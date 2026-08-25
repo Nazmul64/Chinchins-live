@@ -28,10 +28,7 @@ class ChinchinsLiveApp extends StatelessWidget {
       title: 'Chinchins Live',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const LoginScreen(),
-      },
+      home: const LoginScreen(),
     );
   }
 }
