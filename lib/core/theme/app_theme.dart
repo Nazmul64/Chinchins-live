@@ -4,7 +4,15 @@ import 'app_colors.dart';
 
 class AppTheme {
   static ThemeData get darkTheme {
+    TextTheme baseTextTheme;
+    try {
+      baseTextTheme = GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme);
+    } catch (_) {
+      baseTextTheme = ThemeData.dark().textTheme;
+    }
+
     return ThemeData(
+      useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: AppColors.backgroundDark,
       primaryColor: AppColors.neonPink,
@@ -16,9 +24,7 @@ class AppTheme {
         onPrimary: Colors.white,
         onSurface: AppColors.textPrimary,
       ),
-      textTheme: GoogleFonts.outfitTextTheme(
-        ThemeData.dark().textTheme,
-      ).apply(
+      textTheme: baseTextTheme.apply(
         bodyColor: AppColors.textPrimary,
         displayColor: AppColors.textPrimary,
       ),
