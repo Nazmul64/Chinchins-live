@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 import '../../../core/models/model_profile.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/online_badge.dart';
 import '../../../core/widgets/cached_image_loader.dart';
+import 'animated_call_button.dart';
 
-class ModelGridCard extends StatefulWidget {
+class ModelGridCard extends StatelessWidget {
   final ModelProfile model;
   final VoidCallback onTap;
   final VoidCallback onVideoCallTap;
@@ -18,39 +18,9 @@ class ModelGridCard extends StatefulWidget {
   });
 
   @override
-  State<ModelGridCard> createState() => _ModelGridCardState();
-}
-
-class _ModelGridCardState extends State<ModelGridCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _wobbleController;
-  late Animation<double> _wobbleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _wobbleController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-
-    _wobbleAnimation = Tween<double>(begin: -0.08, end: 0.08).animate(
-      CurvedAnimation(parent: _wobbleController, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _wobbleController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final model = widget.model;
-
     return GestureDetector(
-      onTap: widget.onTap,
+      onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
@@ -243,39 +213,10 @@ class _ModelGridCardState extends State<ModelGridCard>
                       ),
                     ),
 
-                    // Right: Animated Wobbling / Pulsing Video Call Button matching Screenshot
-                    AnimatedBuilder(
-                      animation: _wobbleAnimation,
-                      builder: (context, child) {
-                        return Transform.rotate(
-                          angle: _wobbleAnimation.value * math.pi,
-                          child: GestureDetector(
-                            onTap: widget.onVideoCallTap,
-                            child: Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.neonPink.withValues(alpha: 0.6),
-                                    blurRadius: 10,
-                                    spreadRadius: 2,
-                                  ),
-                                ],
-                              ),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.videocam_rounded,
-                                  color: Color(0xFF9C27B0),
-                                  size: 24,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+                    // Right: Animated Video Call Button with Lottie-like ripple & pulse waves
+                    AnimatedCallButton(
+                      onTap: onVideoCallTap,
+                      size: 40,
                     ),
                   ],
                 ),

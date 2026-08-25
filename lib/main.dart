@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core/theme/app_theme.dart';
-import 'features/navigation/screens/main_navigation_screen.dart';
+import 'features/auth/screens/login_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Set system UI overlay style to dark with translucent navigation
@@ -28,7 +28,10 @@ class ChinchinsLiveApp extends StatelessWidget {
       title: 'Chinchins Live',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      home: const MainNavigationScreen(),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const LoginScreen(),
+      },
     );
   }
 }
