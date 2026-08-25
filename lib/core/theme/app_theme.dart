@@ -1,16 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 class AppTheme {
   static ThemeData get darkTheme {
-    TextTheme baseTextTheme;
-    try {
-      baseTextTheme = GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme);
-    } catch (_) {
-      baseTextTheme = ThemeData.dark().textTheme;
-    }
-
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
@@ -23,10 +15,6 @@ class AppTheme {
         surfaceContainerHighest: AppColors.cardDark,
         onPrimary: Colors.white,
         onSurface: AppColors.textPrimary,
-      ),
-      textTheme: baseTextTheme.apply(
-        bodyColor: AppColors.textPrimary,
-        displayColor: AppColors.textPrimary,
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.backgroundDark,
