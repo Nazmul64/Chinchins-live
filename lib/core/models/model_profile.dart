@@ -1,4 +1,4 @@
-﻿class ModelProfile {
+class ModelProfile {
   final String id;
   final String name;
   final int age;
@@ -83,7 +83,12 @@
     final accountId = json['account_id']?.toString() ?? json['id']?.toString() ?? '602281635';
 
     // Name / Display Name
-    final displayName = json['display_name'] ?? json['nickname'] ?? json['name'] ?? 'Ayeena04';
+    final displayName = json['display_name'] ??
+        json['nickname'] ??
+        json['name'] ??
+        (json['first_name'] != null
+            ? '${json['first_name']} ${json['last_name'] ?? ''}'.trim()
+            : 'User');
 
     // Avatar URL
     final avatar = json['avatar_url'] ??

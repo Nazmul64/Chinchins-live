@@ -21,6 +21,7 @@ class AuthApiService {
     try {
       final url = Uri.parse(ApiConstants.register);
       final body = jsonEncode({
+        'name': '${firstName.trim()} ${lastName.trim()}'.trim(),
         'first_name': firstName.trim(),
         'last_name': lastName.trim(),
         'phone': phone.trim(),
