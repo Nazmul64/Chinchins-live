@@ -10,6 +10,7 @@ import '../../../core/services/profile_api_service.dart';
 import '../../../core/services/local_image_cache.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../../profile/screens/host_profile_screen.dart';
+import '../../profile/screens/edit_profile_media_screen.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
 import '../../party/screens/create_room_screen.dart';
 
@@ -92,6 +93,21 @@ class _MeScreenState extends State<MeScreen> {
         builder: (context) => HostProfileScreen(model: profile),
       ),
     );
+  }
+
+  Future<void> _openEditProfileMediaScreen() async {
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditProfileMediaScreen(
+          isInitialSetup: false,
+          initialProfile: _myProfile,
+        ),
+      ),
+    );
+    if (updated == true || mounted) {
+      _loadUserProfile();
+    }
   }
 
   // --- Profile Avatar & Photo Upload Handlers ---
@@ -204,50 +220,7 @@ class _MeScreenState extends State<MeScreen> {
     }
   }
 
-  Future<void> _pickAndUploadCover() async {
-    final picked = await _picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1920,
-      maxHeight: 1080,
-      imageQuality: 85,
-    );
-    if (picked != null) {
-      await LocalImageCache.setCover(picked.path);
-      if (mounted) {
-        setState(() {});
-      }
 
-      if (!mounted) return;
-      setState(() => _isUploading = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Uploading cover background...'), duration: Duration(seconds: 3)),
-      );
-      final res = await ProfileApiService.uploadCover(picked.path);
-      if (!mounted) return;
-      setState(() => _isUploading = false);
-
-      if (res['success'] == true) {
-        if (res['user'] != null && res['user'] is Map<String, dynamic>) {
-          await AuthApiService.saveUser(res['user']);
-          if (mounted) {
-            setState(() {
-              _myProfile = ModelProfile.fromJson(res['user']);
-            });
-          }
-        }
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cover photo updated!'), backgroundColor: Colors.green),
-        );
-        _loadUserProfile();
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res['message'] ?? 'Cover upload failed'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
 
   Future<void> _pickAndUploadGalleryPhotos() async {
     final pickedList = await _picker.pickMultiImage(
@@ -471,238 +444,6 @@ class _MeScreenState extends State<MeScreen> {
     );
   }
 
-  Future<void> _performProfileUpdate({
-    required String firstName,
-    required String lastName,
-    required String nickname,
-    required String age,
-    required String country,
-    required String city,
-    required String intro,
-    required String languages,
-    required String tags,
-    required String videoCallRate,
-  }) async {
-    final res = await ProfileApiService.updateProfile(
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      nickname: nickname.trim(),
-      age: int.tryParse(age.trim()) ?? 25,
-      country: country.trim(),
-      city: city.trim(),
-      introduction: intro.trim(),
-      languages: languages.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
-      tags: tags.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
-      videoCallRate: int.tryParse(videoCallRate.trim()) ?? 1800,
-    );
-
-    if (!mounted) return;
-
-    if (res['success'] == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated in Laravel Database! ✨'), backgroundColor: Colors.green),
-      );
-      _loadUserProfile();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res['message'] ?? 'Update failed'), backgroundColor: Colors.red),
-      );
-    }
-  }
-
-  void _showEditProfileDialog() {
-    final firstNameCtrl = TextEditingController(text: _myProfile?.firstName ?? '');
-    final lastNameCtrl = TextEditingController(text: _myProfile?.lastName ?? '');
-    final nicknameCtrl = TextEditingController(text: _myProfile?.name ?? '');
-    final introCtrl = TextEditingController(text: _myProfile?.intro ?? 'Welcome to Chinchins Live! ✨');
-    final ageCtrl = TextEditingController(text: '${_myProfile?.age ?? 25}');
-    final countryCtrl = TextEditingController(text: _myProfile?.location ?? 'Bangladesh');
-    final cityCtrl = TextEditingController(text: _myProfile?.city ?? '');
-    final langCtrl = TextEditingController(text: _myProfile?.languages.join(', ') ?? 'English, Bengali');
-    final tagsCtrl = TextEditingController(text: _myProfile?.tags.join(', ') ?? 'Live video, Music, Singing, Chat');
-    final rateCtrl = TextEditingController(text: '${_myProfile?.pricePerMin ?? 1800}');
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.cardDarkElevated,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            const Icon(Icons.edit_note_rounded, color: AppColors.neonPink, size: 24),
-            const SizedBox(width: 8),
-            const Text('Edit Profile (Live API)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: firstNameCtrl,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
-                        labelText: 'First Name',
-                        labelStyle: TextStyle(color: AppColors.textMuted),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: lastNameCtrl,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
-                        labelText: 'Last Name',
-                        labelStyle: TextStyle(color: AppColors.textMuted),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: nicknameCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Nickname / Display Name',
-                  labelStyle: TextStyle(color: AppColors.textMuted),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: ageCtrl,
-                      keyboardType: TextInputType.number,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
-                        labelText: 'Age (18-120)',
-                        labelStyle: TextStyle(color: AppColors.textMuted),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: rateCtrl,
-                      keyboardType: TextInputType.number,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
-                        labelText: 'Call Rate (Gems/min)',
-                        labelStyle: TextStyle(color: AppColors.textMuted),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: countryCtrl,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
-                        labelText: 'Country',
-                        labelStyle: TextStyle(color: AppColors.textMuted),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: cityCtrl,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
-                        labelText: 'City (Optional)',
-                        labelStyle: TextStyle(color: AppColors.textMuted),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: introCtrl,
-                maxLines: 2,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Introduction / Bio',
-                  labelStyle: TextStyle(color: AppColors.textMuted),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: langCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Languages (comma separated)',
-                  labelStyle: TextStyle(color: AppColors.textMuted),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: tagsCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Interests / Tags (comma separated)',
-                  labelStyle: TextStyle(color: AppColors.textMuted),
-                ),
-              ),
-              const SizedBox(height: 14),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.neonPurple,
-                  side: const BorderSide(color: AppColors.neonPurple),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                icon: const Icon(Icons.wallpaper_rounded, size: 18),
-                label: const Text('Change Cover Photo'),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _pickAndUploadCover();
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.neonPink,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _performProfileUpdate(
-                firstName: firstNameCtrl.text,
-                lastName: lastNameCtrl.text,
-                nickname: nicknameCtrl.text,
-                age: ageCtrl.text,
-                country: countryCtrl.text,
-                city: cityCtrl.text,
-                intro: introCtrl.text,
-                languages: langCtrl.text,
-                tags: tagsCtrl.text,
-                videoCallRate: rateCtrl.text,
-              );
-            },
-            child: const Text('Save to DB', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     String fullName = '';
@@ -849,8 +590,8 @@ class _MeScreenState extends State<MeScreen> {
                               ),
                               IconButton(
                                 icon: const Icon(Icons.edit_outlined, color: AppColors.neonPurple, size: 18),
-                                onPressed: _showEditProfileDialog,
-                                tooltip: 'Edit Profile Info',
+                                onPressed: _openEditProfileMediaScreen,
+                                tooltip: 'Edit Profile & Photos',
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                               ),
@@ -988,8 +729,8 @@ class _MeScreenState extends State<MeScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 8),
                         ),
                         icon: const Icon(Icons.edit_note_rounded, color: AppColors.neonPink, size: 18),
-                        label: const Text('Edit Profile', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        onPressed: _showEditProfileDialog,
+                        label: const Text('Edit Profile & Photos', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        onPressed: _openEditProfileMediaScreen,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -1024,15 +765,20 @@ class _MeScreenState extends State<MeScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.photo_library_rounded, color: AppColors.neonPink, size: 18),
-                              const SizedBox(width: 6),
-                              Text(
-                                'My Gallery Photos (${gallery.length})',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                            ],
+                          GestureDetector(
+                            onTap: _openEditProfileMediaScreen,
+                            child: Row(
+                              children: [
+                                const Icon(Icons.photo_library_rounded, color: AppColors.neonPink, size: 18),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'My Gallery Photos (${gallery.length})',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 16),
+                              ],
+                            ),
                           ),
                           GestureDetector(
                             onTap: _pickAndUploadGalleryPhotos,

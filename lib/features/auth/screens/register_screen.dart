@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/models/model_profile.dart';
 import '../../../core/widgets/gradient_button.dart';
-import '../../navigation/screens/main_navigation_screen.dart';
+import '../../profile/screens/edit_profile_media_screen.dart';
 import '../services/auth_api_service.dart';
 import '../widgets/auth_text_field.dart';
 
@@ -273,7 +274,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
+        MaterialPageRoute(
+          builder: (context) => EditProfileMediaScreen(
+            isInitialSetup: true,
+            initialProfile: user != null && user is Map<String, dynamic> ? ModelProfile.fromJson(user) : null,
+          ),
+        ),
         (route) => false,
       );
     } else {
