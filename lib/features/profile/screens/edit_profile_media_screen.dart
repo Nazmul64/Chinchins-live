@@ -1082,55 +1082,57 @@ class _EditProfileMediaScreenState extends State<EditProfileMediaScreen> {
           children: [
             // Gallery Header with Actions
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.photo_library_rounded, color: AppColors.neonPink, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Photo Gallery (${_galleryUrls.length})',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.photo_library_rounded, color: AppColors.neonPink, size: 18),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'Gallery (${_galleryUrls.length})',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                Row(
-                  children: [
-                    if (_galleryUrls.isNotEmpty)
-                      TextButton.icon(
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        onPressed: _confirmClearAllGallery,
-                        icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent, size: 16),
-                        label: const Text(
-                          'Clear All',
-                          style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    const SizedBox(width: 6),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.neonPurple,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        minimumSize: Size.zero,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        elevation: 0,
-                      ),
-                      onPressed: _showGalleryAddSheet,
-                      icon: const Icon(Icons.add_photo_alternate_rounded, color: Colors.white, size: 15),
-                      label: const Text(
-                        '+ Add Photos',
-                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
+                if (_galleryUrls.isNotEmpty) ...[
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                  ],
+                    onPressed: _confirmClearAllGallery,
+                    icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent, size: 15),
+                    label: const Text(
+                      'Clear',
+                      style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.neonPurple,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    minimumSize: Size.zero,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                  onPressed: _showGalleryAddSheet,
+                  icon: const Icon(Icons.add_photo_alternate_rounded, color: Colors.white, size: 14),
+                  label: const Text(
+                    '+ Add',
+                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
@@ -1422,26 +1424,32 @@ class _EditProfileMediaScreenState extends State<EditProfileMediaScreen> {
                 border: Border.all(color: AppColors.cardBorder),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _isOnline ? Icons.circle : Icons.circle_outlined,
-                        color: _isOnline ? AppColors.onlineGreen : AppColors.textMuted,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        _isOnline ? 'Online & Available for Calls' : 'Offline / Hidden',
-                        style: TextStyle(
-                          color: _isOnline ? Colors.white : AppColors.textMuted,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Icon(
+                          _isOnline ? Icons.circle : Icons.circle_outlined,
+                          color: _isOnline ? AppColors.onlineGreen : AppColors.textMuted,
+                          size: 13,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _isOnline ? 'Online & Available for Calls' : 'Offline / Hidden',
+                            style: TextStyle(
+                              color: _isOnline ? Colors.white : AppColors.textMuted,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Switch.adaptive(
                     value: _isOnline,
                     activeTrackColor: AppColors.onlineGreen,
