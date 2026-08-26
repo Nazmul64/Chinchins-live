@@ -1,37 +1,140 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../constants/api_constants.dart';
 import '../models/model_profile.dart';
 import '../../features/auth/services/auth_api_service.dart';
 
 class ProfileApiService {
+  /// Safely parse JSON from raw HTTP body without throwing FormatException on HTML error pages
+  static dynamic _safeJsonDecode(String body) {
+    try {
+      return jsonDecode(body);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Fetch authenticated user profile
   static Future<ModelProfile?> getMyProfile() async {
     try {
       final token = await AuthApiService.getToken();
-      final url = Uri.parse(ApiConstants.profileMe);
+      if (token == null) return null;
 
-      final response = await http.get(
+      Uri url = Uri.parse(ApiConstants.profileMe);
+      var response = await http.get(
         url,
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 404) {
+        url = Uri.parse(ApiConstants.userProfile);
+        response = await http.get(
+          url,
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        ).timeout(const Duration(seconds: 10));
+      }
+
+      if (response.statusCode == 200) {
+        final data = _safeJsonDecode(response.body);
+        if (data != null) {
+          final userData = data['data']?['user'] ?? data['data'] ?? data['user'];
+          if (userData != null && userData is Map<String, dynamic>) {
+            return ModelProfile.fromJson(userData);
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Fetch streamers/users for Home Feed
+  static Future<List<ModelProfile>> getHomeFeed({
+    int page = 1,
+    int perPage = 20,
+    String? country,
+    String? gender,
+    String? search,
+    bool? isActive,
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final queryParams = <String, String>{
+        'page': page.toString(),
+        'per_page': perPage.toString(),
+      };
+      if (country != null && country.isNotEmpty && country != 'All') {
+        queryParams['country'] = country;
+      }
+      if (gender != null && gender.isNotEmpty && gender != 'All') {
+        queryParams['gender'] = gender.toLowerCase();
+      }
+      if (search != null && search.isNotEmpty) {
+        queryParams['search'] = search;
+      }
+      if (isActive != null) {
+        queryParams['is_active'] = isActive ? '1' : '0';
+      }
+
+      final uri = Uri.parse(ApiConstants.homeFeed).replace(queryParameters: queryParams);
+      var response = await http.get(
+        uri,
         headers: {
           'Accept': 'application/json',
           if (token != null) 'Authorization': 'Bearer $token',
         },
       ).timeout(const Duration(seconds: 10));
 
+      if (response.statusCode == 404) {
+        // Fallback to /api/users
+        final usersUri = Uri.parse(ApiConstants.users).replace(queryParameters: queryParams);
+        response = await http.get(
+          usersUri,
+          headers: {
+            'Accept': 'application/json',
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+        ).timeout(const Duration(seconds: 10));
+      }
+
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final userData = data['data']?['user'] ?? data['user'];
-        if (userData != null && userData is Map<String, dynamic>) {
-          return ModelProfile.fromJson(userData);
+        final data = _safeJsonDecode(response.body);
+        if (data != null) {
+          List? userList;
+          if (data is List) {
+            userList = data;
+          } else if (data is Map) {
+            if (data['data'] is List) {
+              userList = data['data'] as List;
+            } else if (data['data'] is Map) {
+              if (data['data']['users'] is List) {
+                userList = data['data']['users'] as List;
+              } else if (data['data']['data'] is List) {
+                userList = data['data']['data'] as List;
+              }
+            } else if (data['users'] is List) {
+              userList = data['users'] as List;
+            }
+          }
+
+          if (userList != null && userList.isNotEmpty) {
+            return userList
+                .whereType<Map<String, dynamic>>()
+                .map((u) => ModelProfile.fromJson(u))
+                .toList();
+          }
         }
       }
-    } catch (e) {
-      // Return null on connection error
-    }
-    return null;
+    } catch (_) {}
+    return [];
   }
 
   /// Fetch public profile by ID or Account ID
@@ -49,15 +152,15 @@ class ProfileApiService {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final userData = data['data']?['user'] ?? data['user'];
-        if (userData != null && userData is Map<String, dynamic>) {
-          return ModelProfile.fromJson(userData);
+        final data = _safeJsonDecode(response.body);
+        if (data != null) {
+          final userData = data['data']?['user'] ?? data['user'];
+          if (userData != null && userData is Map<String, dynamic>) {
+            return ModelProfile.fromJson(userData);
+          }
         }
       }
-    } catch (e) {
-      // Fallback
-    }
+    } catch (_) {}
     return null;
   }
 
@@ -108,17 +211,21 @@ class ProfileApiService {
           )
           .timeout(const Duration(seconds: 15));
 
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 && data['status'] == true) {
+      final data = _safeJsonDecode(response.body);
+      if (response.statusCode == 200 && data != null && (data['status'] == true || data['success'] == true)) {
         return {
           'success': true,
           'message': data['message'] ?? 'Profile updated successfully',
-          'user': data['data']?['user'],
+          'user': data['data']?['user'] ?? data['user'] ?? data['data'],
         };
       } else {
+        String msg = 'Failed to update profile';
+        if (data != null && data is Map) {
+          msg = data['message'] ?? data['error'] ?? msg;
+        }
         return {
           'success': false,
-          'message': data['message'] ?? 'Failed to update profile',
+          'message': msg,
         };
       }
     } catch (e) {
@@ -153,24 +260,140 @@ class ProfileApiService {
 
       final streamedResponse = await request.send().timeout(const Duration(seconds: 40));
       final response = await http.Response.fromStream(streamedResponse);
-      final data = jsonDecode(response.body);
+      final data = _safeJsonDecode(response.body);
 
-      if (response.statusCode == 200 && data['status'] == true) {
+      if ((response.statusCode == 200 || response.statusCode == 201) && data != null) {
+        final userData = data['data']?['user'] ?? data['user'] ?? (data['data'] is Map<String, dynamic> ? data['data'] : null);
         return {
           'success': true,
           'message': data['message'] ?? 'Photos uploaded successfully',
-          'user': data['data']?['user'],
+          'user': userData,
         };
       } else {
+        String msg = 'Failed to upload photos';
+        if (data != null && data is Map) {
+          msg = data['message'] ?? data['error'] ?? msg;
+        } else if (response.statusCode == 413) {
+          msg = 'Photo file is too large (413)';
+        } else if (response.statusCode >= 500) {
+          msg = 'Server internal error (${response.statusCode})';
+        }
         return {
           'success': false,
-          'message': data['message'] ?? 'Failed to upload photos',
+          'message': msg,
         };
       }
     } catch (e) {
       return {
         'success': false,
         'message': 'Error uploading photos: $e',
+      };
+    }
+  }
+
+  /// Upload Avatar Photo (multipart)
+  static Future<Map<String, dynamic>> uploadAvatar(String filePath) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.uploadAvatar);
+
+      final request = http.MultipartRequest('POST', url);
+      request.headers['Accept'] = 'application/json';
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      if (File(filePath).existsSync()) {
+        request.files.add(await http.MultipartFile.fromPath('avatar', filePath));
+      } else {
+        return {'success': false, 'message': 'Selected file does not exist.'};
+      }
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 40));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      debugPrint("Upload Status: ${response.statusCode}");
+      debugPrint("Response: ${response.body}");
+
+      final data = _safeJsonDecode(response.body);
+
+      if ((response.statusCode == 200 || response.statusCode == 201) && data != null) {
+        final userData = data['data']?['user'] ?? data['user'] ?? (data['data'] is Map<String, dynamic> ? data['data'] : null);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Avatar uploaded successfully',
+          'user': userData,
+        };
+      } else {
+        String msg = 'Failed to upload avatar';
+        if (data != null && data is Map) {
+          msg = data['message'] ?? data['error'] ?? msg;
+        } else if (response.statusCode == 413) {
+          msg = 'Avatar image file is too large (413)';
+        } else if (response.statusCode >= 500) {
+          msg = 'Server internal error (${response.statusCode})';
+        }
+        return {
+          'success': false,
+          'message': msg,
+        };
+      }
+    } catch (e) {
+      debugPrint("Upload Exception: $e");
+      return {
+        'success': false,
+        'message': 'Error uploading avatar: $e',
+      };
+    }
+  }
+
+  /// Upload Cover Photo (multipart)
+  static Future<Map<String, dynamic>> uploadCover(String filePath) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.uploadCover);
+
+      final request = http.MultipartRequest('POST', url);
+      request.headers.addAll({
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      });
+
+      if (File(filePath).existsSync()) {
+        request.files.add(await http.MultipartFile.fromPath('cover_photo', filePath));
+      } else {
+        return {'success': false, 'message': 'Selected file does not exist.'};
+      }
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 40));
+      final response = await http.Response.fromStream(streamedResponse);
+      final data = _safeJsonDecode(response.body);
+
+      if ((response.statusCode == 200 || response.statusCode == 201) && data != null) {
+        final userData = data['data']?['user'] ?? data['user'] ?? (data['data'] is Map<String, dynamic> ? data['data'] : null);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Cover photo uploaded successfully',
+          'user': userData,
+        };
+      } else {
+        String msg = 'Failed to upload cover photo';
+        if (data != null && data is Map) {
+          msg = data['message'] ?? data['error'] ?? msg;
+        } else if (response.statusCode == 413) {
+          msg = 'Cover photo file is too large (413)';
+        } else if (response.statusCode >= 500) {
+          msg = 'Server internal error (${response.statusCode})';
+        }
+        return {
+          'success': false,
+          'message': msg,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error uploading cover: $e',
       };
     }
   }
@@ -191,14 +414,152 @@ class ProfileApiService {
         body: jsonEncode({'photo': photoUrl}),
       ).timeout(const Duration(seconds: 10));
 
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 && data['status'] == true) {
-        return {'success': true, 'message': data['message']};
+      final data = _safeJsonDecode(response.body);
+      if (response.statusCode == 200 && data != null && (data['status'] == true || data['success'] == true)) {
+        return {'success': true, 'message': data['message'] ?? 'Photo deleted'};
       } else {
-        return {'success': false, 'message': data['message'] ?? 'Failed to delete photo'};
+        String msg = 'Failed to delete photo';
+        if (data != null && data is Map) {
+          msg = data['message'] ?? data['error'] ?? msg;
+        }
+        return {'success': false, 'message': msg};
       }
     } catch (e) {
       return {'success': false, 'message': 'Error deleting photo: $e'};
+    }
+  }
+
+  /// Delete Avatar Photo
+  static Future<Map<String, dynamic>> deleteAvatar() async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.deleteAvatar);
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Accept': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      final data = _safeJsonDecode(response.body);
+      if (response.statusCode == 200 && data != null && (data['status'] == true || data['success'] == true)) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Avatar deleted successfully',
+          'user': data['data']?['user'] ?? data['user'],
+        };
+      } else {
+        String msg = 'Failed to delete avatar';
+        if (data != null && data is Map) {
+          msg = data['message'] ?? data['error'] ?? msg;
+        }
+        return {'success': false, 'message': msg};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Error deleting avatar: $e'};
+    }
+  }
+
+  /// Delete Cover Photo
+  static Future<Map<String, dynamic>> deleteCover() async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.deleteCover);
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Accept': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      final data = _safeJsonDecode(response.body);
+      if (response.statusCode == 200 && data != null && (data['status'] == true || data['success'] == true)) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Cover photo deleted successfully',
+          'user': data['data']?['user'] ?? data['user'],
+        };
+      } else {
+        String msg = 'Failed to delete cover photo';
+        if (data != null && data is Map) {
+          msg = data['message'] ?? data['error'] ?? msg;
+        }
+        return {'success': false, 'message': msg};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Error deleting cover photo: $e'};
+    }
+  }
+
+  /// Update / Reorder entire gallery photo list
+  static Future<Map<String, dynamic>> updateGallery(List<String> photos) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.updateGallery);
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'photos': photos}),
+      ).timeout(const Duration(seconds: 10));
+
+      final data = _safeJsonDecode(response.body);
+      if (response.statusCode == 200 && data != null && (data['status'] == true || data['success'] == true)) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Gallery updated successfully',
+          'user': data['data']?['user'] ?? data['user'],
+        };
+      } else {
+        String msg = 'Failed to update gallery';
+        if (data != null && data is Map) {
+          msg = data['message'] ?? data['error'] ?? msg;
+        }
+        return {'success': false, 'message': msg};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Error updating gallery: $e'};
+    }
+  }
+
+  /// Clear all gallery photos
+  static Future<Map<String, dynamic>> clearGallery() async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.clearGallery);
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Accept': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      final data = _safeJsonDecode(response.body);
+      if (response.statusCode == 200 && data != null && (data['status'] == true || data['success'] == true)) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Gallery cleared successfully',
+          'user': data['data']?['user'] ?? data['user'],
+        };
+      } else {
+        String msg = 'Failed to clear gallery';
+        if (data != null && data is Map) {
+          msg = data['message'] ?? data['error'] ?? msg;
+        }
+        return {'success': false, 'message': msg};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Error clearing gallery: $e'};
     }
   }
 
@@ -219,8 +580,8 @@ class ProfileApiService {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['status'] == true;
+        final data = _safeJsonDecode(response.body);
+        return data != null && (data['status'] == true || data['success'] == true);
       }
     } catch (_) {}
     return false;

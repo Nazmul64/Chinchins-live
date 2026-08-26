@@ -14,21 +14,61 @@ class AuthApiService {
     required String firstName,
     required String lastName,
     required String phone,
-    required String email,
+    String? email,
     required String password,
     required String passwordConfirmation,
+    String? country,
+    String? nickname,
+    String? city,
+    String? gender,
+    int? age,
+    String? introduction,
+    List<String>? languages,
+    List<String>? tags,
+    int? videoCallRate,
   }) async {
     try {
       final url = Uri.parse(ApiConstants.register);
-      final body = jsonEncode({
-        'name': '${firstName.trim()} ${lastName.trim()}'.trim(),
+      final Map<String, dynamic> requestPayload = {
         'first_name': firstName.trim(),
         'last_name': lastName.trim(),
         'phone': phone.trim(),
-        'email': email.trim().toLowerCase(),
+        'phone_number': phone.trim(),
+        'country': country ?? 'Bangladesh',
         'password': password,
         'password_confirmation': passwordConfirmation,
-      });
+        'confirm_password': passwordConfirmation,
+      };
+
+      if (email != null && email.trim().isNotEmpty) {
+        requestPayload['email'] = email.trim().toLowerCase();
+      }
+      if (nickname != null && nickname.trim().isNotEmpty) {
+        requestPayload['nickname'] = nickname.trim();
+      }
+      if (city != null && city.trim().isNotEmpty) {
+        requestPayload['city'] = city.trim();
+      }
+      if (gender != null && gender.trim().isNotEmpty) {
+        requestPayload['gender'] = gender.trim();
+      }
+      if (age != null) {
+        requestPayload['age'] = age;
+      }
+      if (introduction != null && introduction.trim().isNotEmpty) {
+        requestPayload['introduction'] = introduction.trim();
+      }
+      if (languages != null && languages.isNotEmpty) {
+        requestPayload['languages'] = languages;
+      }
+      if (tags != null && tags.isNotEmpty) {
+        requestPayload['tags'] = tags;
+      }
+      if (videoCallRate != null) {
+        requestPayload['video_call_rate'] = videoCallRate;
+      }
+
+      final body = jsonEncode(requestPayload);
 
       final response = await http
           .post(
@@ -44,8 +84,8 @@ class AuthApiService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 201 || (data is Map && data['status'] == true)) {
-        final token = data['data']?['token'];
-        final user = data['data']?['user'];
+        final token = data['data']?['token'] ?? data['token'];
+        final user = data['data']?['user'] ?? data['user'];
 
         if (token != null) {
           await _saveSession(token: token.toString(), user: user);
@@ -53,13 +93,13 @@ class AuthApiService {
 
         return {
           'success': true,
-          'message': data['message'] ?? 'Registration successful!',
+          'message': data['message'] ?? 'Registration successful',
           'user': user,
           'token': token,
         };
       } else {
-        String message = data['message'] ?? 'Registration failed';
-        if (data['errors'] != null && data['errors'] is Map) {
+        String message = data is Map ? (data['message'] ?? 'Registration failed') : 'Registration failed';
+        if (data is Map && data['errors'] != null && data['errors'] is Map) {
           final errors = data['errors'] as Map;
           if (errors.isNotEmpty) {
             final firstErrorList = errors.values.first;
@@ -71,13 +111,13 @@ class AuthApiService {
         return {
           'success': false,
           'message': message,
-          'errors': data['errors'],
+          'errors': data is Map ? data['errors'] : null,
         };
       }
     } on SocketException {
       return {
         'success': false,
-        'message': 'Cannot connect to backend server. Please make sure the Laravel API server is running.',
+        'message': 'Cannot connect to backend server (${ApiConstants.baseUrl}). Please check internet connection.',
       };
     } on TimeoutException {
       return {
@@ -87,7 +127,7 @@ class AuthApiService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'An unexpected error occurred: ',
+        'message': 'An unexpected error occurred: $e',
       };
     }
   }
@@ -180,6 +220,12 @@ class AuthApiService {
     }
   }
 
+  /// Update locally stored user data
+  static Future<void> saveUser(Map<String, dynamic> user) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyUser, jsonEncode(user));
+  }
+
   /// Retrieve stored auth token
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -209,7 +255,7 @@ class AuthApiService {
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'Authorization': 'Bearer ',
+            'Authorization': 'Bearer $token',
           },
         ).timeout(const Duration(seconds: 5));
       }

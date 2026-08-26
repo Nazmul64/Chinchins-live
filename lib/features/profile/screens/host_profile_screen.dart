@@ -119,9 +119,14 @@ class _HostProfileScreenState extends State<HostProfileScreen>
   @override
   Widget build(BuildContext context) {
     final model = widget.model;
-    final activePhotoUrl = model.galleryUrls.isNotEmpty
-        ? model.galleryUrls[_selectedGalleryIndex % model.galleryUrls.length]
-        : model.avatarUrl;
+    final gallery = model.galleryUrls.isNotEmpty
+        ? model.galleryUrls
+        : [if (model.coverPhotoUrl != null) model.coverPhotoUrl!, model.avatarUrl];
+    final activePhotoUrl = gallery.isNotEmpty
+        ? gallery[_selectedGalleryIndex % gallery.length]
+        : (model.coverPhotoUrl ?? model.avatarUrl);
+    final displayName = model.fullName.isNotEmpty ? model.fullName : model.name;
+    final isMale = model.gender?.toLowerCase() == 'male';
 
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
@@ -165,7 +170,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                       ),
                     ),
 
-                    // Horizontal Thumbnail Strip (5 previews at the bottom of cover photo - Screenshot 3)
+                    // Horizontal Thumbnail Strip (previews at the bottom of cover photo - Screenshot 3)
                     Positioned(
                       bottom: 12,
                       left: 14,
@@ -174,7 +179,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                         height: 64,
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
-                          itemCount: model.galleryUrls.length,
+                          itemCount: gallery.length,
                           itemBuilder: (context, index) {
                             final isSelected = _selectedGalleryIndex == index;
                             return GestureDetector(
@@ -205,7 +210,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
                                   child: CachedImageLoader(
-                                    imageUrl: model.galleryUrls[index],
+                                    imageUrl: gallery[index],
                                     fit: BoxFit.cover,
                                   ),
                                 ),
@@ -257,7 +262,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                                       children: [
                                         Flexible(
                                           child: Text(
-                                            model.name,
+                                            displayName,
                                             style: const TextStyle(
                                               color: Colors.white,
                                               fontSize: 20,
@@ -379,17 +384,21 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                                 ),
                               ),
 
-                              // Age Pill (e.g. ♀ 27)
+                              // Age Pill (e.g. ♀ 27 or ♂ 25)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFE91E63),
+                                  color: isMale ? const Color(0xFF3B82F6) : const Color(0xFFE91E63),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.female_rounded, color: Colors.white, size: 12),
+                                    Icon(
+                                      isMale ? Icons.male_rounded : Icons.female_rounded,
+                                      color: Colors.white,
+                                      size: 12,
+                                    ),
                                     const SizedBox(width: 2),
                                     Text('${model.age}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ],

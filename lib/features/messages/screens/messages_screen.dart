@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/models/chat_message.dart';
+import '../../../core/models/model_profile.dart';
+import '../../../core/services/profile_api_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/cached_image_loader.dart';
 import '../widgets/chat_thread_tile.dart';
 import '../../chat/screens/chat_detail_screen.dart';
 
@@ -15,11 +18,22 @@ class MessagesScreen extends StatefulWidget {
 class _MessagesScreenState extends State<MessagesScreen> {
   int _activeSubTabIndex = 0; // 0: Messages, 1: Intimacy
   late List<ChatThread> _threads;
+  List<ModelProfile> _liveHosts = [];
 
   @override
   void initState() {
     super.initState();
     _threads = List.from(MockData.chatThreads);
+    _loadLiveHosts();
+  }
+
+  Future<void> _loadLiveHosts() async {
+    final hosts = await ProfileApiService.getHomeFeed();
+    if (hosts.isNotEmpty && mounted) {
+      setState(() {
+        _liveHosts = hosts;
+      });
+    }
   }
 
   void _openChat(ChatThread thread) {
@@ -36,6 +50,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   void _showNewChatDialog() {
+    final availableHosts = _liveHosts;
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.cardDarkElevated,
@@ -57,27 +72,40 @@ class _MessagesScreenState extends State<MessagesScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            ...MockData.models.take(4).map((model) => ListTile(
-                  leading: CircleAvatar(
-                    backgroundImage: NetworkImage(model.avatarUrl),
-                  ),
-                  title: Text(model.name, style: const TextStyle(color: Colors.white)),
-                  subtitle: Text(model.location, style: const TextStyle(color: AppColors.textMuted)),
-                  trailing: const Icon(Icons.chat_bubble_outline, color: AppColors.neonPink),
-                  onTap: () {
-                    Navigator.pop(context);
-                    final thread = ChatThread(
-                      id: 't_${model.id}',
-                      modelId: model.id,
-                      name: model.name,
-                      avatarUrl: model.avatarUrl,
-                      lastMessage: 'Hello!',
-                      time: 'Just now',
-                      messages: [],
-                    );
-                    _openChat(thread);
-                  },
-                )),
+            if (availableHosts.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: Text('No active hosts online', style: TextStyle(color: AppColors.textMuted)),
+                ),
+              )
+            else
+              ...availableHosts.take(6).map((model) => ListTile(
+                    leading: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(shape: BoxShape.circle),
+                      child: ClipOval(
+                        child: CachedImageLoader(imageUrl: model.avatarUrl, fit: BoxFit.cover),
+                      ),
+                    ),
+                    title: Text(model.fullName.isNotEmpty ? model.fullName : model.name, style: const TextStyle(color: Colors.white)),
+                    subtitle: Text(model.location, style: const TextStyle(color: AppColors.textMuted)),
+                    trailing: const Icon(Icons.chat_bubble_outline, color: AppColors.neonPink),
+                    onTap: () {
+                      Navigator.pop(context);
+                      final thread = ChatThread(
+                        id: 't_${model.id}',
+                        modelId: model.id,
+                        name: model.fullName.isNotEmpty ? model.fullName : model.name,
+                        avatarUrl: model.avatarUrl,
+                        lastMessage: 'Hello! ❤️',
+                        time: 'Just now',
+                        messages: [],
+                      );
+                      _openChat(thread);
+                    },
+                  )),
           ],
         ),
       ),

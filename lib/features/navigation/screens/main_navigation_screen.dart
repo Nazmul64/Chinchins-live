@@ -48,17 +48,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           unselectedFontSize: 11,
           type: BottomNavigationBarType.fixed,
           items: [
-            // "For You" Tab with Thumbs-Up 👍 Icon matching Screenshot 1 & 2
+            // "Home" Tab with Home Icon
             BottomNavigationBarItem(
               icon: Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Icon(
-                  Icons.thumb_up_rounded,
+                  _currentIndex == 0 ? Icons.home_rounded : Icons.home_outlined,
                   color: _currentIndex == 0 ? Colors.white : AppColors.textMuted,
                   size: 24,
                 ),
               ),
-              label: 'For You',
+              label: 'Home',
             ),
 
             // "Messages" Tab with unread badge '22' matching Screenshot 1

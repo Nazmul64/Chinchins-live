@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../core/data/mock_data.dart';
 import '../../../core/models/model_profile.dart';
+import '../../../core/services/profile_api_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../auth/services/auth_api_service.dart';
 import '../widgets/explore_header.dart';
 import '../widgets/model_grid_card.dart';
 import '../../profile/screens/host_profile_screen.dart';
@@ -21,11 +22,65 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
   int _selectedTabIndex = 0;
   List<ModelProfile> _models = [];
   String _selectedLanguage = 'All';
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _models = List.from(MockData.models);
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    // 1. Instantly show saved local user if logged in
+    final savedUser = await AuthApiService.getSavedUser();
+    if (savedUser != null && mounted) {
+      setState(() {
+        _models = [ModelProfile.fromJson(savedUser)];
+      });
+    }
+    // 2. Fetch fresh live database users
+    await _loadHomeFeed();
+  }
+
+  Future<void> _loadHomeFeed() async {
+    setState(() => _isLoading = true);
+    try {
+      // 1. Get logged in user profile
+      ModelProfile? myProfile;
+      final savedUser = await AuthApiService.getSavedUser();
+      if (savedUser != null) {
+        myProfile = ModelProfile.fromJson(savedUser);
+      }
+      final freshMyProfile = await ProfileApiService.getMyProfile();
+      if (freshMyProfile != null) {
+        myProfile = freshMyProfile;
+      }
+
+      // 2. Fetch live users from Laravel REST API
+      final liveFeed = await ProfileApiService.getHomeFeed(
+        country: _selectedLanguage != 'All' ? _selectedLanguage : null,
+      );
+
+      final List<ModelProfile> combined = [];
+      // If user is logged in, show user at the top with Active status!
+      if (myProfile != null) {
+        combined.add(myProfile);
+      }
+
+      for (final user in liveFeed) {
+        if (myProfile != null && user.id == myProfile.id) {
+          continue; // avoid duplicate
+        }
+        combined.add(user);
+      }
+
+      if (mounted) {
+        setState(() {
+          _models = combined;
+        });
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
   }
 
   void _onTabSelected(int index) {
@@ -191,15 +246,9 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
                   onTap: () {
                     setState(() {
                       _selectedLanguage = lang;
-                      if (lang == 'All') {
-                        _models = List.from(MockData.models);
-                      } else {
-                        _models = MockData.models
-                            .where((m) => m.languages.contains(lang))
-                            .toList();
-                      }
                     });
                     Navigator.pop(context);
+                    _loadHomeFeed();
                   },
                 );
               }),
@@ -230,36 +279,67 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
             Expanded(
               child: _selectedTabIndex == 1
                   ? const PartyRoomsScreen()
-                  : RefreshIndicator(
-                      color: AppColors.neonPink,
-                      backgroundColor: AppColors.cardDark,
-                      onRefresh: () async {
-                        await Future.delayed(const Duration(milliseconds: 600));
-                        setState(() {
-                          _models = List.from(MockData.models);
-                        });
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        child: GridView.builder(
-                          itemCount: _models.length,
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 0.72,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                          ),
-                          itemBuilder: (context, index) {
-                            final model = _models[index];
-                            return ModelGridCard(
-                              model: model,
-                              onTap: () => _openHostProfile(model),
-                              onVideoCallTap: () => _startVideoCall(model),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
+                  : _isLoading && _models.isEmpty
+                      ? const Center(
+                          child: CircularProgressIndicator(color: AppColors.neonPink),
+                        )
+                      : _models.isEmpty
+                          ? RefreshIndicator(
+                              color: AppColors.neonPink,
+                              backgroundColor: AppColors.cardDark,
+                              onRefresh: _loadHomeFeed,
+                              child: ListView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                children: [
+                                  SizedBox(height: MediaQuery.of(context).size.height * 0.25),
+                                  const Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.wifi_tethering_off_rounded, color: AppColors.textMuted, size: 54),
+                                        SizedBox(height: 14),
+                                        Text(
+                                          'No Live Streamers Online',
+                                          style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                                        ),
+                                        SizedBox(height: 6),
+                                        Text(
+                                          'Pull down to refresh or check back soon',
+                                          style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : RefreshIndicator(
+                              color: AppColors.neonPink,
+                              backgroundColor: AppColors.cardDark,
+                              onRefresh: () async {
+                                await _loadHomeFeed();
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                child: GridView.builder(
+                                  itemCount: _models.length,
+                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    childAspectRatio: 0.72,
+                                    crossAxisSpacing: 10,
+                                    mainAxisSpacing: 10,
+                                  ),
+                                  itemBuilder: (context, index) {
+                                    final model = _models[index];
+                                    return ModelGridCard(
+                                      model: model,
+                                      onTap: () => _openHostProfile(model),
+                                      onVideoCallTap: () => _startVideoCall(model),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
             ),
           ],
         ),
