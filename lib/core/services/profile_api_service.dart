@@ -129,6 +129,24 @@ class ProfileApiService {
             return userList
                 .whereType<Map<String, dynamic>>()
                 .map((u) => ModelProfile.fromJson(u))
+                .where((profile) {
+                  final name = profile.name.trim().toLowerCase();
+                  final firstName = (profile.firstName ?? '').trim().toLowerCase();
+                  final lastName = (profile.lastName ?? '').trim().toLowerCase();
+                  final email = (profile.email ?? '').trim().toLowerCase();
+
+                  if (name == 'admin' ||
+                      name.contains('administrator') ||
+                      name == 'ayeena04' ||
+                      name == 'ayeena' ||
+                      firstName == 'admin' ||
+                      lastName == 'admin' ||
+                      email.startsWith('admin@') ||
+                      email.contains('admin@')) {
+                    return false;
+                  }
+                  return true;
+                })
                 .toList();
           }
         }

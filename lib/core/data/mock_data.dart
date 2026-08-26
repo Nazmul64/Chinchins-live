@@ -37,24 +37,6 @@ class MockData {
   // Explore / Hot Models List
   static final List<ModelProfile> models = [
     const ModelProfile(
-      id: '602281635',
-      name: 'Ayeena04',
-      age: 27,
-      location: 'Pakistan',
-      level: 4,
-      intro: 'Sweet girl looking for honest talk ❤️',
-      languages: ['Urdu', 'English', 'Bengali'],
-      tags: ['Live Video 📹', 'Music 🎵', 'Chatting 💬', 'Travel ✈️'],
-      avatarUrl: imgAyeena,
-      galleryUrls: [imgAyeena, imgHabiba, imgMahi, imgRuhi, imgMoyna],
-      charmLevel: 11400,
-      topFan: 'lucky_star',
-      pricePerMin: 1800,
-      isOnline: true,
-      isVerified: true,
-      hasExtraGems: false,
-    ),
-    const ModelProfile(
       id: '891029381',
       name: 'Mahi',
       age: 21,

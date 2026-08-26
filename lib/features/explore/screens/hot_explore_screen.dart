@@ -34,9 +34,14 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
     // 1. Instantly show saved local user if logged in
     final savedUser = await AuthApiService.getSavedUser();
     if (savedUser != null && mounted) {
-      setState(() {
-        _models = [ModelProfile.fromJson(savedUser)];
-      });
+      final p = ModelProfile.fromJson(savedUser);
+      if (p.name.trim().toLowerCase() != 'admin' &&
+          !p.name.trim().toLowerCase().contains('admin') &&
+          p.name.trim().toLowerCase() != 'ayeena04') {
+        setState(() {
+          _models = [p];
+        });
+      }
     }
     // 2. Fetch fresh live database users
     await _loadHomeFeed();
@@ -61,13 +66,30 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
         country: _selectedLanguage != 'All' ? _selectedLanguage : null,
       );
 
+      bool isExcludedUser(ModelProfile profile) {
+        final name = profile.name.trim().toLowerCase();
+        final firstName = (profile.firstName ?? '').trim().toLowerCase();
+        final lastName = (profile.lastName ?? '').trim().toLowerCase();
+        final email = (profile.email ?? '').trim().toLowerCase();
+
+        return name == 'admin' ||
+            name.contains('administrator') ||
+            name == 'ayeena04' ||
+            name == 'ayeena' ||
+            firstName == 'admin' ||
+            lastName == 'admin' ||
+            email.startsWith('admin@') ||
+            email.contains('admin@');
+      }
+
       final List<ModelProfile> combined = [];
       // If user is logged in, show user at the top with Active status!
-      if (myProfile != null) {
+      if (myProfile != null && !isExcludedUser(myProfile)) {
         combined.add(myProfile);
       }
 
       for (final user in liveFeed) {
+        if (isExcludedUser(user)) continue;
         if (myProfile != null && user.id == myProfile.id) {
           continue; // avoid duplicate
         }
