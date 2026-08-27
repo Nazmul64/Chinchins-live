@@ -12,7 +12,8 @@ import '../../../core/services/local_image_cache.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../profile/screens/edit_profile_media_screen.dart';
-import '../../wallet/widgets/recharge_gems_sheet.dart';
+import '../../wallet/screens/wallet_screen.dart';
+import '../../wallet/services/wallet_api_service.dart';
 import '../../party/screens/create_room_screen.dart';
 import '../../kyc/screens/kyc_verification_screen.dart';
 import '../../kyc/services/kyc_api_service.dart';
@@ -87,21 +88,31 @@ class _MeScreenState extends State<MeScreen> {
         _myProfile = remoteProfile;
       });
     }
+
+    // 3. Fetch fresh wallet balance
+    try {
+      final walletData = await WalletApiService.getWalletBalance();
+      if (walletData != null && mounted) {
+        setState(() {
+          _myGems = walletData['coins'] ?? _myGems;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _openWalletScreen({int initialTabIndex = 0}) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WalletScreen(initialTabIndex: initialTabIndex),
+      ),
+    ).then((_) {
+      _loadUserProfile();
+    });
   }
 
   void _openRechargeSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => RechargeGemsSheet(
-        onRechargeSuccess: () {
-          setState(() {
-            _myGems += 32000;
-          });
-        },
-      ),
-    );
+    _openWalletScreen(initialTabIndex: 0);
   }
 
   void _openMyHostProfile() {
@@ -1163,10 +1174,10 @@ class _MeScreenState extends State<MeScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildGridMenuItem(Icons.military_tech_rounded, 'SVIP', const Color(0xFFFFB300)),
-                          _buildGridMenuItem(Icons.backpack_rounded, 'My Bag', const Color(0xFF42A5F5)),
-                          _buildGridMenuItem(Icons.diamond_rounded, 'Buy Coin', AppColors.neonPink, onTap: _openRechargeSheet),
-                          _buildGridMenuItem(Icons.payment_rounded, 'Payment\ndetails', const Color(0xFF26A69A)),
+                          _buildGridMenuItem(Icons.account_balance_wallet_rounded, 'Wallet', const Color(0xFFFFB300), onTap: () => _openWalletScreen(initialTabIndex: 0)),
+                          _buildGridMenuItem(Icons.receipt_long_rounded, 'Deposit\nHistory', const Color(0xFF42A5F5), onTap: () => _openWalletScreen(initialTabIndex: 1)),
+                          _buildGridMenuItem(Icons.diamond_rounded, 'Buy Coin', AppColors.neonPink, onTap: () => _openWalletScreen(initialTabIndex: 0)),
+                          _buildGridMenuItem(Icons.military_tech_rounded, 'SVIP', const Color(0xFF26A69A)),
                         ],
                       ),
                       const SizedBox(height: 18),

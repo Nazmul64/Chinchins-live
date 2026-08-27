@@ -37,7 +37,8 @@ class ApiConstants {
   static String get walletBalance => '$baseUrl/wallet/balance';
   static String get paymentMethods => '$baseUrl/payment-methods';
   static String get coinPackages => '$baseUrl/coin-packages';
-  static String get depositRequest => '$baseUrl/deposit/request';
+  static String get depositSubmit => '$baseUrl/deposit/submit';
+  static String get depositRequest => '$baseUrl/deposit/submit';
   static String get depositHistory => '$baseUrl/deposit/history';
   static String get walletTransactions => '$baseUrl/wallet/transactions';
   
