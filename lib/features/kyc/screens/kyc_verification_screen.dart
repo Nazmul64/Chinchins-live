@@ -85,9 +85,13 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
   File? _faceRightImage;
   File? _faceBlinkImage;
 
+  // Optional Video Verification File
+  File? _videoScanFile;
+
   bool _isLoading = true;
   bool _isSubmitting = false;
   bool _isAiChecking = false;
+  bool _isVideoScanning = false;
   bool _isResubmitting = false;
 
   String _kycStatus = 'unverified'; // unverified, pending, approved, rejected
@@ -272,6 +276,93 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
     } catch (_) {}
   }
 
+  Future<void> _recordLiveVideoScan() async {
+    final picked = await _picker.pickVideo(
+      source: ImageSource.camera,
+      maxDuration: const Duration(seconds: 15),
+      preferredCameraDevice: CameraDevice.front,
+    );
+
+    if (picked == null) return;
+    final file = File(picked.path);
+    setState(() {
+      _videoScanFile = file;
+      _isVideoScanning = true;
+    });
+
+    // Show Progress Dialog with Circular Tracker (0% -> 25% -> 50% -> 75% -> 100%)
+    _showVideoProcessingModal();
+
+    final result = await KycApiService.uploadVideoVerify(videoFile: file);
+
+    if (!mounted) return;
+    setState(() {
+      _isVideoScanning = false;
+    });
+
+    if (result['status'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: AppColors.onlineGreen, size: 20),
+              const SizedBox(width: 8),
+              Expanded(child: Text(result['message'] ?? 'Video face scan verified (100%)!')),
+            ],
+          ),
+          backgroundColor: AppColors.surfaceDark,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _showVideoProcessingModal() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surfaceDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            const Text(
+              'Processing Live Face Video Scan',
+              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 18),
+            const SizedBox(
+              width: 80,
+              height: 80,
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.neonPink),
+                strokeWidth: 4,
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              '1. Center (25%)  •  2. Turn Left (50%)\n3. Turn Right (75%)  •  4. Blink (100%)',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.5),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'সোজা তাকান, বামে ও ডানে ঘুরুন এবং চোখের পলক ফেলুন।',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.neonPink, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _selectDate() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
@@ -362,8 +453,8 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
         'text_legibility': 'excellent',
         'liveness_confidence': 0.99,
         'status': 'PASSED',
-        'instruction_en': 'AI facial landmarks & document clarity verified successfully.',
-        'instruction_bn': 'ফেস ভেরিফিকেশন সফল! আপনার ছবি ও ডকুমেন্ট স্পষ্ঠ হয়েছে।',
+        'instruction_en': 'Look directly at the camera at eye level.',
+        'instruction_bn': 'চোখের সমান্তরালে সরাসরি ক্যামেরার দিকে তাকান।',
       };
     });
 
@@ -460,6 +551,116 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _showFaceUnlockDialog() {
+    final TextEditingController identifierController = TextEditingController();
+    File? unlockFaceImage;
+    bool isUnlocking = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          backgroundColor: AppColors.surfaceDark,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.lock_open_rounded, color: AppColors.onlineGreen, size: 24),
+              SizedBox(width: 8),
+              Text('Biometric Face Unlock', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Verify your live face to unlock and recover your suspended account.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: identifierController,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: 'Phone / Email / Account ID',
+                  labelStyle: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  filled: true,
+                  fillColor: AppColors.cardDark,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await _picker.pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.front);
+                  if (picked != null) {
+                    setModalState(() {
+                      unlockFaceImage = File(picked.path);
+                    });
+                  }
+                },
+                child: Container(
+                  height: 90,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: AppColors.cardDark,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: unlockFaceImage != null ? AppColors.onlineGreen : AppColors.cardBorder),
+                  ),
+                  child: unlockFaceImage != null
+                      ? ClipRRect(borderRadius: BorderRadius.circular(9), child: Image.file(unlockFaceImage!, fit: BoxFit.cover))
+                      : const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.camera_front_rounded, color: AppColors.neonPink, size: 28),
+                            SizedBox(height: 4),
+                            Text('Capture Live Face', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                          ],
+                        ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.neonPurple),
+              onPressed: isUnlocking
+                  ? null
+                  : () async {
+                      if (identifierController.text.trim().isEmpty || unlockFaceImage == null) {
+                        _showErrorSnackBar('Please provide identifier and live face photo');
+                        return;
+                      }
+                      setModalState(() => isUnlocking = true);
+                      final res = await KycApiService.unlockAccountWithFace(
+                        accountIdentifier: identifierController.text.trim(),
+                        liveFaceImage: unlockFaceImage!,
+                      );
+                      if (ctx.mounted) {
+                        setModalState(() => isUnlocking = false);
+                        Navigator.pop(ctx);
+                      }
+                      if (mounted) {
+                        if (res['status'] == true) {
+                          _showErrorSnackBar(res['message'] ?? 'Account unlocked successfully!');
+                        } else {
+                          _showErrorSnackBar(res['message'] ?? 'Unlock failed');
+                        }
+                      }
+                    },
+              child: isUnlocking
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Unlock Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -638,7 +839,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           ],
         ),
         content: const Text(
-          'Your multi-angle face verification and official identity documents have been submitted. Our safety team will review and grant your Verified badge.',
+          'Your multi-angle face verification and official identity documents have been submitted to https://chinchins.live/. Our safety team will review and grant your Verified badge.',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
         ),
@@ -680,6 +881,11 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.lock_open_rounded, color: AppColors.onlineGreen),
+            tooltip: 'Biometric Unlock',
+            onPressed: _showFaceUnlockDialog,
+          ),
           IconButton(
             icon: const Icon(Icons.help_outline_rounded, color: AppColors.neonPink),
             tooltip: 'Instructions',
@@ -1212,26 +1418,47 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           ),
           const SizedBox(height: 14),
 
-          // AI Pre-Check Button
-          if (_frontImage != null && _faceCenterImage != null) ...[
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.neonPurple,
-                side: const BorderSide(color: AppColors.neonPurple),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+          // Live Video Scan or AI Pre-Check Row
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              if (_frontImage != null && _faceCenterImage != null)
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.neonPurple,
+                    side: const BorderSide(color: AppColors.neonPurple),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                  ),
+                  icon: _isAiChecking
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPurple))
+                      : const Icon(Icons.auto_awesome_rounded, color: AppColors.neonPink, size: 18),
+                  label: Text(
+                    _isAiChecking ? 'Inspecting...' : 'AI Quality Pre-check',
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: _isAiChecking ? null : _runAiPreCheck,
+                ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.onlineGreen,
+                  side: const BorderSide(color: AppColors.onlineGreen),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                ),
+                icon: _isVideoScanning
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onlineGreen))
+                    : const Icon(Icons.videocam_rounded, color: AppColors.onlineGreen, size: 18),
+                label: Text(
+                  _videoScanFile != null ? 'Video Scan Completed' : 'Live Video Scan (0-100%)',
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                onPressed: _isVideoScanning ? null : _recordLiveVideoScan,
               ),
-              icon: _isAiChecking
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPurple))
-                  : const Icon(Icons.auto_awesome_rounded, color: AppColors.neonPink, size: 18),
-              label: Text(
-                _isAiChecking ? 'Inspecting with AI...' : 'Run AI Quality & Face Pre-check',
-                style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
-              ),
-              onPressed: _isAiChecking ? null : _runAiPreCheck,
-            ),
-            const SizedBox(height: 12),
-          ],
+            ],
+          ),
+          const SizedBox(height: 14),
 
           // Optional notes
           TextFormField(

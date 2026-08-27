@@ -302,4 +302,35 @@ class KycApiService {
     } catch (_) {}
     return null;
   }
+
+  /// 5. Live Video Face Scan & Circular Progress Processing (0% -> 25% -> 50% -> 75% -> 100%)
+  static Future<Map<String, dynamic>> uploadVideoVerify({
+    required File videoFile,
+    String? customToken,
+  }) async {
+    try {
+      final token = customToken ?? await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.kycVideoVerify);
+      final request = http.MultipartRequest('POST', url);
+
+      request.headers['Accept'] = 'application/json';
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      request.files.add(await http.MultipartFile.fromPath('video', videoFile.path));
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      final decoded = jsonDecode(response.body);
+      return decoded as Map<String, dynamic>;
+    } catch (e) {
+      return {
+        'status': false,
+        'message': 'Video face scan error: ${e.toString()}',
+      };
+    }
+  }
 }
+

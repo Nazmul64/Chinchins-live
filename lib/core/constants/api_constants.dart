@@ -55,6 +55,8 @@ class ApiConstants {
   static String get kycAiDetect => '$baseUrl/kyc/ai-detect';
   static String get kycFaceVerifyStep => '$baseUrl/kyc/face/verify-step';
   static String get kycFaceUnlock => '$baseUrl/kyc/face/unlock';
+  static String get kycVideoVerify => '$baseUrl/kyc/video-verify';
 }
+
 
 
