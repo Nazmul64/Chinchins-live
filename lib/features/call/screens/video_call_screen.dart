@@ -1,14 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/models/gift_item.dart';
-import '../../../core/data/mock_data.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../chat/widgets/gift_picker_modal.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../../wallet/widgets/continue_call_recharge_dialog.dart';
 import '../services/call_api_service.dart';
+import '../services/call_sound_manager.dart';
+import '../services/webrtc_call_service.dart';
 
 class VideoCallScreen extends StatefulWidget {
   final ModelProfile model;
@@ -29,7 +31,11 @@ class VideoCallScreen extends StatefulWidget {
 }
 
 class _VideoCallScreenState extends State<VideoCallScreen> {
-  int _callSeconds = 0; // Counts upwards from 00:00
+  final WebRTCCallService _webrtcService = WebRTCCallService();
+  bool _isCameraReady = false;
+  bool _isConnectingCall = true;
+
+  int _callSeconds = 0;
   Timer? _timer;
   bool _isMuted = false;
   bool _isCameraOff = false;
@@ -48,9 +54,34 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _isFreeTrialActive = widget.isFreeTrial;
     _freeTrialRemaining = widget.freeDurationSeconds;
     _ratePerMinute = widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100;
+
+    _playDialingTone();
+    _initWebRTCMedia();
     _loadUserBalance();
     _connectCallSession();
     _startTimer();
+  }
+
+  Future<void> _playDialingTone() async {
+    await CallSoundManager.playOutgoingRingtone();
+    // Stop dialing tone after 2.5 seconds as receiver connects
+    Future.delayed(const Duration(milliseconds: 2500), () {
+      if (mounted) {
+        CallSoundManager.stopRingtone();
+        setState(() {
+          _isConnectingCall = false;
+        });
+      }
+    });
+  }
+
+  Future<void> _initWebRTCMedia() async {
+    final success = await _webrtcService.initializeMedia();
+    if (mounted) {
+      setState(() {
+        _isCameraReady = success;
+      });
+    }
   }
 
   Future<void> _loadUserBalance() async {
@@ -74,6 +105,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    CallSoundManager.stopRingtone();
+    _webrtcService.dispose();
     if (widget.callId != null) {
       CallApiService.endCall(
         callId: widget.callId!,
@@ -154,6 +187,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   }
 
   void _showRechargePopup() {
+    CallSoundManager.stopRingtone();
     setState(() {
       _isRechargeDialogVisible = true;
     });
@@ -187,11 +221,17 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Host Video Stream Feed
-          CachedImageLoader(
-            imageUrl: widget.model.avatarUrl,
-            fit: BoxFit.cover,
-          ),
+          // 1. Host Video Stream Feed (Live Remote Stream or Live Profile)
+          if (_webrtcService.remoteStream != null)
+            RTCVideoView(
+              _webrtcService.remoteRenderer,
+              objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            )
+          else
+            CachedImageLoader(
+              imageUrl: widget.model.avatarUrl,
+              fit: BoxFit.cover,
+            ),
 
           // Dark overlay gradient
           Container(
@@ -208,6 +248,39 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               ),
             ),
           ),
+
+          // Connecting indicator / Ringing badge
+          if (_isConnectingCall)
+            Positioned(
+              top: MediaQuery.of(context).size.height * 0.4,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.8), width: 1.5),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPink),
+                      ),
+                      SizedBox(width: 10),
+                      Text(
+                        'Ringing & Connecting...',
+                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
 
           // 2. Animated Gift Overlay
           if (_activeGiftShower != null)
@@ -242,7 +315,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Column(
                 children: [
-                  // Top Row: Timer Mini Window + User Gems
+                  // Top Row: Host Pill + Gems + Timer
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -352,7 +425,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                   ],
                   const SizedBox(height: 10),
 
-                  // "Continue Video Call 💎 1800/min" Pill matching Screenshot
+                  // "Continue Video Call 💎 Rate/min" Pill matching Screenshot
                   GestureDetector(
                     onTap: _showRechargePopup,
                     child: Container(
@@ -398,23 +471,23 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
             ),
           ),
 
-          // 4. Floating Self-Camera Preview (Top Right)
+          // 4. Floating Real Self-Camera Preview (Top Right)
           if (!_isRechargeDialogVisible)
             Positioned(
               top: 140,
               right: 16,
               child: Container(
-                width: 90,
-                height: 125,
+                width: 105,
+                height: 145,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white38, width: 1.5),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.8), width: 2.0),
                   boxShadow: const [
-                    BoxShadow(color: Colors.black54, blurRadius: 10),
+                    BoxShadow(color: Colors.black54, blurRadius: 12, offset: Offset(0, 4)),
                   ],
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -422,25 +495,30 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                         color: const Color(0xFF1E1830),
                         child: _isCameraOff
                             ? const Center(
-                                child: Icon(Icons.videocam_off, color: Colors.white54, size: 28),
+                                child: Icon(Icons.videocam_off_rounded, color: Colors.white54, size: 28),
                               )
-                            : CachedImageLoader(
-                                imageUrl: MockData.imgLivePreview,
-                                fit: BoxFit.cover,
-                              ),
+                            : _isCameraReady
+                                ? RTCVideoView(
+                                    _webrtcService.localRenderer,
+                                    mirror: true,
+                                    objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                                  )
+                                : const Center(
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPink),
+                                  ),
                       ),
                       Positioned(
-                        bottom: 4,
+                        bottom: 6,
                         left: 6,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(4),
+                            color: Colors.black87,
+                            borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
                             'You',
-                            style: TextStyle(color: Colors.white, fontSize: 9),
+                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
@@ -481,12 +559,13 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                         setState(() {
                           _isMuted = !_isMuted;
                         });
+                        _webrtcService.toggleMute(_isMuted);
                       },
                     ),
 
-                    // End Call Button (Big Red) -> Shows Recharge Dialog
+                    // End Call Button (Big Red) -> Hangs up
                     GestureDetector(
-                      onTap: _showRechargePopup,
+                      onTap: () => Navigator.pop(context),
                       child: Container(
                         width: 64,
                         height: 64,
@@ -509,15 +588,16 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                       ),
                     ),
 
-                    // Camera Toggle
+                    // Camera Toggle (On / Off)
                     _buildCallControlButton(
-                      icon: _isCameraOff ? Icons.videocam_off_rounded : Icons.switch_camera_rounded,
+                      icon: _isCameraOff ? Icons.videocam_off_rounded : Icons.videocam_rounded,
                       isActive: !_isCameraOff,
                       activeColor: Colors.white24,
                       onTap: () {
                         setState(() {
                           _isCameraOff = !_isCameraOff;
                         });
+                        _webrtcService.toggleCamera(_isCameraOff);
                       },
                     ),
 
@@ -542,7 +622,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               ),
             ),
 
-          // 6. Centered Overlaid Dialog matching Screenshot (with Ribbon Diamond, Host Photo, 7560 BDT 150.00, Get Coins)
+          // 6. Centered Overlaid Dialog matching Screenshot
           if (_isRechargeDialogVisible)
             Container(
               color: Colors.black.withValues(alpha: 0.55),
