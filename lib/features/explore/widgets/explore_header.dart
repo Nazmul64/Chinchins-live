@@ -36,7 +36,9 @@ class ExploreHeader extends StatelessWidget {
                   const SizedBox(width: 14),
                   _buildTabItem(title: 'Party 🎉', index: 1),
                   const SizedBox(width: 14),
-                  _buildTabItem(title: 'Match', index: 2),
+                  _buildTabItem(title: 'Match 🔥', index: 2),
+                  const SizedBox(width: 14),
+                  _buildVideoCallTabItem(index: 3),
                 ],
               ),
             ),
@@ -118,6 +120,60 @@ class ExploreHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildVideoCallTabItem({required int index}) {
+    final isSelected = selectedTabIndex == index;
+    return GestureDetector(
+      onTap: () => onTabSelected(index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          gradient: isSelected
+              ? AppColors.primaryGradient
+              : LinearGradient(
+                  colors: [
+                    AppColors.neonPink.withValues(alpha: 0.25),
+                    AppColors.neonPurple.withValues(alpha: 0.25),
+                  ],
+                ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? Colors.white : AppColors.neonPink.withValues(alpha: 0.5),
+            width: 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppColors.neonPink.withValues(alpha: 0.5),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.videocam_rounded,
+              color: Colors.white,
+              size: 15,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Video Call',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: isSelected ? 13.5 : 12.5,
+                fontWeight: isSelected ? FontWeight.w900 : FontWeight.bold,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

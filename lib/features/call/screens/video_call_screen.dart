@@ -6,14 +6,22 @@ import '../../../core/data/mock_data.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../chat/widgets/gift_picker_modal.dart';
+import '../../wallet/services/wallet_api_service.dart';
 import '../../wallet/widgets/continue_call_recharge_dialog.dart';
+import '../services/call_api_service.dart';
 
 class VideoCallScreen extends StatefulWidget {
   final ModelProfile model;
+  final int? callId;
+  final bool isFreeTrial;
+  final int freeDurationSeconds;
 
   const VideoCallScreen({
     super.key,
     required this.model,
+    this.callId,
+    this.isFreeTrial = false,
+    this.freeDurationSeconds = 10,
   });
 
   @override
@@ -21,24 +29,57 @@ class VideoCallScreen extends StatefulWidget {
 }
 
 class _VideoCallScreenState extends State<VideoCallScreen> {
-  int _callSeconds = 79; // Start at 01:19 as in the screenshot or count upwards
+  int _callSeconds = 0; // Counts upwards from 00:00
   Timer? _timer;
   bool _isMuted = false;
   bool _isCameraOff = false;
   bool _isBeautyFilterOn = true;
   String? _activeGiftShower;
-  int _userGems = 12450;
+  int _userGems = 0;
   bool _isRechargeDialogVisible = false;
+  bool _isFreeTrialActive = false;
+  int _freeTrialRemaining = 0;
+  int _ratePerMinute = 100;
+  bool _isPulseInProgress = false;
 
   @override
   void initState() {
     super.initState();
+    _isFreeTrialActive = widget.isFreeTrial;
+    _freeTrialRemaining = widget.freeDurationSeconds;
+    _ratePerMinute = widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100;
+    _loadUserBalance();
+    _connectCallSession();
     _startTimer();
+  }
+
+  Future<void> _loadUserBalance() async {
+    final balanceData = await WalletApiService.getWalletBalance();
+    if (balanceData != null && mounted) {
+      final coinsVal = balanceData['coins'] ?? balanceData['user_coins'] ?? balanceData['current_coins'];
+      setState(() {
+        _userGems = coinsVal is int
+            ? coinsVal
+            : int.tryParse(coinsVal?.toString() ?? '0') ?? 0;
+      });
+    }
+  }
+
+  Future<void> _connectCallSession() async {
+    if (widget.callId != null) {
+      await CallApiService.startCall(callId: widget.callId!);
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    if (widget.callId != null) {
+      CallApiService.endCall(
+        callId: widget.callId!,
+        durationSeconds: _callSeconds,
+      );
+    }
     super.dispose();
   }
 
@@ -47,13 +88,48 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       if (mounted) {
         setState(() {
           _callSeconds++;
-          // Trigger the recharge dialog automatically after preview time if not already shown
-          if (_callSeconds == 85 && !_isRechargeDialogVisible) {
-            _showRechargePopup();
+          if (_isFreeTrialActive && _freeTrialRemaining > 0) {
+            _freeTrialRemaining--;
+            if (_freeTrialRemaining <= 0) {
+              _isFreeTrialActive = false;
+            }
           }
         });
+
+        // In-call pulse billing every 10 seconds or when free trial finishes
+        if (widget.callId != null && (_callSeconds % 10 == 0 || (_freeTrialRemaining == 0 && _isFreeTrialActive))) {
+          _sendInCallPulse();
+        }
       }
     });
+  }
+
+  Future<void> _sendInCallPulse() async {
+    if (_isPulseInProgress || widget.callId == null || _isRechargeDialogVisible) return;
+    _isPulseInProgress = true;
+
+    try {
+      final res = await CallApiService.deductIntervalPulse(
+        callId: widget.callId!,
+        elapsedSeconds: _callSeconds,
+        coins: _ratePerMinute,
+      );
+
+      if (!mounted) return;
+
+      if (res['should_terminate_call'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
+        _showRechargePopup();
+      } else if (res['success'] == true) {
+        if (res['current_coins'] != null) {
+          setState(() {
+            _userGems = (res['current_coins'] is int)
+                ? res['current_coins']
+                : int.tryParse(res['current_coins'].toString()) ?? _userGems;
+          });
+        }
+      }
+    } catch (_) {}
+    _isPulseInProgress = false;
   }
 
   String _formatDuration(int seconds) {
@@ -247,7 +323,34 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  if (_isFreeTrialActive && _freeTrialRemaining > 0) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.orangeGradient,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.orange.withValues(alpha: 0.5),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.timer_rounded, color: Colors.white, size: 15),
+                          const SizedBox(width: 6),
+                          Text(
+                            '🎉 Free Trial Active: ${_freeTrialRemaining}s free',
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
 
                   // "Continue Video Call 💎 1800/min" Pill matching Screenshot
                   GestureDetector(

@@ -49,7 +49,9 @@ class ApiConstants {
   static String get withdrawHistory => '$baseUrl/withdraw/history';
   static String withdrawDetails(String id) => '$baseUrl/withdraw/$id';
   
-  // Video Calling endpoints
+  // Video & Audio Calling endpoints
+  static String get callConfig => '$baseUrl/call/config';
+  static String get callRandomMatch => '$baseUrl/call/random-match';
   static String get callInitiate => '$baseUrl/call/initiate';
   static String get callStart => '$baseUrl/call/start';
   static String get callEnd => '$baseUrl/call/end';
