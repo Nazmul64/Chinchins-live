@@ -203,9 +203,9 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                 Navigator.pop(ctx);
                 final picked = await _picker.pickImage(
                   source: ImageSource.camera,
-                  maxWidth: 1024,
-                  maxHeight: 1024,
-                  imageQuality: 75,
+                  maxWidth: 800,
+                  maxHeight: 800,
+                  imageQuality: 70,
                   preferredCameraDevice: isSelfie ? CameraDevice.front : CameraDevice.rear,
                 );
                 if (picked != null) {
@@ -222,9 +222,9 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                 Navigator.pop(ctx);
                 final picked = await _picker.pickImage(
                   source: ImageSource.gallery,
-                  maxWidth: 1024,
-                  maxHeight: 1024,
-                  imageQuality: 75,
+                  maxWidth: 800,
+                  maxHeight: 800,
+                  imageQuality: 70,
                 );
                 if (picked != null) {
                   setState(() {

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../../core/utils/app_logger.dart';
 import '../../auth/services/auth_api_service.dart';
 
 class KycApiService {
@@ -18,7 +19,20 @@ class KycApiService {
       if (token != null) headers['Authorization'] = 'Bearer $token';
       if (userId != null) headers['X-User-Id'] = userId;
 
+      AppLogger.request(
+        method: 'GET',
+        url: url.toString(),
+        headers: headers,
+      );
+
       final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
+
+      AppLogger.response(
+        method: 'GET',
+        url: url.toString(),
+        statusCode: response.statusCode,
+        body: response.body,
+      );
 
       if (response.statusCode == 200) {
         try {
@@ -26,9 +40,13 @@ class KycApiService {
           if (data['status'] == true && data['data'] != null) {
             return data['data'] as Map<String, dynamic>;
           }
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error('KycInstructionsParse', e, st);
+        }
       }
-    } catch (_) {}
+    } catch (e, st) {
+      AppLogger.error('KycInstructions', e, st);
+    }
 
     // Fallback default guidelines according to specification
     return {
@@ -141,8 +159,29 @@ class KycApiService {
       // Attach 1 Single Selfie Photo
       request.files.add(await http.MultipartFile.fromPath('selfie_image', selfieImage.path));
 
+      final filesList = [
+        'front_image (${(await frontImage.length()) ~/ 1024} KB)',
+        if (backImage != null) 'back_image (${(await backImage.length()) ~/ 1024} KB)',
+        'selfie_image (${(await selfieImage.length()) ~/ 1024} KB)',
+      ];
+
+      AppLogger.request(
+        method: 'POST [Multipart]',
+        url: url.toString(),
+        headers: request.headers,
+        fields: request.fields,
+        files: filesList,
+      );
+
       final streamedResponse = await request.send().timeout(const Duration(seconds: 45));
       final response = await http.Response.fromStream(streamedResponse);
+
+      AppLogger.response(
+        method: 'POST',
+        url: url.toString(),
+        statusCode: response.statusCode,
+        body: response.body,
+      );
 
       // Safe JSON decode
       Map<String, dynamic> decoded = {};
@@ -151,7 +190,8 @@ class KycApiService {
         if (raw is Map<String, dynamic>) {
           decoded = raw;
         }
-      } catch (_) {
+      } catch (e) {
+        AppLogger.error('KycSubmitDecodeError', 'Failed to parse json response: ${response.body}');
         if (response.statusCode == 413) {
           return {
             'success': false,
@@ -166,7 +206,7 @@ class KycApiService {
         }
         return {
           'success': false,
-          'message': 'Server response code ${response.statusCode}. Please try again.',
+          'message': 'Server returned code ${response.statusCode}. Response: ${response.body.length > 80 ? response.body.substring(0, 80) : response.body}',
         };
       }
 
@@ -196,7 +236,8 @@ class KycApiService {
           'errors': decoded['errors'],
         };
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('KycSubmitException', e, st);
       return {
         'success': false,
         'message': 'Connection error: ${e.toString()}',
@@ -216,7 +257,20 @@ class KycApiService {
       if (token != null) headers['Authorization'] = 'Bearer $token';
       if (userId != null) headers['X-User-Id'] = userId;
 
+      AppLogger.request(
+        method: 'GET',
+        url: url.toString(),
+        headers: headers,
+      );
+
       final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
+
+      AppLogger.response(
+        method: 'GET',
+        url: url.toString(),
+        statusCode: response.statusCode,
+        body: response.body,
+      );
 
       if (response.statusCode == 200) {
         try {
@@ -231,9 +285,13 @@ class KycApiService {
             }
             return kycData;
           }
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error('KycStatusParse', e, st);
+        }
       }
-    } catch (_) {}
+    } catch (e, st) {
+      AppLogger.error('KycStatus', e, st);
+    }
     return null;
   }
 
@@ -251,21 +309,37 @@ class KycApiService {
       request.fields['account_identifier'] = accountIdentifier;
       request.files.add(await http.MultipartFile.fromPath('image', liveFaceImage.path));
 
+      AppLogger.request(
+        method: 'POST [Unlock]',
+        url: url.toString(),
+        fields: request.fields,
+      );
+
       final streamedResponse = await request.send().timeout(const Duration(seconds: 25));
       final response = await http.Response.fromStream(streamedResponse);
+
+      AppLogger.response(
+        method: 'POST',
+        url: url.toString(),
+        statusCode: response.statusCode,
+        body: response.body,
+      );
 
       try {
         final decoded = jsonDecode(response.body);
         if (decoded is Map<String, dynamic>) {
           return decoded;
         }
-      } catch (_) {}
+      } catch (e, st) {
+        AppLogger.error('FaceUnlockDecode', e, st);
+      }
 
       return {
         'status': response.statusCode == 200,
         'message': response.statusCode == 200 ? 'Account unlocked successfully!' : 'Unlock request processed.',
       };
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('FaceUnlockException', e, st);
       return {
         'status': false,
         'message': 'Account unlock error: ${e.toString()}',
@@ -298,8 +372,21 @@ class KycApiService {
       request.files.add(await http.MultipartFile.fromPath('front_image', frontImage.path));
       request.files.add(await http.MultipartFile.fromPath('selfie_image', selfieImage.path));
 
+      AppLogger.request(
+        method: 'POST [AiDetect]',
+        url: url.toString(),
+        headers: request.headers,
+      );
+
       final streamedResponse = await request.send().timeout(const Duration(seconds: 25));
       final response = await http.Response.fromStream(streamedResponse);
+
+      AppLogger.response(
+        method: 'POST',
+        url: url.toString(),
+        statusCode: response.statusCode,
+        body: response.body,
+      );
 
       if (response.statusCode == 200) {
         try {
@@ -307,9 +394,13 @@ class KycApiService {
           if (data['status'] == true && data['data'] != null) {
             return data['data'] as Map<String, dynamic>;
           }
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error('AiDetectParse', e, st);
+        }
       }
-    } catch (_) {}
+    } catch (e, st) {
+      AppLogger.error('AiDetectException', e, st);
+    }
     return null;
   }
 }
