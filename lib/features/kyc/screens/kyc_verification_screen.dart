@@ -787,9 +787,11 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
       faceLeftImage: _faceLeftImage,
       faceRightImage: _faceRightImage,
       faceBlinkImage: _faceBlinkImage,
+      faceVideoFile: _videoScanFile,
       userNotes: _notesController.text.trim(),
       livenessData: {
         'status': 'passed',
+        'has_video_scan': _videoScanFile != null,
         'multi_angle_verified': _faceLeftImage != null && _faceRightImage != null && _faceBlinkImage != null,
         'confidence': 0.99,
         'timestamp': DateTime.now().toIso8601String(),

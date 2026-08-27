@@ -6,7 +6,7 @@ import '../../../core/constants/api_constants.dart';
 import '../../auth/services/auth_api_service.dart';
 
 class KycApiService {
-  /// Fetch supported KYC documents, requirements & AI face liveness guidelines
+  /// 1. Fetch supported KYC documents, requirements & AI face liveness guidelines
   static Future<Map<String, dynamic>> getInstructions() async {
     try {
       final token = await AuthApiService.getToken();
@@ -44,6 +44,7 @@ class KycApiService {
             'front_image',
             'back_image',
             'selfie_image',
+            'face_video',
           ],
           'front_part_guide': 'Clear, glare-free photo of the front side of your NID Card with photo and name visible.',
           'back_part_guide': 'Clear photo of the back side of your NID Card with address and barcode visible.',
@@ -59,6 +60,7 @@ class KycApiService {
             'date_of_birth',
             'front_image',
             'selfie_image',
+            'face_video',
           ],
           'front_part_guide': 'High-resolution photo or screenshot of the main bio-data page (with photo, MRZ code and passport number).',
           'back_part_guide': 'Optional for passport.',
@@ -74,6 +76,7 @@ class KycApiService {
             'date_of_birth',
             'front_image',
             'selfie_image',
+            'face_video',
           ],
           'front_part_guide': 'Clear photo or digital screenshot of the full birth certificate document.',
           'back_part_guide': 'Optional.',
@@ -98,32 +101,39 @@ class KycApiService {
     };
   }
 
-  /// Get current user's KYC verification status, latest submission, and badge
-  static Future<Map<String, dynamic>?> getKycStatus([String? customToken]) async {
+  /// 2. Run AI Quality & Face Pre-check
+  static Future<Map<String, dynamic>?> aiDetect({
+    required File frontImage,
+    required File selfieImage,
+  }) async {
     try {
-      final token = customToken ?? await AuthApiService.getToken();
+      final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse(ApiConstants.kycStatus);
-      final headers = <String, String>{'Accept': 'application/json'};
-      if (token != null) headers['Authorization'] = 'Bearer $token';
-      if (userId != null) headers['X-User-Id'] = userId;
+      final url = Uri.parse(ApiConstants.kycAiDetect);
+      final request = http.MultipartRequest('POST', url);
 
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
+      request.headers['Accept'] = 'application/json';
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      if (userId != null) {
+        request.headers['X-User-Id'] = userId;
+        request.fields['user_id'] = userId;
+      }
+
+      request.files.add(await http.MultipartFile.fromPath('front_image', frontImage.path));
+      request.files.add(await http.MultipartFile.fromPath('selfie_image', selfieImage.path));
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 25));
+      final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
         try {
           final data = jsonDecode(response.body);
           if (data['status'] == true && data['data'] != null) {
-            final kycData = data['data'] as Map<String, dynamic>;
-            final prefs = await SharedPreferences.getInstance();
-            final status = (kycData['kyc_status'] ?? 'unverified').toString().toLowerCase();
-            await prefs.setString('kyc_verification_status', status);
-            if (kycData['is_verified'] != null) {
-              await prefs.setBool('is_verified', kycData['is_verified'] == true || kycData['is_verified'] == 1);
-            }
-            return kycData;
+            return data['data'] as Map<String, dynamic>;
           }
         } catch (_) {}
       }
@@ -131,7 +141,59 @@ class KycApiService {
     return null;
   }
 
-  /// Submit full KYC verification with multi-angle face verification (Center, Left, Right, Blink)
+  /// 3. Binance-Style Live Video Face Scan Upload (0-100% Progress)
+  static Future<Map<String, dynamic>> uploadVideoVerify({
+    required File videoFile,
+    String? customToken,
+  }) => uploadLiveFaceVideoScan(videoFile: videoFile, customToken: customToken);
+
+  static Future<Map<String, dynamic>> uploadLiveFaceVideoScan({
+    required File videoFile,
+    String? customToken,
+  }) async {
+    try {
+      final token = customToken ?? await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
+      final url = Uri.parse(ApiConstants.kycVideoVerify);
+      final request = http.MultipartRequest('POST', url);
+
+      request.headers['Accept'] = 'application/json';
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      if (userId != null) {
+        request.headers['X-User-Id'] = userId;
+        request.fields['user_id'] = userId;
+      }
+
+      request.files.add(await http.MultipartFile.fromPath('video', videoFile.path));
+      request.files.add(await http.MultipartFile.fromPath('face_video', videoFile.path));
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+      } catch (_) {}
+
+      return {
+        'status': response.statusCode == 200,
+        'message': 'Video processed successfully.',
+      };
+    } catch (e) {
+      return {
+        'status': false,
+        'message': 'Video face scan error: ${e.toString()}',
+      };
+    }
+  }
+
+  /// 4. Submit Full KYC with Document & Face Video/Selfie
   static Future<Map<String, dynamic>> submitKyc({
     required String documentType,
     required String fullName,
@@ -143,6 +205,7 @@ class KycApiService {
     File? faceLeftImage,
     File? faceRightImage,
     File? faceBlinkImage,
+    File? faceVideoFile,
     Map<String, dynamic>? livenessData,
     String? userNotes,
     String? customToken,
@@ -184,8 +247,12 @@ class KycApiService {
         request.files.add(await http.MultipartFile.fromPath('back_image', backImage.path));
       }
 
-      // Multi-Angle Face Files
+      // Selfie & Video Files
       request.files.add(await http.MultipartFile.fromPath('selfie_image', selfieImage.path));
+      if (faceVideoFile != null) {
+        request.files.add(await http.MultipartFile.fromPath('face_video', faceVideoFile.path));
+        request.files.add(await http.MultipartFile.fromPath('video', faceVideoFile.path));
+      }
       if (faceLeftImage != null) {
         request.files.add(await http.MultipartFile.fromPath('face_left_image', faceLeftImage.path));
       }
@@ -219,7 +286,6 @@ class KycApiService {
             'message': 'Authentication session expired. Please re-login to your account.',
           };
         }
-        // If server returned HTML, provide user friendly message
         return {
           'success': false,
           'message': 'Server response code ${response.statusCode}. Please try again.',
@@ -240,7 +306,7 @@ class KycApiService {
       } else {
         return {
           'success': false,
-          'message': decoded['message'] ?? 'Failed to submit KYC (${response.statusCode})',
+          'message': decoded['message'] ?? 'Failed to submit KYC verification (${response.statusCode})',
           'errors': decoded['errors'],
         };
       }
@@ -252,7 +318,7 @@ class KycApiService {
     }
   }
 
-  /// Real-time AI Face Step Verification ('center' | 'turn_left' | 'turn_right' | 'blink')
+  /// 5. Real-time AI Face Step Verification ('center' | 'turn_left' | 'turn_right' | 'blink')
   static Future<Map<String, dynamic>> verifyFaceStep({
     required String step,
     required File frameImage,
@@ -300,7 +366,7 @@ class KycApiService {
     }
   }
 
-  /// Biometric AI Face Re-Unlock for Blocked / Suspended Accounts
+  /// 6. Biometric AI Face Re-Unlock for Blocked / Suspended Accounts
   static Future<Map<String, dynamic>> unlockAccountWithFace({
     required String accountIdentifier, // phone, email, or account_id
     required File liveFaceImage,
@@ -336,89 +402,36 @@ class KycApiService {
     }
   }
 
-  /// AI Pre-check for face quality, liveness & document legibility
-  static Future<Map<String, dynamic>?> aiDetect({
-    required File frontImage,
-    required File selfieImage,
-  }) async {
-    try {
-      final token = await AuthApiService.getToken();
-      final savedUser = await AuthApiService.getSavedUser();
-      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
-
-      final url = Uri.parse(ApiConstants.kycAiDetect);
-      final request = http.MultipartRequest('POST', url);
-
-      request.headers['Accept'] = 'application/json';
-      if (token != null) {
-        request.headers['Authorization'] = 'Bearer $token';
-      }
-      if (userId != null) {
-        request.headers['X-User-Id'] = userId;
-        request.fields['user_id'] = userId;
-      }
-
-      request.files.add(await http.MultipartFile.fromPath('front_image', frontImage.path));
-      request.files.add(await http.MultipartFile.fromPath('selfie_image', selfieImage.path));
-
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 25));
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode == 200) {
-        try {
-          final data = jsonDecode(response.body);
-          if (data['status'] == true && data['data'] != null) {
-            return data['data'] as Map<String, dynamic>;
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  /// Live Video Face Scan & Circular Progress Processing (0% -> 25% -> 50% -> 75% -> 100%)
-  static Future<Map<String, dynamic>> uploadVideoVerify({
-    required File videoFile,
-    String? customToken,
-  }) async {
+  /// 7. Get current KYC Status & Verified state
+  static Future<Map<String, dynamic>?> getKycStatus([String? customToken]) async {
     try {
       final token = customToken ?? await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse(ApiConstants.kycVideoVerify);
-      final request = http.MultipartRequest('POST', url);
+      final url = Uri.parse(ApiConstants.kycStatus);
+      final headers = <String, String>{'Accept': 'application/json'};
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+      if (userId != null) headers['X-User-Id'] = userId;
 
-      request.headers['Accept'] = 'application/json';
-      if (token != null) {
-        request.headers['Authorization'] = 'Bearer $token';
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body);
+          if (data['status'] == true && data['data'] != null) {
+            final kycData = data['data'] as Map<String, dynamic>;
+            final prefs = await SharedPreferences.getInstance();
+            final status = (kycData['kyc_status'] ?? 'unverified').toString().toLowerCase();
+            await prefs.setString('kyc_verification_status', status);
+            if (kycData['is_verified'] != null) {
+              await prefs.setBool('is_verified', kycData['is_verified'] == true || kycData['is_verified'] == 1);
+            }
+            return kycData;
+          }
+        } catch (_) {}
       }
-      if (userId != null) {
-        request.headers['X-User-Id'] = userId;
-        request.fields['user_id'] = userId;
-      }
-
-      request.files.add(await http.MultipartFile.fromPath('video', videoFile.path));
-
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
-      final response = await http.Response.fromStream(streamedResponse);
-
-      try {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map<String, dynamic>) {
-          return decoded;
-        }
-      } catch (_) {}
-
-      return {
-        'status': response.statusCode == 200,
-        'message': 'Video processed successfully.',
-      };
-    } catch (e) {
-      return {
-        'status': false,
-        'message': 'Video face scan error: ${e.toString()}',
-      };
-    }
+    } catch (_) {}
+    return null;
   }
 }
