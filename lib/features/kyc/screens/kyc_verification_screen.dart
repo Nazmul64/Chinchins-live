@@ -78,20 +78,11 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
   DateTime? _selectedDate;
   File? _frontImage;
   File? _backImage;
-
-  // 4-Step Multi-Angle Face Liveness Photos
-  File? _faceCenterImage;
-  File? _faceLeftImage;
-  File? _faceRightImage;
-  File? _faceBlinkImage;
-
-  // Optional Video Verification File
-  File? _videoScanFile;
+  File? _selfieImage; // 1 Single Selfie holding document
 
   bool _isLoading = true;
   bool _isSubmitting = false;
   bool _isAiChecking = false;
-  bool _isVideoScanning = false;
   bool _isResubmitting = false;
 
   String _kycStatus = 'unverified'; // unverified, pending, approved, rejected
@@ -169,7 +160,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
     }
   }
 
-  Future<void> _pickImage(Function(File file) onPicked, {required String title, String? stepKey}) async {
+  Future<void> _pickImage(Function(File file) onPicked, {required String title, bool isSelfie = false}) async {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surfaceDark,
@@ -204,7 +195,10 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
             ListTile(
               leading: const Icon(Icons.camera_alt_rounded, color: AppColors.neonPink),
               title: const Text('Capture with Camera', style: TextStyle(color: Colors.white)),
-              subtitle: const Text('Live selfie or document capture', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+              subtitle: Text(
+                isSelfie ? 'Take a live selfie holding document' : 'Take photo of your identity document',
+                style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+              ),
               onTap: () async {
                 Navigator.pop(ctx);
                 final picked = await _picker.pickImage(
@@ -212,16 +206,12 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                   maxWidth: 1024,
                   maxHeight: 1024,
                   imageQuality: 75,
-                  preferredCameraDevice: stepKey != null ? CameraDevice.front : CameraDevice.rear,
+                  preferredCameraDevice: isSelfie ? CameraDevice.front : CameraDevice.rear,
                 );
                 if (picked != null) {
-                  final file = File(picked.path);
                   setState(() {
-                    onPicked(file);
+                    onPicked(File(picked.path));
                   });
-                  if (stepKey != null) {
-                    _verifyStepWithApi(stepKey, file);
-                  }
                 }
               },
             ),
@@ -237,126 +227,13 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                   imageQuality: 75,
                 );
                 if (picked != null) {
-                  final file = File(picked.path);
                   setState(() {
-                    onPicked(file);
+                    onPicked(File(picked.path));
                   });
-                  if (stepKey != null) {
-                    _verifyStepWithApi(stepKey, file);
-                  }
                 }
               },
             ),
             const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _verifyStepWithApi(String step, File file) async {
-    try {
-      final res = await KycApiService.verifyFaceStep(step: step, frameImage: file);
-      if (res['status'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: AppColors.onlineGreen, size: 18),
-                const SizedBox(width: 8),
-                Expanded(child: Text(res['instruction_en'] ?? 'Step verified successfully!')),
-              ],
-            ),
-            backgroundColor: AppColors.surfaceDark,
-            duration: const Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _recordLiveVideoScan() async {
-    final picked = await _picker.pickVideo(
-      source: ImageSource.camera,
-      maxDuration: const Duration(seconds: 15),
-      preferredCameraDevice: CameraDevice.front,
-    );
-
-    if (picked == null) return;
-    final file = File(picked.path);
-    setState(() {
-      _videoScanFile = file;
-      _isVideoScanning = true;
-    });
-
-    // Show Progress Dialog with Circular Tracker (0% -> 25% -> 50% -> 75% -> 100%)
-    _showVideoProcessingModal();
-
-    final result = await KycApiService.uploadVideoVerify(videoFile: file);
-
-    if (!mounted) return;
-    setState(() {
-      _isVideoScanning = false;
-    });
-
-    if (result['status'] == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: AppColors.onlineGreen, size: 20),
-              const SizedBox(width: 8),
-              Expanded(child: Text(result['message'] ?? 'Video face scan verified (100%)!')),
-            ],
-          ),
-          backgroundColor: AppColors.surfaceDark,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  void _showVideoProcessingModal() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surfaceDark,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 16),
-            const Text(
-              'Processing Live Face Video Scan',
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 18),
-            const SizedBox(
-              width: 80,
-              height: 80,
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.neonPink),
-                strokeWidth: 4,
-              ),
-            ),
-            const SizedBox(height: 18),
-            const Text(
-              '1. Center (25%)  •  2. Turn Left (50%)\n3. Turn Right (75%)  •  4. Blink (100%)',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.5),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'সোজা তাকান, বামে ও ডানে ঘুরুন এবং চোখের পলক ফেলুন।',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.neonPink, fontSize: 12),
-            ),
-            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -403,8 +280,8 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
       return false;
     }
 
-    if (_faceCenterImage == null) {
-      _showErrorSnackBar('Please capture Step 1 (Center Face / Selfie with document)');
+    if (_selfieImage == null) {
+      _showErrorSnackBar('Please take a clear Selfie holding your identity document');
       return false;
     }
 
@@ -428,8 +305,8 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
   }
 
   Future<void> _runAiPreCheck() async {
-    if (_frontImage == null || _faceCenterImage == null) {
-      _showErrorSnackBar('Please select Document front image and Center Face selfie to run AI pre-check.');
+    if (_frontImage == null || _selfieImage == null) {
+      _showErrorSnackBar('Please select Document front image and Selfie to run AI pre-check.');
       return;
     }
 
@@ -437,7 +314,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
 
     final result = await KycApiService.aiDetect(
       frontImage: _frontImage!,
-      selfieImage: _faceCenterImage!,
+      selfieImage: _selfieImage!,
     );
 
     if (!mounted) return;
@@ -448,7 +325,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
         'face_centered': true,
         'eyes_open': true,
         'lighting_score': 0.96,
-        'blur_score': 0.06,
+        'blur_score': 0.05,
         'document_corners': 4,
         'text_legibility': 'excellent',
         'liveness_confidence': 0.99,
@@ -492,31 +369,17 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  passed ? 'AI Face & Doc Check Passed' : 'AI Inspection Warnings',
+                  passed ? 'AI Quality Check Passed' : 'AI Inspection Warnings',
                   style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
             const SizedBox(height: 14),
-            _buildAiMetricRow('Face Centered & Detected', result['face_centered'] != false ? 'Yes' : 'No', result['face_centered'] != false),
-            _buildAiMetricRow('Face Liveness Confidence', '${((result['confidence'] ?? result['liveness_confidence'] ?? 0.98) * 100).toInt()}%', true),
+            _buildAiMetricRow('Face Detected', result['face_detected'] != false ? 'Yes' : 'No', result['face_detected'] != false),
             _buildAiMetricRow('Lighting & Clarity', '${((result['lighting_score'] ?? 0.95) * 100).toInt()}% Good', true),
             _buildAiMetricRow('Document Legibility', (result['text_legibility'] ?? 'High').toString().toUpperCase(), true),
-            _buildAiMetricRow('Document Corners Visible', '${result['document_corners'] ?? 4} / 4', (result['document_corners'] ?? 4) >= 4),
-            const SizedBox(height: 14),
-            if (result['instruction_bn'] != null)
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.cardDark,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  result['instruction_bn'].toString(),
-                  style: const TextStyle(color: AppColors.neonPink, fontSize: 12),
-                ),
-              ),
-            const SizedBox(height: 16),
+            _buildAiMetricRow('Document Corners', '${result['document_corners'] ?? 4} / 4', (result['document_corners'] ?? 4) >= 4),
+            const SizedBox(height: 18),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -595,7 +458,13 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
               const SizedBox(height: 12),
               GestureDetector(
                 onTap: () async {
-                  final picked = await _picker.pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.front);
+                  final picked = await _picker.pickImage(
+                    source: ImageSource.camera,
+                    maxWidth: 1024,
+                    maxHeight: 1024,
+                    imageQuality: 75,
+                    preferredCameraDevice: CameraDevice.front,
+                  );
                   if (picked != null) {
                     setModalState(() {
                       unlockFaceImage = File(picked.path);
@@ -666,13 +535,13 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
   }
 
   void _showGuidanceModal() {
-    final guidelines = _instructionsData?['ai_liveness_guidelines'] as Map<String, dynamic>?;
-    final rules = (guidelines?['rules'] as List?) ?? [
-      'No sunglasses, hats, masks, or filters allowed.',
+    final rulesList = (_instructionsData?['photo_guidelines']?['rules'] as List?) ?? [
+      'No sunglasses, hats, masks, or beauty filters allowed.',
       'All four corners of the identity card/document must be visible.',
       'Text and dates on the document must be sharp, legible, and unblurred.',
-      'Selfie face must match the face on the identity document.',
+      'Selfie face must match the photo on the identity document.',
     ];
+    final rules = rulesList.map((e) => e.toString()).toList();
 
     showModalBottomSheet(
       context: context,
@@ -697,21 +566,20 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
               ),
               const Row(
                 children: [
-                  Icon(Icons.face_retouching_natural_rounded, color: AppColors.neonPink, size: 24),
+                  Icon(Icons.shield_outlined, color: AppColors.neonPink, size: 24),
                   SizedBox(width: 10),
                   Text(
-                    'Multi-Angle AI Face Verification',
+                    'KYC Photo Guidelines',
                     style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
               const SizedBox(height: 14),
-              _buildStepItem('Step 1 (Center)', 'Look directly into camera at eye level holding your document.'),
-              _buildStepItem('Step 2 (Turn Left)', 'Turn head slightly 15°–30° to the left.'),
-              _buildStepItem('Step 3 (Turn Right)', 'Turn head slightly 15°–30° to the right.'),
-              _buildStepItem('Step 4 (Blink / Smile)', 'Blink naturally or smile to ensure live human presence.'),
+              _buildStepItem('Step 1', 'Upload clear front & back photos of your identity document.'),
+              _buildStepItem('Step 2', 'Take 1 clear selfie holding your document close to your chest/face.'),
+              _buildStepItem('Step 3', 'Make sure your name and document number are sharp & readable.'),
               const SizedBox(height: 14),
-              const Text('Rules & Legibility:', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+              const Text('Important Rules:', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               ...rules.map((r) => Padding(
                     padding: const EdgeInsets.symmetric(vertical: 2.5),
@@ -719,7 +587,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('• ', style: TextStyle(color: AppColors.neonPink, fontSize: 14, fontWeight: FontWeight.bold)),
-                        Expanded(child: Text(r.toString(), style: const TextStyle(color: AppColors.textSecondary, fontSize: 12))),
+                        Expanded(child: Text(r, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12))),
                       ],
                     ),
                   )),
@@ -783,19 +651,8 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
       dateOfBirth: dobFormatted,
       frontImage: _frontImage!,
       backImage: _backImage,
-      selfieImage: _faceCenterImage!,
-      faceLeftImage: _faceLeftImage,
-      faceRightImage: _faceRightImage,
-      faceBlinkImage: _faceBlinkImage,
-      faceVideoFile: _videoScanFile,
+      selfieImage: _selfieImage!,
       userNotes: _notesController.text.trim(),
-      livenessData: {
-        'status': 'passed',
-        'has_video_scan': _videoScanFile != null,
-        'multi_angle_verified': _faceLeftImage != null && _faceRightImage != null && _faceBlinkImage != null,
-        'confidence': 0.99,
-        'timestamp': DateTime.now().toIso8601String(),
-      },
     );
 
     if (!mounted) return;
@@ -841,7 +698,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           ],
         ),
         content: const Text(
-          'Your multi-angle face verification and official identity documents have been submitted to https://chinchins.live/. Our safety team will review and grant your Verified badge.',
+          'Your identity documents & selfie verification have been submitted. Our safety team will review and grant your Verified badge.',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
         ),
@@ -890,7 +747,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.help_outline_rounded, color: AppColors.neonPink),
-            tooltip: 'Instructions',
+            tooltip: 'Guidelines',
             onPressed: _showGuidanceModal,
           ),
         ],
@@ -954,7 +811,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                                 Text(
                                   _kycStatus == 'approved'
                                       ? 'Your identity is fully verified. Verified Streamer badge is active on your profile.'
-                                      : 'Submit official ID and 4-step AI face verification to unlock host privileges and Verified streamer badge.',
+                                      : 'Submit official ID and 1 clear selfie to unlock host privileges and Verified streamer badge.',
                                   style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5, height: 1.3),
                                 ),
                               ],
@@ -991,14 +848,14 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
     Color border = Colors.amber;
     IconData icon = Icons.hourglass_top_rounded;
     String title = 'Verification Pending';
-    String desc = 'Your documents and multi-angle face verification are under review.';
+    String desc = 'Your documents and selfie photo are under review.';
 
     if (_kycStatus == 'approved') {
       bg = const Color(0xFF064E3B);
       border = Colors.greenAccent;
       icon = Icons.verified_rounded;
       title = 'Identity Verified (Approved)';
-      desc = 'Congratulations! Your official streamer verification badge is now active.';
+      desc = 'Congratulations! Your official streamer verification badge is active.';
     } else if (_kycStatus == 'rejected') {
       bg = const Color(0xFF4C0519);
       border = Colors.redAccent;
@@ -1062,8 +919,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           _buildDetailRow('Legal Name', _fullNameController.text.isNotEmpty ? _fullNameController.text : 'Verified'),
           _buildDetailRow('Document Type', _selectedDocType.label),
           _buildDetailRow('Document Number', _docNumberController.text.isNotEmpty ? _docNumberController.text : 'Verified'),
-          _buildDetailRow('Face Liveness', '4-Angle Biometric Passed', color: AppColors.onlineGreen),
-          _buildDetailRow('Badge Status', 'Active (Blue Badge)', color: const Color(0xFF3B82F6)),
+          _buildDetailRow('Badge Status', 'Active (Blue Checkmark)', color: const Color(0xFF3B82F6)),
           const SizedBox(height: 8),
         ],
       ),
@@ -1093,7 +949,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'We have received your KYC verification request. Admin is currently reviewing your document photos and 4-angle facial verification.',
+            'We have received your KYC verification request. Admin is currently reviewing your document photos and selfie.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
           ),
           const SizedBox(height: 14),
@@ -1132,7 +988,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           Text(
             _rejectionReason != null && _rejectionReason!.isNotEmpty
                 ? 'Feedback from admin: "$_rejectionReason"'
-                : 'Your submission could not be verified. Please ensure the document and selfies are clear, valid, and unblurred.',
+                : 'Your submission could not be verified. Please ensure the document and selfie are clear, valid, and unblurred.',
             style: const TextStyle(color: Colors.white70, fontSize: 12.5, height: 1.4),
           ),
           const SizedBox(height: 16),
@@ -1345,122 +1201,48 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           ],
           const SizedBox(height: 22),
 
-          // 4. Multi-Angle Face Liveness & Selfie Section
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                '4. AI Face Verification (4 Angles)',
-                style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-              ),
-              GestureDetector(
-                onTap: _showGuidanceModal,
-                child: const Text('Instructions', style: TextStyle(color: AppColors.neonPink, fontSize: 12, fontWeight: FontWeight.bold)),
-              ),
-            ],
+          // 4. Live Selfie with Document
+          const Text(
+            '4. Selfie with Identity Document',
+            style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
           const Text(
-            'Complete all 4 facial positions for highest security & fast verification approval.',
+            'Take 1 clear selfie holding your document close to your chest/face.',
             style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
           ),
           const SizedBox(height: 12),
 
-          // 4-Angle Grid
-          Row(
-            children: [
-              Expanded(
-                child: _buildUploadCard(
-                  title: '1. Center Face *',
-                  subtitle: 'Holding Document',
-                  imageFile: _faceCenterImage,
-                  height: 130,
-                  onTap: () => _pickImage((f) => _faceCenterImage = f, title: 'Step 1: Center Face Selfie', stepKey: 'center'),
-                  onRemove: () => setState(() => _faceCenterImage = null),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildUploadCard(
-                  title: '2. Turn Left',
-                  subtitle: '15°-30° Left Pose',
-                  imageFile: _faceLeftImage,
-                  height: 130,
-                  onTap: () => _pickImage((f) => _faceLeftImage = f, title: 'Step 2: Turn Head Left', stepKey: 'turn_left'),
-                  onRemove: () => setState(() => _faceLeftImage = null),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _buildUploadCard(
-                  title: '3. Turn Right',
-                  subtitle: '15°-30° Right Pose',
-                  imageFile: _faceRightImage,
-                  height: 130,
-                  onTap: () => _pickImage((f) => _faceRightImage = f, title: 'Step 3: Turn Head Right', stepKey: 'turn_right'),
-                  onRemove: () => setState(() => _faceRightImage = null),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildUploadCard(
-                  title: '4. Blink / Smile',
-                  subtitle: 'Live Detection',
-                  imageFile: _faceBlinkImage,
-                  height: 130,
-                  onTap: () => _pickImage((f) => _faceBlinkImage = f, title: 'Step 4: Blink / Smile', stepKey: 'blink'),
-                  onRemove: () => setState(() => _faceBlinkImage = null),
-                ),
-              ),
-            ],
+          _buildUploadCard(
+            title: '1 Selfie with Document *',
+            subtitle: 'Both your face and document must be clearly visible',
+            imageFile: _selfieImage,
+            height: 140,
+            onTap: () => _pickImage((f) => _selfieImage = f, title: 'Take Selfie with Document', isSelfie: true),
+            onRemove: () => setState(() => _selfieImage = null),
           ),
           const SizedBox(height: 14),
 
-          // Live Video Scan or AI Pre-Check Row
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              if (_frontImage != null && _faceCenterImage != null)
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.neonPurple,
-                    side: const BorderSide(color: AppColors.neonPurple),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-                  ),
-                  icon: _isAiChecking
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPurple))
-                      : const Icon(Icons.auto_awesome_rounded, color: AppColors.neonPink, size: 18),
-                  label: Text(
-                    _isAiChecking ? 'Inspecting...' : 'AI Quality Pre-check',
-                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                  onPressed: _isAiChecking ? null : _runAiPreCheck,
-                ),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.onlineGreen,
-                  side: const BorderSide(color: AppColors.onlineGreen),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-                ),
-                icon: _isVideoScanning
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onlineGreen))
-                    : const Icon(Icons.videocam_rounded, color: AppColors.onlineGreen, size: 18),
-                label: Text(
-                  _videoScanFile != null ? 'Video Scan Completed' : 'Live Video Scan (0-100%)',
-                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-                onPressed: _isVideoScanning ? null : _recordLiveVideoScan,
+          // AI Quality Pre-Check Button (Optional)
+          if (_frontImage != null && _selfieImage != null) ...[
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.neonPurple,
+                side: const BorderSide(color: AppColors.neonPurple),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
               ),
-            ],
-          ),
-          const SizedBox(height: 14),
+              icon: _isAiChecking
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPurple))
+                  : const Icon(Icons.auto_awesome_rounded, color: AppColors.neonPink, size: 18),
+              label: Text(
+                _isAiChecking ? 'Inspecting with AI...' : 'Run AI Quality Pre-check',
+                style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+              ),
+              onPressed: _isAiChecking ? null : _runAiPreCheck,
+            ),
+            const SizedBox(height: 14),
+          ],
 
           // Optional notes
           TextFormField(
@@ -1490,7 +1272,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Your documents and identity data are securely encrypted and protected under strict privacy policies. They will never be shared publicly.',
+                    'Your documents and selfie photo are securely encrypted and protected under strict privacy policies. They will never be shared publicly.',
                     style: TextStyle(color: AppColors.textMuted, fontSize: 11, height: 1.3),
                   ),
                 ),
