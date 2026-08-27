@@ -96,9 +96,9 @@ class KycApiService {
   }
 
   /// Get current user's KYC verification status, latest submission, and badge
-  static Future<Map<String, dynamic>?> getKycStatus() async {
+  static Future<Map<String, dynamic>?> getKycStatus([String? customToken]) async {
     try {
-      final token = await AuthApiService.getToken();
+      final token = customToken ?? await AuthApiService.getToken();
       final url = Uri.parse(ApiConstants.kycStatus);
       final response = await http.get(
         url,
@@ -125,7 +125,7 @@ class KycApiService {
     return null;
   }
 
-  /// Submit KYC verification with document images and selfie
+  /// Submit full KYC verification with multi-angle face verification (Center, Left, Right, Blink)
   static Future<Map<String, dynamic>> submitKyc({
     required String documentType,
     required String fullName,
@@ -134,11 +134,15 @@ class KycApiService {
     required File frontImage,
     File? backImage,
     required File selfieImage,
+    File? faceLeftImage,
+    File? faceRightImage,
+    File? faceBlinkImage,
     Map<String, dynamic>? livenessData,
     String? userNotes,
+    String? customToken,
   }) async {
     try {
-      final token = await AuthApiService.getToken();
+      final token = customToken ?? await AuthApiService.getToken();
       final url = Uri.parse(ApiConstants.kycSubmit);
       final request = http.MultipartRequest('POST', url);
 
@@ -147,7 +151,7 @@ class KycApiService {
         request.headers['Authorization'] = 'Bearer $token';
       }
 
-      // Fields
+      // Text Fields
       request.fields['document_type'] = documentType;
       request.fields['full_name'] = fullName;
       request.fields['document_number'] = documentNumber;
@@ -161,14 +165,25 @@ class KycApiService {
         request.fields['user_notes'] = userNotes;
       }
 
-      // Files
+      // Document Files
       request.files.add(await http.MultipartFile.fromPath('front_image', frontImage.path));
       if (backImage != null) {
         request.files.add(await http.MultipartFile.fromPath('back_image', backImage.path));
       }
-      request.files.add(await http.MultipartFile.fromPath('selfie_image', selfieImage.path));
 
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 40));
+      // Multi-Angle Face Files
+      request.files.add(await http.MultipartFile.fromPath('selfie_image', selfieImage.path));
+      if (faceLeftImage != null) {
+        request.files.add(await http.MultipartFile.fromPath('face_left_image', faceLeftImage.path));
+      }
+      if (faceRightImage != null) {
+        request.files.add(await http.MultipartFile.fromPath('face_right_image', faceRightImage.path));
+      }
+      if (faceBlinkImage != null) {
+        request.files.add(await http.MultipartFile.fromPath('face_blink_image', faceBlinkImage.path));
+      }
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 50));
       final response = await http.Response.fromStream(streamedResponse);
 
       final decoded = jsonDecode(response.body);
@@ -198,7 +213,66 @@ class KycApiService {
     }
   }
 
-  /// AI Pre-check for face, liveness & document legibility
+  /// Real-time AI Face Step Verification ('center' | 'turn_left' | 'turn_right' | 'blink')
+  static Future<Map<String, dynamic>> verifyFaceStep({
+    required String step,
+    required File frameImage,
+    String? customToken,
+  }) async {
+    try {
+      final token = customToken ?? await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.kycFaceVerifyStep);
+      final request = http.MultipartRequest('POST', url);
+
+      request.headers['Accept'] = 'application/json';
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      request.fields['step'] = step;
+      request.files.add(await http.MultipartFile.fromPath('image', frameImage.path));
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 20));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      final decoded = jsonDecode(response.body);
+      return decoded as Map<String, dynamic>;
+    } catch (e) {
+      return {
+        'status': false,
+        'message': 'Face step check error: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Biometric AI Face Re-Unlock for Blocked / Suspended Accounts
+  static Future<Map<String, dynamic>> unlockAccountWithFace({
+    required String accountIdentifier, // phone, email, or account_id
+    required File liveFaceImage,
+  }) async {
+    try {
+      final url = Uri.parse(ApiConstants.kycFaceUnlock);
+      final request = http.MultipartRequest('POST', url);
+
+      request.headers['Accept'] = 'application/json';
+      request.fields['phone'] = accountIdentifier;
+      request.fields['account_identifier'] = accountIdentifier;
+      request.files.add(await http.MultipartFile.fromPath('image', liveFaceImage.path));
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 25));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      final decoded = jsonDecode(response.body);
+      return decoded as Map<String, dynamic>;
+    } catch (e) {
+      return {
+        'status': false,
+        'message': 'Account unlock error: ${e.toString()}',
+      };
+    }
+  }
+
+  /// AI Pre-check for face quality, liveness & document legibility
   static Future<Map<String, dynamic>?> aiDetect({
     required File frontImage,
     required File selfieImage,
