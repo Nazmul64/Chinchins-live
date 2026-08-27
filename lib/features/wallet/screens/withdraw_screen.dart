@@ -618,13 +618,22 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Row(
-                                  children: [
-                                    Icon(Icons.account_balance_wallet_rounded, color: AppColors.gemYellow, size: 20),
-                                    SizedBox(width: 8),
-                                    Text('Available Coins Balance', style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600)),
-                                  ],
+                                const Expanded(
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.account_balance_wallet_rounded, color: AppColors.gemYellow, size: 20),
+                                      SizedBox(width: 8),
+                                      Flexible(
+                                        child: Text(
+                                          'Available Coins Balance',
+                                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                                const SizedBox(width: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
@@ -653,7 +662,13 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(_rateText, style: const TextStyle(color: Colors.cyanAccent, fontSize: 11.5, fontWeight: FontWeight.w600)),
+                                Expanded(
+                                  child: Text(
+                                    _rateText,
+                                    style: const TextStyle(color: Colors.cyanAccent, fontSize: 11.5, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
                                 Text('Min: $_minCoins Coins', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
                               ],
                             ),
@@ -696,11 +711,14 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                         size: 18,
                                       ),
                                       const SizedBox(width: 8),
-                                      Text(
-                                        method['name'] ?? 'bKash Personal',
-                                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                      Expanded(
+                                        child: Text(
+                                          method['name'] ?? 'bKash Personal',
+                                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
-                                      const Spacer(),
+                                      const SizedBox(width: 6),
                                       Text(
                                         '(${method['account_type'] ?? 'Personal'})',
                                         style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
@@ -747,14 +765,14 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                       const SizedBox(height: 12),
 
                       // Account Type Radio Chips (Personal / Agent)
-                      Row(
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           const Text('Account Type:', style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
-                          const SizedBox(width: 10),
                           _buildAccountTypeChip('Personal'),
-                          const SizedBox(width: 8),
                           _buildAccountTypeChip('Agent'),
-                          const SizedBox(width: 8),
                           _buildAccountTypeChip('Merchant'),
                         ],
                       ),
