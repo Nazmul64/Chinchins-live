@@ -21,7 +21,6 @@ void main() async {
   };
 
   AppLogger.info('AppInit', 'Chinchins Live Debug Mode Active');
-
   // Set system UI overlay style to dark with translucent navigation
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

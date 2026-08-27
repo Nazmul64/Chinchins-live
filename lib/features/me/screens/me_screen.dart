@@ -13,6 +13,8 @@ import '../../auth/services/auth_api_service.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../profile/screens/edit_profile_media_screen.dart';
 import '../../wallet/screens/wallet_screen.dart';
+import '../../wallet/screens/withdraw_screen.dart';
+import '../../wallet/screens/withdraw_history_screen.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../../party/screens/create_room_screen.dart';
 import '../../kyc/screens/kyc_verification_screen.dart';
@@ -27,7 +29,6 @@ class MeScreen extends StatefulWidget {
 
 class _MeScreenState extends State<MeScreen> {
   int _myGems = 0;
-  final int _beansCount = 0;
   final int _iLikeCount = 0;
   final int _likeMeCount = 0;
 
@@ -113,6 +114,30 @@ class _MeScreenState extends State<MeScreen> {
 
   void _openRechargeSheet() {
     _openWalletScreen(initialTabIndex: 0);
+  }
+
+  void _openWithdrawScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WithdrawScreen(
+          onWithdrawSuccess: () {
+            _loadUserProfile();
+          },
+        ),
+      ),
+    ).then((_) {
+      _loadUserProfile();
+    });
+  }
+
+  void _openWithdrawHistoryScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const WithdrawHistoryScreen(),
+      ),
+    );
   }
 
   void _openMyHostProfile() {
@@ -922,15 +947,16 @@ class _MeScreenState extends State<MeScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // 3. Two Main Balance Cards (My Gems & Beans Center) matching Screenshot 2
+                // 3. Three Main Balance / Action Cards (My Gems, Withdraw, Beans Center)
                 Row(
                   children: [
                     // My Gems Card
                     Expanded(
+                      flex: 5,
                       child: GestureDetector(
                         onTap: _openRechargeSheet,
                         child: Container(
-                          padding: const EdgeInsets.all(14),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFF381F4B), Color(0xFF231433)],
@@ -940,69 +966,93 @@ class _MeScreenState extends State<MeScreen> {
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: AppColors.neonPurple.withValues(alpha: 0.3)),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text('My Gems', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 16),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '$_myGems',
-                                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
+                                  const Text('My Gems', style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.neonPink.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text('Top-up', style: TextStyle(color: AppColors.neonPink, fontSize: 9.5, fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),
-                              const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 20),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 16),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      '$_myGems',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
 
-                    // Beans Center Card
+                    // Withdraw / Cash Out Card
                     Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF3B2818), Color(0xFF24180E)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.gemYellow.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Beans Center', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.spa_rounded, color: Colors.amber, size: 16),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '$_beansCount',
-                                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                      flex: 5,
+                      child: GestureDetector(
+                        onTap: _openWithdrawScreen,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF143328), Color(0xFF0D211A)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                            const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 20),
-                          ],
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.onlineGreen.withValues(alpha: 0.4)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Cash Out', style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.onlineGreen.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text('bKash/Nagad', style: TextStyle(color: AppColors.onlineGreen, fontSize: 9, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              const Row(
+                                children: [
+                                  Icon(Icons.payments_rounded, color: AppColors.onlineGreen, size: 16),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Withdraw',
+                                    style: TextStyle(color: AppColors.onlineGreen, fontSize: 14, fontWeight: FontWeight.bold),
+                                  ),
+                                  Spacer(),
+                                  Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 16),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -1175,9 +1225,9 @@ class _MeScreenState extends State<MeScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           _buildGridMenuItem(Icons.account_balance_wallet_rounded, 'Wallet', const Color(0xFFFFB300), onTap: () => _openWalletScreen(initialTabIndex: 0)),
+                          _buildGridMenuItem(Icons.payments_rounded, 'Withdraw\nCoins', const Color(0xFF00E676), onTap: _openWithdrawScreen),
                           _buildGridMenuItem(Icons.receipt_long_rounded, 'Deposit\nHistory', const Color(0xFF42A5F5), onTap: () => _openWalletScreen(initialTabIndex: 1)),
-                          _buildGridMenuItem(Icons.diamond_rounded, 'Buy Coin', AppColors.neonPink, onTap: () => _openWalletScreen(initialTabIndex: 0)),
-                          _buildGridMenuItem(Icons.military_tech_rounded, 'SVIP', const Color(0xFF26A69A)),
+                          _buildGridMenuItem(Icons.history_rounded, 'Withdraw\nHistory', const Color(0xFF80D8FF), onTap: _openWithdrawHistoryScreen),
                         ],
                       ),
                       const SizedBox(height: 18),
@@ -1186,9 +1236,9 @@ class _MeScreenState extends State<MeScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
+                          _buildGridMenuItem(Icons.diamond_rounded, 'Buy Coin', AppColors.neonPink, onTap: () => _openWalletScreen(initialTabIndex: 0)),
                           _buildGridMenuItem(Icons.verified_user_rounded, 'KYC\nVerify', const Color(0xFF00E676), onTap: _openKycScreen),
                           _buildGridMenuItem(Icons.star_rounded, 'My Level', const Color(0xFFFF7043)),
-                          _buildGridMenuItem(Icons.card_giftcard_rounded, 'Reward', const Color(0xFF66BB6A)),
                           _buildGridMenuItem(Icons.support_agent_rounded, 'Customer\nService', const Color(0xFFAB47BC)),
                         ],
                       ),

@@ -33,7 +33,7 @@ class ApiConstants {
   static String get clearGallery => '$baseUrl/profile/clear-gallery';
   static String get profileStatus => '$baseUrl/profile/status';
 
-  // Wallet, Payment & Deposit endpoints
+  // Wallet, Payment, Deposit & Withdrawal endpoints
   static String get walletBalance => '$baseUrl/wallet/balance';
   static String get paymentMethods => '$baseUrl/payment-methods';
   static String get coinPackages => '$baseUrl/coin-packages';
@@ -41,6 +41,13 @@ class ApiConstants {
   static String get depositRequest => '$baseUrl/deposit/submit';
   static String get depositHistory => '$baseUrl/deposit/history';
   static String get walletTransactions => '$baseUrl/wallet/transactions';
+  
+  // Withdrawal / Cash Out endpoints
+  static String get withdrawInfo => '$baseUrl/withdraw/info';
+  static String get withdrawCalculate => '$baseUrl/withdraw/calculate';
+  static String get withdrawSubmit => '$baseUrl/withdraw/submit';
+  static String get withdrawHistory => '$baseUrl/withdraw/history';
+  static String withdrawDetails(String id) => '$baseUrl/withdraw/$id';
   
   // Video Calling endpoints
   static String get callInitiate => '$baseUrl/call/initiate';

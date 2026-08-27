@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_logger.dart';
 import '../services/wallet_api_service.dart';
+import 'withdraw_screen.dart';
 
 class WalletScreen extends StatefulWidget {
   final int initialTabIndex; // 0: Recharge, 1: History
@@ -120,15 +121,28 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
         ),
         centerTitle: true,
         actions: [
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.onlineGreen,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            icon: const Icon(Icons.payments_rounded, size: 16, color: AppColors.onlineGreen),
+            label: const Text('Withdraw', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => WithdrawScreen(
+                    onWithdrawSuccess: _loadAllWalletData,
+                  ),
+                ),
+              ).then((_) => _loadAllWalletData());
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
             tooltip: 'Refresh Balance',
             onPressed: _loadAllWalletData,
-          ),
-          IconButton(
-            icon: const Icon(Icons.bug_report_rounded, color: Colors.greenAccent),
-            tooltip: 'Debug Logs',
-            onPressed: () => AppLogger.showDebugConsole(context),
           ),
         ],
       ),
@@ -323,6 +337,31 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                     ),
               const SizedBox(width: 6),
               const Text('Gems', style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.2),
+                  foregroundColor: AppColors.onlineGreen,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: AppColors.onlineGreen, width: 1),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  elevation: 0,
+                ),
+                icon: const Icon(Icons.payments_rounded, size: 16, color: AppColors.onlineGreen),
+                label: const Text('Cash Out', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => WithdrawScreen(
+                        onWithdrawSuccess: _loadAllWalletData,
+                      ),
+                    ),
+                  ).then((_) => _loadAllWalletData());
+                },
+              ),
             ],
           ),
           const SizedBox(height: 16),
