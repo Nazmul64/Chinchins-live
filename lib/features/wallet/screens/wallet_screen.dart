@@ -801,6 +801,26 @@ class _DepositSheetModalState extends State<DepositSheetModal> {
     }
   }
 
+  int _parseInt(dynamic val, [int def = 0]) {
+    if (val == null) return def;
+    if (val is int) return val;
+    if (val is num) return val.toInt();
+    if (val is String) {
+      return int.tryParse(val.replaceAll(RegExp(r'[^0-9\-]'), '')) ?? def;
+    }
+    return def;
+  }
+
+  double _parseDouble(dynamic val, [double def = 0.0]) {
+    if (val == null) return def;
+    if (val is double) return val;
+    if (val is num) return val.toDouble();
+    if (val is String) {
+      return double.tryParse(val.replaceAll(RegExp(r'[^0-9.\-]'), '')) ?? def;
+    }
+    return def;
+  }
+
   Future<void> _submitDeposit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedMethod == null) {
@@ -810,19 +830,28 @@ class _DepositSheetModalState extends State<DepositSheetModal> {
       return;
     }
 
-    final double price = (widget.package['price'] ?? widget.package['price_bdt'] ?? 0).toDouble();
-    final int coins = widget.package['total_coins'] ?? ((widget.package['coins'] ?? 0) + (widget.package['bonus_coins'] ?? 0));
+    final double price = _parseDouble(widget.package['price'] ?? widget.package['price_bdt'] ?? 0);
+    final int baseCoins = _parseInt(widget.package['coins'] ?? widget.package['base_coins'] ?? 0);
+    final int bonusCoins = _parseInt(widget.package['bonus_coins'] ?? widget.package['bonus'] ?? 0);
+    final int coins = _parseInt(widget.package['total_coins'], baseCoins + bonusCoins);
+
+    final int? packageId = widget.package['id'] != null
+        ? _parseInt(widget.package['id'])
+        : (widget.package['package_id'] != null ? _parseInt(widget.package['package_id']) : null);
+    final int? paymentMethodId = _selectedMethod?['id'] != null ? _parseInt(_selectedMethod!['id']) : null;
+    final String paymentMethodCode = _selectedMethod?['code']?.toString().toLowerCase() ??
+        _selectedMethod?['name']?.toString().toLowerCase().split(' ').first ?? 'bkash';
 
     setState(() => _isSubmitting = true);
 
     final res = await WalletApiService.submitDepositRequest(
-      packageId: widget.package['id'],
-      paymentMethodId: _selectedMethod!['id'],
-      paymentMethod: _selectedMethod!['code'] ?? _selectedMethod!['name'],
+      packageId: packageId,
+      paymentMethodId: paymentMethodId,
+      paymentMethod: paymentMethodCode,
       amount: price,
-      coins: coins,
+      coins: coins > 0 ? coins : null,
       senderNumber: _senderNumberController.text.trim(),
-      transactionId: _trxIdController.text.trim(),
+      transactionId: _trxIdController.text.trim().toUpperCase(),
       screenshot: _screenshotFile,
       userNote: _userNoteController.text.trim(),
     );
@@ -863,9 +892,9 @@ class _DepositSheetModalState extends State<DepositSheetModal> {
 
   @override
   Widget build(BuildContext context) {
-    final coins = widget.package['coins'] ?? 0;
-    final bonus = widget.package['bonus_coins'] ?? 0;
-    final totalCoins = widget.package['total_coins'] ?? (coins + bonus);
+    final int coins = _parseInt(widget.package['coins'] ?? widget.package['base_coins']);
+    final int bonus = _parseInt(widget.package['bonus_coins'] ?? widget.package['bonus']);
+    final int totalCoins = _parseInt(widget.package['total_coins'], coins + bonus);
     final priceStr = widget.package['formatted_price'] ?? '৳${widget.package['price'] ?? widget.package['price_bdt'] ?? 0}';
 
     final accountNumber = _selectedMethod?['account_number'] ?? '01700000000';

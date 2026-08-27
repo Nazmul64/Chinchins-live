@@ -92,7 +92,7 @@ class WalletApiService {
     return [];
   }
 
-  /// 3. Get Coin Recharge Packages with Bonus Gems & Prices
+  /// 3. Get Coin Recharge Packages with Bonus Gems & Prices (100% Dynamic from Database)
   static Future<List<Map<String, dynamic>>> getCoinPackages() async {
     try {
       final token = await AuthApiService.getToken();
@@ -153,7 +153,7 @@ class WalletApiService {
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse(ApiConstants.depositRequest);
+      final url = Uri.parse(ApiConstants.depositSubmit);
       final request = http.MultipartRequest('POST', url);
 
       request.headers['Accept'] = 'application/json';
@@ -165,25 +165,40 @@ class WalletApiService {
         request.fields['user_id'] = userId;
       }
 
-      request.fields['payment_method'] = paymentMethod ?? 'bkash';
+      // Format payment method code (e.g. 'bkash', 'nagad', 'rocket', 'upay')
+      String methodCode = (paymentMethod ?? 'bkash').toLowerCase().trim();
+      if (methodCode.contains('bkash')) {
+        methodCode = 'bkash';
+      } else if (methodCode.contains('nagad')) {
+        methodCode = 'nagad';
+      } else if (methodCode.contains('rocket')) {
+        methodCode = 'rocket';
+      } else if (methodCode.contains('upay')) {
+        methodCode = 'upay';
+      }
+
+      request.fields['payment_method'] = methodCode;
       if (paymentMethodId != null) {
         request.fields['payment_method_id'] = paymentMethodId.toString();
       }
-      request.fields['sender_number'] = senderNumber;
-      request.fields['transaction_id'] = transactionId;
-      request.fields['amount'] = amount.toString();
-      if (coins != null) {
+      request.fields['sender_number'] = senderNumber.trim();
+      request.fields['transaction_id'] = transactionId.trim().toUpperCase();
+
+      final amountStr = amount == amount.roundToDouble() ? amount.toInt().toString() : amount.toStringAsFixed(2);
+      request.fields['amount'] = amountStr;
+
+      if (coins != null && coins > 0) {
         request.fields['coins'] = coins.toString();
       }
       if (packageId != null) {
         request.fields['package_id'] = packageId.toString();
       }
-      if (userNote != null && userNote.isNotEmpty) {
-        request.fields['user_note'] = userNote;
+      if (userNote != null && userNote.trim().isNotEmpty) {
+        request.fields['user_note'] = userNote.trim();
       }
 
       final filesList = <String>[];
-      if (screenshot != null) {
+      if (screenshot != null && screenshot.existsSync()) {
         request.files.add(await http.MultipartFile.fromPath('screenshot', screenshot.path));
         filesList.add('screenshot (${(await screenshot.length()) ~/ 1024} KB)');
       }
@@ -216,14 +231,19 @@ class WalletApiService {
         AppLogger.error('DepositSubmitDecodeError', 'Invalid server response: ${response.body}');
         return {
           'success': false,
-          'message': 'Server response (${response.statusCode}): ${response.body.length > 80 ? response.body.substring(0, 80) : response.body}',
+          'message': 'Server response (${response.statusCode}): ${response.body.length > 100 ? response.body.substring(0, 100) : response.body}',
         };
       }
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
+      final isSuccess = response.statusCode == 200 ||
+          response.statusCode == 201 ||
+          decoded['status'] == true ||
+          decoded['status'] == 'success';
+
+      if (isSuccess) {
         return {
           'success': true,
-          'message': decoded['message'] ?? 'Deposit request submitted successfully! Coins will be credited after admin review.',
+          'message': decoded['message'] ?? 'Deposit request submitted successfully! Your coins will be credited once verified by admin.',
           'data': decoded['data'],
         };
       } else {
@@ -294,6 +314,54 @@ class WalletApiService {
       }
     } catch (e, st) {
       AppLogger.error('DepositHistory', e, st);
+    }
+    return [];
+  }
+
+  /// 6. Get User's Full Wallet Transaction Ledger (Calls, Gifts, Deposits)
+  static Future<List<Map<String, dynamic>>> getWalletTransactions({int page = 1}) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
+      final url = Uri.parse('${ApiConstants.walletTransactions}?page=$page');
+      final headers = <String, String>{'Accept': 'application/json'};
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+      if (userId != null) headers['X-User-Id'] = userId;
+
+      AppLogger.request(
+        method: 'GET',
+        url: url.toString(),
+        headers: headers,
+      );
+
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
+
+      AppLogger.response(
+        method: 'GET',
+        url: url.toString(),
+        statusCode: response.statusCode,
+        body: response.body,
+      );
+
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body);
+          if (data['status'] == true && data['data'] != null) {
+            if (data['data'] is List) {
+              return List<Map<String, dynamic>>.from(data['data']);
+            }
+            if (data['data'] is Map && data['data']['data'] is List) {
+              return List<Map<String, dynamic>>.from(data['data']['data']);
+            }
+          }
+        } catch (e, st) {
+          AppLogger.error('WalletTransactionsParse', e, st);
+        }
+      }
+    } catch (e, st) {
+      AppLogger.error('WalletTransactions', e, st);
     }
     return [];
   }

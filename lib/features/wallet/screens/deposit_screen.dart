@@ -135,6 +135,26 @@ class _DepositScreenState extends State<DepositScreen> {
     );
   }
 
+  int _parseInt(dynamic val, [int def = 0]) {
+    if (val == null) return def;
+    if (val is int) return val;
+    if (val is num) return val.toInt();
+    if (val is String) {
+      return int.tryParse(val.replaceAll(RegExp(r'[^0-9\-]'), '')) ?? def;
+    }
+    return def;
+  }
+
+  double _parseDouble(dynamic val, [double def = 0.0]) {
+    if (val == null) return def;
+    if (val is double) return val;
+    if (val is num) return val.toDouble();
+    if (val is String) {
+      return double.tryParse(val.replaceAll(RegExp(r'[^0-9.\-]'), '')) ?? def;
+    }
+    return def;
+  }
+
   Future<void> _submitDeposit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -148,22 +168,31 @@ class _DepositScreenState extends State<DepositScreen> {
     setState(() => _isSubmitting = true);
 
     final pkg = widget.selectedPackage;
-    final int? packageId = pkg['id'] is int ? pkg['id'] : (pkg['package_id'] is int ? pkg['package_id'] : null);
-    final double amount = (pkg['price'] ?? pkg['price_bdt'] ?? pkg['rate_bdt'] ?? 150.0).toDouble();
-    final int coins = (pkg['total_coins'] ?? ((pkg['coins'] ?? pkg['rate_coins'] ?? 7000) + (pkg['bonus_coins'] ?? pkg['bonus'] ?? 600))) as int;
+    final int? packageId = pkg['id'] != null
+        ? _parseInt(pkg['id'])
+        : (pkg['package_id'] != null ? _parseInt(pkg['package_id']) : null);
+    final double amount = _parseDouble(pkg['price'] ?? pkg['price_bdt'] ?? pkg['rate_bdt'] ?? 150.0);
+    
+    final int baseCoins = _parseInt(pkg['coins'] ?? pkg['base_coins'] ?? pkg['rate_coins'] ?? 7000);
+    final int bonusCoins = _parseInt(pkg['bonus_coins'] ?? pkg['bonus'] ?? 600);
+    final int coins = _parseInt(pkg['total_coins'], baseCoins + bonusCoins);
+
+    final int? paymentMethodId = _selectedMethod?['id'] != null ? _parseInt(_selectedMethod!['id']) : null;
+    final String paymentMethodCode = _selectedMethod?['code']?.toString().toLowerCase() ??
+        _selectedMethod?['name']?.toString().toLowerCase().split(' ').first ?? 'bkash';
 
     final result = await WalletApiService.submitDepositRequest(
       packageId: packageId,
-      paymentMethodId: _selectedMethod!['id'] is int ? _selectedMethod!['id'] : null,
-      paymentMethod: _selectedMethod!['name'] ?? _selectedMethod!['code'] ?? 'bkash',
+      paymentMethodId: paymentMethodId,
+      paymentMethod: paymentMethodCode,
       amount: amount,
-      coins: coins,
+      coins: coins > 0 ? coins : null,
       senderNumber: _senderNumberController.text.trim(),
       transactionId: _trxIdController.text.trim().toUpperCase(),
       screenshot: _screenshotFile,
       userNote: _userNoteController.text.trim().isNotEmpty
           ? _userNoteController.text.trim()
-          : 'Sent $amount tk for $coins gems',
+          : 'Recharge for $coins gems',
     );
 
     if (!mounted) return;
@@ -171,7 +200,7 @@ class _DepositScreenState extends State<DepositScreen> {
 
     if (result['success'] == true) {
       widget.onDepositSuccess?.call();
-      _showSuccessDialog(result['message']);
+      _showSuccessDialog(result['message'] ?? 'Deposit request submitted successfully!');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -392,11 +421,11 @@ class _DepositScreenState extends State<DepositScreen> {
   @override
   Widget build(BuildContext context) {
     final pkg = widget.selectedPackage;
-    final int gems = (pkg['coins'] ?? pkg['gems'] ?? 32000) as int;
-    final int bonus = (pkg['bonus_coins'] ?? pkg['bonus'] ?? 8000) as int;
-    final int totalGems = (pkg['total_coins'] ?? (gems + bonus)) as int;
-    final String priceStr = pkg['formatted_price'] ?? pkg['priceBDT'] ?? '৳550';
-    final String badge = pkg['badge'] ?? pkg['tag'] ?? '';
+    final int gems = _parseInt(pkg['coins'] ?? pkg['gems'] ?? pkg['base_coins'], 32000);
+    final int bonus = _parseInt(pkg['bonus_coins'] ?? pkg['bonus'], 8000);
+    final int totalGems = _parseInt(pkg['total_coins'], gems + bonus);
+    final String priceStr = pkg['formatted_price'] ?? (pkg['price_bdt'] != null ? '৳${pkg['price_bdt']}' : (pkg['price'] != null ? '৳${pkg['price']}' : '৳550'));
+    final String badge = (pkg['badge'] ?? pkg['tag'] ?? pkg['offer_tag'] ?? '').toString();
 
     final accountNumber = _selectedMethod?['account_number'] ?? '01700000000';
     final accountType = _selectedMethod?['account_type'] ?? 'Personal';

@@ -47,6 +47,16 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
     }
   }
 
+  int _parseInt(dynamic val, [int def = 0]) {
+    if (val == null) return def;
+    if (val is int) return val;
+    if (val is num) return val.toInt();
+    if (val is String) {
+      return int.tryParse(val.replaceAll(RegExp(r'[^0-9\-]'), '')) ?? def;
+    }
+    return def;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -224,8 +234,8 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
                   children: List.generate(_packages.length, (index) {
                     final pkg = _packages[index];
                     final isSelected = _selectedPackageIndex == index;
-                    final int gems = (pkg['coins'] ?? pkg['gems'] ?? 0) as int;
-                    final int bonus = (pkg['bonus_coins'] ?? pkg['bonus'] ?? 0) as int;
+                    final int gems = _parseInt(pkg['coins'] ?? pkg['gems'] ?? pkg['base_coins']);
+                    final int bonus = _parseInt(pkg['bonus_coins'] ?? pkg['bonus']);
                     final String priceStr = pkg['formatted_price'] ??
                         (pkg['price_bdt'] != null ? '৳${pkg['price_bdt']}' : (pkg['price'] != null ? '৳${pkg['price']}' : '৳0'));
                     final String tag = (pkg['badge'] ?? pkg['offer_tag'] ?? pkg['tag'] ?? '').toString();
@@ -358,9 +368,9 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
                         final current = (_selectedPackageIndex < _packages.length)
                             ? _packages[_selectedPackageIndex]
                             : _packages.first;
-                        final int cGems = (current['coins'] ?? current['gems'] ?? 0) as int;
-                        final int cBonus = (current['bonus_coins'] ?? current['bonus'] ?? 0) as int;
-                        final int cTotal = (current['total_coins'] ?? (cGems + cBonus)) as int;
+                        final int cGems = _parseInt(current['coins'] ?? current['gems'] ?? current['base_coins']);
+                        final int cBonus = _parseInt(current['bonus_coins'] ?? current['bonus']);
+                        final int cTotal = _parseInt(current['total_coins'], cGems + cBonus);
                         final String cPrice = current['formatted_price'] ??
                             (current['price_bdt'] != null ? '৳${current['price_bdt']}' : (current['price'] != null ? '৳${current['price']}' : '৳0'));
                         return Text(
