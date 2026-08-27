@@ -209,9 +209,9 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                 Navigator.pop(ctx);
                 final picked = await _picker.pickImage(
                   source: ImageSource.camera,
-                  maxWidth: 1800,
-                  maxHeight: 1800,
-                  imageQuality: 88,
+                  maxWidth: 1024,
+                  maxHeight: 1024,
+                  imageQuality: 75,
                   preferredCameraDevice: stepKey != null ? CameraDevice.front : CameraDevice.rear,
                 );
                 if (picked != null) {
@@ -232,9 +232,9 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                 Navigator.pop(ctx);
                 final picked = await _picker.pickImage(
                   source: ImageSource.gallery,
-                  maxWidth: 1800,
-                  maxHeight: 1800,
-                  imageQuality: 88,
+                  maxWidth: 1024,
+                  maxHeight: 1024,
+                  imageQuality: 75,
                 );
                 if (picked != null) {
                   final file = File(picked.path);

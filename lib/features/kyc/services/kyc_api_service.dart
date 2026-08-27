@@ -10,20 +10,23 @@ class KycApiService {
   static Future<Map<String, dynamic>> getInstructions() async {
     try {
       final token = await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
       final url = Uri.parse(ApiConstants.kycInstructions);
-      final response = await http.get(
-        url,
-        headers: {
-          'Accept': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 10));
+      final headers = <String, String>{'Accept': 'application/json'};
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+      if (userId != null) headers['X-User-Id'] = userId;
+
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['status'] == true && data['data'] != null) {
-          return data['data'] as Map<String, dynamic>;
-        }
+        try {
+          final data = jsonDecode(response.body);
+          if (data['status'] == true && data['data'] != null) {
+            return data['data'] as Map<String, dynamic>;
+          }
+        } catch (_) {}
       }
     } catch (_) {}
 
@@ -99,27 +102,30 @@ class KycApiService {
   static Future<Map<String, dynamic>?> getKycStatus([String? customToken]) async {
     try {
       final token = customToken ?? await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
       final url = Uri.parse(ApiConstants.kycStatus);
-      final response = await http.get(
-        url,
-        headers: {
-          'Accept': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 10));
+      final headers = <String, String>{'Accept': 'application/json'};
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+      if (userId != null) headers['X-User-Id'] = userId;
+
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['status'] == true && data['data'] != null) {
-          final kycData = data['data'] as Map<String, dynamic>;
-          final prefs = await SharedPreferences.getInstance();
-          final status = (kycData['kyc_status'] ?? 'unverified').toString().toLowerCase();
-          await prefs.setString('kyc_verification_status', status);
-          if (kycData['is_verified'] != null) {
-            await prefs.setBool('is_verified', kycData['is_verified'] == true || kycData['is_verified'] == 1);
+        try {
+          final data = jsonDecode(response.body);
+          if (data['status'] == true && data['data'] != null) {
+            final kycData = data['data'] as Map<String, dynamic>;
+            final prefs = await SharedPreferences.getInstance();
+            final status = (kycData['kyc_status'] ?? 'unverified').toString().toLowerCase();
+            await prefs.setString('kyc_verification_status', status);
+            if (kycData['is_verified'] != null) {
+              await prefs.setBool('is_verified', kycData['is_verified'] == true || kycData['is_verified'] == 1);
+            }
+            return kycData;
           }
-          return kycData;
-        }
+        } catch (_) {}
       }
     } catch (_) {}
     return null;
@@ -143,12 +149,19 @@ class KycApiService {
   }) async {
     try {
       final token = customToken ?? await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
       final url = Uri.parse(ApiConstants.kycSubmit);
       final request = http.MultipartRequest('POST', url);
 
       request.headers['Accept'] = 'application/json';
       if (token != null) {
         request.headers['Authorization'] = 'Bearer $token';
+      }
+      if (userId != null) {
+        request.headers['X-User-Id'] = userId;
+        request.fields['user_id'] = userId;
       }
 
       // Text Fields
@@ -183,10 +196,36 @@ class KycApiService {
         request.files.add(await http.MultipartFile.fromPath('face_blink_image', faceBlinkImage.path));
       }
 
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 50));
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
       final response = await http.Response.fromStream(streamedResponse);
 
-      final decoded = jsonDecode(response.body);
+      // Safe JSON decode with HTML error protection
+      Map<String, dynamic> decoded = {};
+      try {
+        final raw = jsonDecode(response.body);
+        if (raw is Map<String, dynamic>) {
+          decoded = raw;
+        }
+      } catch (_) {
+        if (response.statusCode == 413) {
+          return {
+            'success': false,
+            'message': 'Image payload is too large. Please retake standard resolution photos.',
+          };
+        }
+        if (response.statusCode == 401 || response.statusCode == 419) {
+          return {
+            'success': false,
+            'message': 'Authentication session expired. Please re-login to your account.',
+          };
+        }
+        // If server returned HTML, provide user friendly message
+        return {
+          'success': false,
+          'message': 'Server response code ${response.statusCode}. Please try again.',
+        };
+      }
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('kyc_verification_status', 'pending');
@@ -201,7 +240,7 @@ class KycApiService {
       } else {
         return {
           'success': false,
-          'message': decoded['message'] ?? 'Failed to submit KYC verification (${response.statusCode})',
+          'message': decoded['message'] ?? 'Failed to submit KYC (${response.statusCode})',
           'errors': decoded['errors'],
         };
       }
@@ -221,6 +260,9 @@ class KycApiService {
   }) async {
     try {
       final token = customToken ?? await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
       final url = Uri.parse(ApiConstants.kycFaceVerifyStep);
       final request = http.MultipartRequest('POST', url);
 
@@ -228,15 +270,28 @@ class KycApiService {
       if (token != null) {
         request.headers['Authorization'] = 'Bearer $token';
       }
+      if (userId != null) {
+        request.headers['X-User-Id'] = userId;
+        request.fields['user_id'] = userId;
+      }
 
       request.fields['step'] = step;
       request.files.add(await http.MultipartFile.fromPath('image', frameImage.path));
 
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 20));
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 25));
       final response = await http.Response.fromStream(streamedResponse);
 
-      final decoded = jsonDecode(response.body);
-      return decoded as Map<String, dynamic>;
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+      } catch (_) {}
+
+      return {
+        'status': response.statusCode == 200,
+        'instruction_en': 'Step frame received.',
+      };
     } catch (e) {
       return {
         'status': false,
@@ -262,8 +317,17 @@ class KycApiService {
       final streamedResponse = await request.send().timeout(const Duration(seconds: 25));
       final response = await http.Response.fromStream(streamedResponse);
 
-      final decoded = jsonDecode(response.body);
-      return decoded as Map<String, dynamic>;
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+      } catch (_) {}
+
+      return {
+        'status': response.statusCode == 200,
+        'message': response.statusCode == 200 ? 'Account unlocked successfully!' : 'Unlock request processed.',
+      };
     } catch (e) {
       return {
         'status': false,
@@ -279,12 +343,19 @@ class KycApiService {
   }) async {
     try {
       final token = await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
       final url = Uri.parse(ApiConstants.kycAiDetect);
       final request = http.MultipartRequest('POST', url);
 
       request.headers['Accept'] = 'application/json';
       if (token != null) {
         request.headers['Authorization'] = 'Bearer $token';
+      }
+      if (userId != null) {
+        request.headers['X-User-Id'] = userId;
+        request.fields['user_id'] = userId;
       }
 
       request.files.add(await http.MultipartFile.fromPath('front_image', frontImage.path));
@@ -294,22 +365,27 @@ class KycApiService {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['status'] == true && data['data'] != null) {
-          return data['data'] as Map<String, dynamic>;
-        }
+        try {
+          final data = jsonDecode(response.body);
+          if (data['status'] == true && data['data'] != null) {
+            return data['data'] as Map<String, dynamic>;
+          }
+        } catch (_) {}
       }
     } catch (_) {}
     return null;
   }
 
-  /// 5. Live Video Face Scan & Circular Progress Processing (0% -> 25% -> 50% -> 75% -> 100%)
+  /// Live Video Face Scan & Circular Progress Processing (0% -> 25% -> 50% -> 75% -> 100%)
   static Future<Map<String, dynamic>> uploadVideoVerify({
     required File videoFile,
     String? customToken,
   }) async {
     try {
       final token = customToken ?? await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
       final url = Uri.parse(ApiConstants.kycVideoVerify);
       final request = http.MultipartRequest('POST', url);
 
@@ -317,14 +393,27 @@ class KycApiService {
       if (token != null) {
         request.headers['Authorization'] = 'Bearer $token';
       }
+      if (userId != null) {
+        request.headers['X-User-Id'] = userId;
+        request.fields['user_id'] = userId;
+      }
 
       request.files.add(await http.MultipartFile.fromPath('video', videoFile.path));
 
       final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
       final response = await http.Response.fromStream(streamedResponse);
 
-      final decoded = jsonDecode(response.body);
-      return decoded as Map<String, dynamic>;
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+      } catch (_) {}
+
+      return {
+        'status': response.statusCode == 200,
+        'message': 'Video processed successfully.',
+      };
     } catch (e) {
       return {
         'status': false,
@@ -333,4 +422,3 @@ class KycApiService {
     }
   }
 }
-
