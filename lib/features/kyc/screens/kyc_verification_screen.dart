@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/app_logger.dart';
 import '../services/kyc_api_service.dart';
 
 enum KycDocType {
@@ -288,7 +289,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
     return true;
   }
 
-  void _showErrorSnackBar(String message) {
+  void _showErrorSnackBar(String message, {bool showDebugAction = true}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -300,6 +301,14 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
         ),
         backgroundColor: Colors.redAccent,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        action: showDebugAction
+            ? SnackBarAction(
+                label: 'VIEW LOG',
+                textColor: Colors.yellowAccent,
+                onPressed: () => AppLogger.showDebugConsole(context),
+              )
+            : null,
       ),
     );
   }
@@ -741,6 +750,11 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
         centerTitle: true,
         actions: [
           IconButton(
+            icon: const Icon(Icons.bug_report_rounded, color: Colors.greenAccent),
+            tooltip: 'Live Debug Console',
+            onPressed: () => AppLogger.showDebugConsole(context),
+          ),
+          IconButton(
             icon: const Icon(Icons.lock_open_rounded, color: AppColors.onlineGreen),
             tooltip: 'Biometric Unlock',
             onPressed: _showFaceUnlockDialog,
@@ -751,6 +765,22 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
             onPressed: _showGuidanceModal,
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.greenAccent, width: 1.2),
+        ),
+        icon: const Icon(Icons.bug_report_rounded, color: Colors.greenAccent, size: 18),
+        label: ValueListenableBuilder<int>(
+          valueListenable: AppLogger.logCountNotifier,
+          builder: (context, count, _) => Text(
+            count > 0 ? 'Debug Logs ($count)' : 'Debug Logs',
+            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+          ),
+        ),
+        onPressed: () => AppLogger.showDebugConsole(context),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppColors.neonPink))
