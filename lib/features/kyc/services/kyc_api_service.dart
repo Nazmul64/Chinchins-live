@@ -182,9 +182,17 @@ class KycApiService {
           'data': decoded['data'],
         };
       } else {
+        String errorMsg = decoded['message'] ?? 'Failed to submit KYC verification (${response.statusCode})';
+        if (decoded['errors'] is Map) {
+          final errMap = decoded['errors'] as Map;
+          final firstKey = errMap.keys.firstOrNull;
+          if (firstKey != null && errMap[firstKey] is List && (errMap[firstKey] as List).isNotEmpty) {
+            errorMsg = (errMap[firstKey] as List).first.toString();
+          }
+        }
         return {
           'success': false,
-          'message': decoded['message'] ?? 'Failed to submit KYC verification (${response.statusCode})',
+          'message': errorMsg,
           'errors': decoded['errors'],
         };
       }
