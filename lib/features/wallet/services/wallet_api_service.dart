@@ -123,10 +123,7 @@ class WalletApiService {
         try {
           final data = jsonDecode(response.body);
           if (data['status'] == true && data['data'] is List) {
-            final list = List<Map<String, dynamic>>.from(data['data']);
-            if (list.isNotEmpty) {
-              return list;
-            }
+            return List<Map<String, dynamic>>.from(data['data']);
           }
         } catch (e, st) {
           AppLogger.error('CoinPackagesParse', e, st);
@@ -135,66 +132,7 @@ class WalletApiService {
     } catch (e, st) {
       AppLogger.error('CoinPackages', e, st);
     }
-
-    // Default fallback packages if database is being seeded
-    return [
-      {
-        'id': 1,
-        'coins': 6000,
-        'bonus_coins': 1000,
-        'total_coins': 7000,
-        'price': 120.0,
-        'price_bdt': 120.0,
-        'formatted_price': '৳120',
-        'badge': 'Starter',
-        'badge_color': 'purple',
-        'bonus_text': '+1,000 Bonus',
-        'is_popular': false,
-        'button_text': 'Recharge 7,000 Gems (৳120)',
-      },
-      {
-        'id': 2,
-        'coins': 32000,
-        'bonus_coins': 8000,
-        'total_coins': 40000,
-        'price': 550.0,
-        'price_bdt': 550.0,
-        'formatted_price': '৳550',
-        'badge': '🔥 Popular',
-        'badge_color': 'pink',
-        'bonus_text': '+8,000 Bonus',
-        'is_popular': true,
-        'button_text': 'Recharge 40,000 Gems (৳550)',
-      },
-      {
-        'id': 3,
-        'coins': 65000,
-        'bonus_coins': 20000,
-        'total_coins': 85000,
-        'price': 1100.0,
-        'price_bdt': 1100.0,
-        'formatted_price': '৳1,100',
-        'badge': '⭐ Best Value',
-        'badge_color': 'amber',
-        'bonus_text': '+20,000 Bonus',
-        'is_popular': false,
-        'button_text': 'Recharge 85,000 Gems (৳1,100)',
-      },
-      {
-        'id': 4,
-        'coins': 150000,
-        'bonus_coins': 50000,
-        'total_coins': 200000,
-        'price': 2500.0,
-        'price_bdt': 2500.0,
-        'formatted_price': '৳2,500',
-        'badge': '👑 VIP Pack',
-        'badge_color': 'cyan',
-        'bonus_text': '+50,000 Bonus',
-        'is_popular': false,
-        'button_text': 'Recharge 200,000 Gems (৳2,500)',
-      },
-    ];
+    return [];
   }
 
   /// 4. Submit Manual Deposit / Recharge Request (bKash / Nagad / Rocket TrxID + Receipt)

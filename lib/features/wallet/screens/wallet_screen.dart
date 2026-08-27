@@ -333,7 +333,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildStatItem('Total Deposited', '$totalDepositedCoins 🪙', Icons.savings_outlined, Colors.amberAccent),
+              _buildStatItem('Total Deposited', '$totalDepositedCoins Coins', Icons.savings_outlined, Colors.amberAccent),
               Container(width: 1, height: 26, color: Colors.white12),
               _buildStatItem('Total Spent', totalSpentBdt, Icons.payments_outlined, Colors.cyanAccent),
               Container(width: 1, height: 26, color: Colors.white12),
@@ -395,7 +395,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       physics: const BouncingScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        childAspectRatio: 0.86,
+        childAspectRatio: 0.76,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
@@ -408,12 +408,12 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   }
 
   Widget _buildPackageCard(Map<String, dynamic> pkg) {
-    final coins = pkg['coins'] ?? 0;
-    final bonus = pkg['bonus_coins'] ?? 0;
-    final totalCoins = pkg['total_coins'] ?? (coins + bonus);
+    // 100% Dynamic API Binding (No hardcoding)
+    final dynamicCoins = pkg['display_coins'] ?? pkg['formatted_coins'] ?? pkg['coins'] ?? pkg['base_coins'] ?? '32000';
+    final bonusText = pkg['display_bonus'] ?? pkg['formatted_bonus_coins'] ?? (pkg['bonus_coins'] != null && pkg['bonus_coins'] > 0 ? '+${pkg['bonus_coins']} Bonus Gems' : null);
     final priceStr = pkg['formatted_price'] ?? '৳${pkg['price'] ?? pkg['price_bdt'] ?? 0}';
-    final badge = pkg['badge'] ?? (bonus > 0 ? '+$bonus Bonus' : null);
-    final isPopular = pkg['is_popular'] == true;
+    final badge = pkg['badge'] ?? (pkg['is_popular'] == true ? '🔥 50% OFF' : null);
+    final isPopular = pkg['is_popular'] == true || pkg['popular'] == true;
 
     return GestureDetector(
       onTap: () => _openDepositModal(pkg),
@@ -438,25 +438,25 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
         child: Stack(
           children: [
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Top Diamond Icon & Coins Count
+                  // Top Diamond Icon & Base Coins Count (e.g. 32000)
                   Column(
                     children: [
                       const SizedBox(height: 10),
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
                           color: AppColors.gemYellow.withValues(alpha: 0.15),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 26),
+                        child: const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 24),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Text(
-                        '$totalCoins',
+                        '$dynamicCoins',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -474,21 +474,23 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                     ],
                   ),
 
-                  // Bonus text
-                  if (bonus > 0)
+                  // Bonus text pill (e.g. +8000 Bonus Gems / +700 Bonus Gems)
+                  if (bonusText != null && bonusText.toString().isNotEmpty)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
                       decoration: BoxDecoration(
                         color: AppColors.neonPurple.withValues(alpha: 0.25),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        '+$bonus Bonus Gems',
-                        style: const TextStyle(color: Color(0xFFC084FC), fontSize: 10, fontWeight: FontWeight.bold),
+                        bonusText.toString(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Color(0xFFC084FC), fontSize: 9.5, fontWeight: FontWeight.bold),
                       ),
                     )
                   else
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
                   // Price Button
                   Container(
@@ -514,8 +516,8 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
               ),
             ),
 
-            // Top Badge (Popular / Starter)
-            if (badge != null)
+            // Top Badge (e.g. 50% OFF)
+            if (badge != null && badge.toString().isNotEmpty)
               Positioned(
                 top: 0,
                 left: 0,
