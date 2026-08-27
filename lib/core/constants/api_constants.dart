@@ -32,4 +32,26 @@ class ApiConstants {
   static String get updateGallery => '$baseUrl/profile/update-gallery';
   static String get clearGallery => '$baseUrl/profile/clear-gallery';
   static String get profileStatus => '$baseUrl/profile/status';
+
+  // Wallet, Payment & Deposit endpoints
+  static String get walletBalance => '$baseUrl/wallet/balance';
+  static String get paymentMethods => '$baseUrl/payment-methods';
+  static String get coinPackages => '$baseUrl/coin-packages';
+  static String get depositRequest => '$baseUrl/deposit/request';
+  static String get depositHistory => '$baseUrl/deposit/history';
+  static String get walletTransactions => '$baseUrl/wallet/transactions';
+  
+  // Video Calling endpoints
+  static String get callInitiate => '$baseUrl/call/initiate';
+  static String get callStart => '$baseUrl/call/start';
+  static String get callEnd => '$baseUrl/call/end';
+  static String get callDeductInterval => '$baseUrl/call/deduct-interval';
+  static String get callHistory => '$baseUrl/call/history';
+
+  // KYC Verification endpoints
+  static String get kycInstructions => '$baseUrl/kyc/instructions';
+  static String get kycSubmit => '$baseUrl/kyc/submit';
+  static String get kycStatus => '$baseUrl/kyc/status';
+  static String get kycAiDetect => '$baseUrl/kyc/ai-detect';
 }
+

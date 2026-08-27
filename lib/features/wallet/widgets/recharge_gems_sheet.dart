@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
+import '../screens/deposit_screen.dart';
+import '../services/wallet_api_service.dart';
 
 class RechargeGemsSheet extends StatefulWidget {
   final ModelProfile? model;
@@ -18,45 +20,32 @@ class RechargeGemsSheet extends StatefulWidget {
 }
 
 class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
-  int _selectedPackageIndex = 1; // Default to popular ৳550 package
+  int _selectedPackageIndex = 0;
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _packages = [];
 
-  final List<Map<String, dynamic>> _packages = [
-    {
-      'gems': 6000,
-      'bonus': 1000,
-      'priceBDT': '৳120',
-      'priceUSD': '\$0.99',
-      'tag': '',
-    },
-    {
-      'gems': 32000,
-      'bonus': 8000,
-      'priceBDT': '৳550',
-      'priceUSD': '\$4.99',
-      'tag': '🔥 50% OFF',
-    },
-    {
-      'gems': 70000,
-      'bonus': 20000,
-      'priceBDT': '৳1,150',
-      'priceUSD': '\$9.99',
-      'tag': 'Best Value',
-    },
-    {
-      'gems': 150000,
-      'bonus': 50000,
-      'priceBDT': '৳2,400',
-      'priceUSD': '\$19.99',
-      'tag': '+30% Free',
-    },
-    {
-      'gems': 350000,
-      'bonus': 120000,
-      'priceBDT': '৳5,500',
-      'priceUSD': '\$49.99',
-      'tag': 'VIP Bonus',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadDynamicPackages();
+  }
+
+  Future<void> _loadDynamicPackages() async {
+    final list = await WalletApiService.getCoinPackages();
+    if (mounted) {
+      setState(() {
+        _packages = list;
+        _isLoading = false;
+        // Default to popular package if available
+        final popIndex = _packages.indexWhere((p) => p['is_popular'] == true || p['popular'] == true);
+        if (popIndex != -1) {
+          _selectedPackageIndex = popIndex;
+        } else if (_packages.isNotEmpty) {
+          _selectedPackageIndex = 0;
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,265 +79,306 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
               ),
               const SizedBox(height: 12),
 
-          // 1. Host Cute Speech Bubble Banner (as described in Voice Message!)
-          if (widget.model != null)
-            Container(
-              margin: const EdgeInsets.only(bottom: 14),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF3B1F4B), Color(0xFF261536)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.neonPurple.withValues(alpha: 0.4)),
-              ),
-              child: Row(
-                children: [
-                  // Host Picture on the side
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.neonPink, width: 2),
-                    ),
-                    child: ClipOval(
-                      child: CachedImageLoader(
-                        imageUrl: widget.model!.avatarUrl,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Host Cute Message
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              widget.model!.name,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.star_rounded, color: AppColors.gemYellow, size: 14),
-                          ],
-                        ),
-                        const SizedBox(height: 3),
-                        const Text(
-                          '"I want to talk more with you, recharge and call me back! ❤️"',
-                          style: TextStyle(
-                            color: Color(0xFFFFD1E3),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // 2. Spend Less, Get More Promo Banner (50% Off)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4A148C), Color(0xFF880E4F)],
-              ),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Spend Less, Get More Gems!',
-                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Update to Monthly Card',
-                      style: TextStyle(color: Colors.white70, fontSize: 11),
-                    ),
-                  ],
-                ),
+              // 1. Host Cute Speech Bubble Banner (if model provided)
+              if (widget.model != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.gemYellow,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Text(
-                    '50% off',
-                    style: TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.w900),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // 3. Gems Packages Grid
-          const Text(
-            'Select Package (Bangla Taka ৳)',
-            style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 10),
-
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: List.generate(_packages.length, (index) {
-              final pkg = _packages[index];
-              final isSelected = _selectedPackageIndex == index;
-
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedPackageIndex = index;
-                  });
-                },
-                child: Container(
-                  width: (MediaQuery.of(context).size.width - 42) / 2,
+                  margin: const EdgeInsets.only(bottom: 14),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.neonPink.withValues(alpha: 0.15)
-                        : AppColors.cardDark,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isSelected ? AppColors.neonPink : AppColors.cardBorder,
-                      width: isSelected ? 1.8 : 1,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF3B1F4B), Color(0xFF261536)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.neonPurple.withValues(alpha: 0.4)),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      if (pkg['tag'].isNotEmpty)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            gradient: AppColors.primaryGradient,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            pkg['tag'],
-                            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      Row(
-                        children: [
-                          const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 18),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${pkg['gems']}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '+${pkg['bonus']} Bonus',
-                        style: const TextStyle(color: AppColors.onlineGreen, fontSize: 11, fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 8),
                       Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        width: 50,
+                        height: 50,
                         decoration: BoxDecoration(
-                          color: isSelected ? AppColors.neonPink : AppColors.cardDarkElevated,
-                          borderRadius: BorderRadius.circular(8),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.neonPink, width: 2),
                         ),
-                        child: Center(
-                          child: Text(
-                            pkg['priceBDT'],
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        child: ClipOval(
+                          child: CachedImageLoader(
+                            imageUrl: widget.model!.avatarUrl,
+                            fit: BoxFit.cover,
                           ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  widget.model!.name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.star_rounded, color: AppColors.gemYellow, size: 14),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            const Text(
+                              '"I want to talk more with you, recharge and call me back! ❤️"',
+                              style: TextStyle(
+                                color: Color(0xFFFFD1E3),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              );
-            }),
-          ),
-          const SizedBox(height: 16),
 
-          // 4. Payment Gateways Logos (bKash / Nagad / Card)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildPaymentChip('bKash 📱'),
-              const SizedBox(width: 8),
-              _buildPaymentChip('Nagad ⚡'),
-              const SizedBox(width: 8),
-              _buildPaymentChip('Card 💳'),
-              const SizedBox(width: 8),
-              _buildPaymentChip('Google Play'),
+              // 2. Spend Less, Get More Promo Banner (50% Off)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4A148C), Color(0xFF880E4F)],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Spend Less, Get More Gems!',
+                          style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Update to Monthly Card',
+                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.gemYellow,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        '50% off',
+                        style: TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // 3. Gems Packages Grid
+              const Text(
+                'Select Package (Bangla Taka ৳)',
+                style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+
+              if (_isLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(
+                    child: CircularProgressIndicator(color: AppColors.neonPink),
+                  ),
+                )
+              else if (_packages.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 30),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        const Text('No packages available at the moment', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _loadDynamicPackages,
+                          child: const Text('Retry', style: TextStyle(color: AppColors.neonPink)),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: List.generate(_packages.length, (index) {
+                    final pkg = _packages[index];
+                    final isSelected = _selectedPackageIndex == index;
+                    final int gems = (pkg['coins'] ?? pkg['gems'] ?? 0) as int;
+                    final int bonus = (pkg['bonus_coins'] ?? pkg['bonus'] ?? 0) as int;
+                    final String priceStr = pkg['formatted_price'] ??
+                        (pkg['price_bdt'] != null ? '৳${pkg['price_bdt']}' : (pkg['price'] != null ? '৳${pkg['price']}' : '৳0'));
+                    final String tag = (pkg['badge'] ?? pkg['offer_tag'] ?? pkg['tag'] ?? '').toString();
+
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedPackageIndex = index;
+                        });
+                      },
+                      child: Container(
+                        width: (MediaQuery.of(context).size.width - 42) / 2,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.neonPink.withValues(alpha: 0.15)
+                              : AppColors.cardDark,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isSelected ? AppColors.neonPink : AppColors.cardBorder,
+                            width: isSelected ? 1.8 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (tag.isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  gradient: AppColors.primaryGradient,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  tag,
+                                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            Row(
+                              children: [
+                                const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 18),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$gems',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '+$bonus Bonus',
+                              style: const TextStyle(color: AppColors.onlineGreen, fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isSelected ? AppColors.neonPink : AppColors.cardDarkElevated,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  priceStr,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              const SizedBox(height: 16),
+
+              // 4. Payment Gateways Logos (bKash / Nagad / Card)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildPaymentChip('bKash 📱'),
+                  const SizedBox(width: 8),
+                  _buildPaymentChip('Nagad ⚡'),
+                  const SizedBox(width: 8),
+                  _buildPaymentChip('Card 💳'),
+                  const SizedBox(width: 8),
+                  _buildPaymentChip('Google Play'),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // 5. Submit Recharge Action Button -> Navigates to DepositScreen
+              if (_packages.isNotEmpty)
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.neonPink,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      elevation: 6,
+                    ),
+                    onPressed: () {
+                      if (_selectedPackageIndex >= _packages.length) return;
+                      final selectedPkg = _packages[_selectedPackageIndex];
+                      Navigator.pop(context); // Close bottom sheet
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => DepositScreen(
+                            selectedPackage: selectedPkg,
+                            onDepositSuccess: widget.onRechargeSuccess,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Builder(
+                      builder: (context) {
+                        final current = (_selectedPackageIndex < _packages.length)
+                            ? _packages[_selectedPackageIndex]
+                            : _packages.first;
+                        final int cGems = (current['coins'] ?? current['gems'] ?? 0) as int;
+                        final int cBonus = (current['bonus_coins'] ?? current['bonus'] ?? 0) as int;
+                        final int cTotal = (current['total_coins'] ?? (cGems + cBonus)) as int;
+                        final String cPrice = current['formatted_price'] ??
+                            (current['price_bdt'] != null ? '৳${current['price_bdt']}' : (current['price'] != null ? '৳${current['price']}' : '৳0'));
+                        return Text(
+                          'Recharge $cTotal Gems ($cPrice)',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
             ],
           ),
-          const SizedBox(height: 14),
-
-          // 5. Submit Recharge Action Button
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.neonPink,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                elevation: 6,
-              ),
-              onPressed: () {
-                final selectedPkg = _packages[_selectedPackageIndex];
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('🎉 Recharge of ${selectedPkg['gems']} Gems successful! Ready to call.'),
-                    backgroundColor: AppColors.onlineGreen,
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-                widget.onRechargeSuccess?.call();
-              },
-              child: Text(
-                'Recharge ${(_packages[_selectedPackageIndex]['gems'] as int) + (_packages[_selectedPackageIndex]['bonus'] as int)} Gems (${_packages[_selectedPackageIndex]['priceBDT']})',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
-    ),
-    ),
     );
   }
 

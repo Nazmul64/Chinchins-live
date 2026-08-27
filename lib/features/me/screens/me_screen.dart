@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
@@ -13,6 +14,8 @@ import '../../profile/screens/host_profile_screen.dart';
 import '../../profile/screens/edit_profile_media_screen.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
 import '../../party/screens/create_room_screen.dart';
+import '../../kyc/screens/kyc_verification_screen.dart';
+import '../../kyc/services/kyc_api_service.dart';
 
 class MeScreen extends StatefulWidget {
   const MeScreen({super.key});
@@ -30,12 +33,42 @@ class _MeScreenState extends State<MeScreen> {
   ModelProfile? _myProfile;
   final ImagePicker _picker = ImagePicker();
   bool _isUploading = false;
+  String _kycStatus = 'unverified';
 
   @override
   void initState() {
     super.initState();
     LocalImageCache.init();
     _loadUserProfile();
+    _loadKycStatus();
+  }
+
+  Future<void> _loadKycStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _kycStatus = prefs.getString('kyc_verification_status') ?? 'unverified';
+      });
+    }
+    // Asynchronously refresh status from server
+    try {
+      final statusResult = await KycApiService.getKycStatus();
+      if (statusResult != null && mounted) {
+        setState(() {
+          _kycStatus = (statusResult['kyc_status'] ?? _kycStatus).toString().toLowerCase();
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _openKycScreen() async {
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (context) => const KycVerificationScreen()),
+    );
+    if (updated == true || mounted) {
+      _loadKycStatus();
+    }
   }
 
   Future<void> _loadUserProfile() async {
@@ -1010,83 +1043,108 @@ class _MeScreenState extends State<MeScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
-
-                // 5. App Icon Camouflage Box
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.cardDark,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.cardBorder),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Column(
+                // 5. KYC Verification Card
+                GestureDetector(
+                  onTap: _openKycScreen,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF231738), Color(0xFF171329)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _kycStatus == 'approved'
+                            ? Colors.greenAccent.withValues(alpha: 0.5)
+                            : _kycStatus == 'pending'
+                                ? Colors.amber.withValues(alpha: 0.5)
+                                : AppColors.neonPurple.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                            gradient: _kycStatus == 'approved'
+                                ? const LinearGradient(colors: [Color(0xFF00E676), Color(0xFF00B0FF)])
+                                : _kycStatus == 'pending'
+                                    ? const LinearGradient(colors: [Color(0xFFFFB300), Color(0xFFFF6D00)])
+                                    : AppColors.primaryGradient,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _kycStatus == 'approved'
+                                ? Icons.verified_rounded
+                                : _kycStatus == 'pending'
+                                    ? Icons.hourglass_top_rounded
+                                    : Icons.verified_user_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('App icon camouflage', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                              SizedBox(height: 2),
-                              Text('To prevent embarrassment', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                              Row(
+                                children: [
+                                  const Text(
+                                    'KYC Verification',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: _kycStatus == 'approved'
+                                          ? const Color(0xFF064E3B)
+                                          : _kycStatus == 'pending'
+                                              ? const Color(0xFF78350F)
+                                              : const Color(0xFF312E81),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: _kycStatus == 'approved'
+                                            ? Colors.greenAccent
+                                            : _kycStatus == 'pending'
+                                                ? Colors.amber
+                                                : const Color(0xFF818CF8),
+                                        width: 0.6,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _kycStatus == 'approved'
+                                          ? 'Verified'
+                                          : _kycStatus == 'pending'
+                                              ? 'Pending'
+                                              : 'Submit Now',
+                                      style: TextStyle(
+                                        color: _kycStatus == 'approved'
+                                            ? Colors.greenAccent
+                                            : _kycStatus == 'pending'
+                                                ? Colors.amber
+                                                : const Color(0xFFA5B4FC),
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'NID, Passport, or Birth Certificate',
+                                style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                              ),
                             ],
                           ),
-                          Row(
-                            children: [
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  gradient: AppColors.primaryGradient,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Center(
-                                  child: Text('LIVE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 8)),
-                                ),
-                              ),
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 4),
-                                child: Icon(Icons.sync_alt_rounded, color: AppColors.gemYellow, size: 18),
-                              ),
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1E88E5),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Center(
-                                  child: Icon(Icons.wb_sunny_rounded, color: Colors.amber, size: 20),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 36,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.neonPurple,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                          ),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('App Icon disguised as Weather app!'),
-                                backgroundColor: AppColors.neonPurple,
-                              ),
-                            );
-                          },
-                          child: const Text('Change Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                         ),
-                      ),
-                    ],
+                        const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 20),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -1107,7 +1165,7 @@ class _MeScreenState extends State<MeScreen> {
                         children: [
                           _buildGridMenuItem(Icons.military_tech_rounded, 'SVIP', const Color(0xFFFFB300)),
                           _buildGridMenuItem(Icons.backpack_rounded, 'My Bag', const Color(0xFF42A5F5)),
-                          _buildGridMenuItem(Icons.diamond_rounded, 'Gems Center', AppColors.neonPink, onTap: _openRechargeSheet),
+                          _buildGridMenuItem(Icons.diamond_rounded, 'Buy Coin', AppColors.neonPink, onTap: _openRechargeSheet),
                           _buildGridMenuItem(Icons.payment_rounded, 'Payment\ndetails', const Color(0xFF26A69A)),
                         ],
                       ),
@@ -1117,16 +1175,9 @@ class _MeScreenState extends State<MeScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
+                          _buildGridMenuItem(Icons.verified_user_rounded, 'KYC\nVerify', const Color(0xFF00E676), onTap: _openKycScreen),
                           _buildGridMenuItem(Icons.star_rounded, 'My Level', const Color(0xFFFF7043)),
                           _buildGridMenuItem(Icons.card_giftcard_rounded, 'Reward', const Color(0xFF66BB6A)),
-                          _buildGridMenuItem(
-                            Icons.settings_rounded,
-                            'Settings',
-                            AppColors.textMuted,
-                            onTap: () {
-                              _showLogoutDialog(context);
-                            },
-                          ),
                           _buildGridMenuItem(Icons.support_agent_rounded, 'Customer\nService', const Color(0xFFAB47BC)),
                         ],
                       ),
