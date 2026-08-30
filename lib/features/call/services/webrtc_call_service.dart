@@ -540,11 +540,11 @@ class WebRTCCallService {
       if (type == 'answer' && !_hasRemoteAnswer) {
         final sdp = _extractSdp(signal, payload);
         if (sdp.isNotEmpty && _peerConnection != null) {
-          _hasRemoteAnswer = true;
           answerState = 'Received';
           _log('ANSWER_RECEIVED_BY_CALLER (sdp len: ${sdp.length})');
           try {
-            await _peerConnection?.setRemoteDescription(RTCSessionDescription(sdp, 'answer'));
+            await _peerConnection!.setRemoteDescription(RTCSessionDescription(sdp, 'answer'));
+            _hasRemoteAnswer = true;
             _log('SET_REMOTE_DESCRIPTION_ANSWER_SUCCESS');
             await _drainPendingCandidates();
           } catch (e) {
@@ -560,11 +560,11 @@ class WebRTCCallService {
       if (type == 'offer' && !_hasAnsweredOffer) {
         final sdp = _extractSdp(signal, payload);
         if (sdp.isNotEmpty && _peerConnection != null) {
-          _hasAnsweredOffer = true;
           offerState = 'Received';
           _log('OFFER_RECEIVED_BY_RECEIVER (sdp len: ${sdp.length})');
           try {
-            await _peerConnection?.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
+            await _peerConnection!.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
+            _hasAnsweredOffer = true;
             _log('SET_REMOTE_DESCRIPTION_OFFER_SUCCESS');
             await _drainPendingCandidates();
 
@@ -733,3 +733,4 @@ class WebRTCCallService {
     _isInitialized = false;
   }
 }
+
