@@ -199,26 +199,48 @@ class WebRTCCallService {
 
       pc.onTrack = (RTCTrackEvent event) async {
         _log('REMOTE_TRACK_RECEIVED: ${event.track.kind}');
+        try {
+          event.track.enabled = true;
+        } catch (_) {}
+
         if (event.streams.isNotEmpty) {
           _remoteStream = event.streams[0];
         } else {
           _remoteStream ??= await createLocalMediaStream('remote_${DateTime.now().millisecondsSinceEpoch}');
           _remoteStream!.addTrack(event.track);
         }
+
+        try {
+          for (final track in _remoteStream!.getTracks()) {
+            track.enabled = true;
+          }
+        } catch (_) {}
+
         remoteRenderer.srcObject = _remoteStream;
         _log('REMOTE_STREAM_ATTACHED (kind: ${event.track.kind})');
         onRemoteStreamConnected?.call(_remoteStream!);
 
         try {
-          await Helper.setSpeakerphoneOn(_isSpeakerOn);
+          await Helper.setSpeakerphoneOn(true);
+          _isSpeakerOn = true;
         } catch (_) {}
       };
 
       pc.onAddStream = (MediaStream stream) {
         _log('REMOTE_ADD_STREAM: ${stream.id}');
+        try {
+          for (final track in stream.getTracks()) {
+            track.enabled = true;
+          }
+        } catch (_) {}
         _remoteStream = stream;
         remoteRenderer.srcObject = _remoteStream;
         onRemoteStreamConnected?.call(_remoteStream!);
+
+        try {
+          Helper.setSpeakerphoneOn(true);
+          _isSpeakerOn = true;
+        } catch (_) {}
       };
 
       pc.onConnectionState = (RTCPeerConnectionState state) {
@@ -733,4 +755,5 @@ class WebRTCCallService {
     _isInitialized = false;
   }
 }
+
 
