@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../../core/services/signaling_service.dart';
@@ -341,36 +341,67 @@ class WebRTCCallService {
   }
 
   String _extractSdp(Map signal, Map payload) {
-    dynamic rawSdp = payload['sdp'] ?? signal['sdp'] ?? payload['description'] ?? signal['description'] ?? payload['session_description'] ?? signal['session_description'];
+    dynamic raw = payload['sdp'] ??
+        signal['sdp'] ??
+        payload['description'] ??
+        signal['description'] ??
+        payload['session_description'] ??
+        signal['session_description'] ??
+        payload['payload'] ??
+        signal['payload'] ??
+        payload['data'] ??
+        signal['data'];
 
-    if (rawSdp is Map) {
-      rawSdp = rawSdp['sdp'] ?? rawSdp['description'];
+    // 1. Unnest map if needed
+    if (raw is Map) {
+      raw = raw['sdp'] ?? raw['description'] ?? raw['session_description'] ?? raw['payload'] ?? raw['data'];
     }
 
-    if (rawSdp == null) {
-      final rawSignalPayload = signal['payload'];
-      if (rawSignalPayload is String && rawSignalPayload.contains('v=0')) {
-        rawSdp = rawSignalPayload;
+    if (raw == null) return '';
+
+    String sdp = raw.toString().trim();
+
+    // 2. Decode stringified JSON if needed (recursively handles wrapped JSON)
+    for (int i = 0; i < 3; i++) {
+      final trimmed = sdp.trim();
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+        try {
+          final decoded = jsonDecode(trimmed);
+          if (decoded is Map) {
+            final inner = decoded['sdp'] ?? decoded['description'] ?? decoded['session_description'] ?? decoded['payload'];
+            if (inner != null) {
+              sdp = inner.toString().trim();
+              continue;
+            }
+          } else if (decoded is String) {
+            sdp = decoded.trim();
+            continue;
+          }
+        } catch (_) {}
       }
+      break;
     }
 
-    if (rawSdp == null) return '';
-
-    String sdp = rawSdp.toString().trim();
-    if (sdp.startsWith('"') && sdp.endsWith('"') && sdp.length > 2) {
-      try {
-        sdp = jsonDecode(sdp);
-      } catch (_) {}
-    }
-
+    // 3. Unescape escaped CRLF characters
     if (sdp.contains(r'\r\n')) {
       sdp = sdp.replaceAll(r'\r\n', '\r\n');
     }
-    if (sdp.contains(r'\n') && !sdp.contains('\n')) {
+    if (sdp.contains(r'\n')) {
       sdp = sdp.replaceAll(r'\n', '\n');
     }
 
-    return sdp;
+    // 4. Locate SDP starting boundary (must start with v=0)
+    final v0Index = sdp.indexOf('v=0');
+    if (v0Index >= 0) {
+      sdp = sdp.substring(v0Index);
+    }
+
+    // 5. Clean up any trailing quotes or brackets
+    if (sdp.endsWith('"') || sdp.endsWith("'")) {
+      sdp = sdp.substring(0, sdp.length - 1);
+    }
+
+    return sdp.trim();
   }
 
   void _setupWebSocketSignaling(
