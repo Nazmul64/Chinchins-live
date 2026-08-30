@@ -1,9 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/online_badge.dart';
 import '../../../core/widgets/cached_image_loader.dart';
-import 'animated_call_button.dart';
+import '../../../core/widgets/online_badge.dart';
 
 class ModelGridCard extends StatelessWidget {
   final ModelProfile model;
@@ -38,29 +37,30 @@ class ModelGridCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Portrait Background Image
+              // 1. Portrait Background Image
               CachedImageLoader(
                 imageUrl: model.avatarUrl,
                 fit: BoxFit.cover,
               ),
 
-              // Gradient Overlay (Dark bottom)
+              // 2. Gradient Overlay (Dark bottom for crystal clear text readability)
               Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
                       Colors.transparent,
-                      Color(0x33000000),
-                      Color(0xEE0F0E17),
+                      Colors.transparent,
+                      Color(0x66000000),
+                      Color(0xEE0B0B14),
                     ],
-                    stops: [0.35, 0.65, 1.0],
+                    stops: [0.0, 0.45, 0.70, 1.0],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   ),
                 ),
               ),
 
-              // Top Badges: Online on left, Blue Verified 'v' badge on right matching Screenshot
+              // 3. Top Badges: Online on left, Blue Verified checkmark badge on right
               Positioned(
                 top: 8,
                 left: 8,
@@ -68,37 +68,33 @@ class ModelGridCard extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Online indicator
+                    // Online badge (🟢 Online)
                     if (model.isOnline)
                       const OnlineBadge(showText: true)
                     else
                       const SizedBox.shrink(),
 
-                    // Blue Verified Checkmark (v) Icon on top right (User circled in red)
+                    // Blue Verified Checkmark (✓) Icon on top right
                     if (model.isVerified)
                       Container(
                         width: 22,
                         height: 22,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: const Color(0xFF4FC3F7),
-                          border: Border.all(color: Colors.white, width: 1.2),
+                          color: const Color(0xFF00A2FF),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.8), width: 1.0),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF0288D1).withValues(alpha: 0.6),
+                              color: const Color(0xFF00A2FF).withValues(alpha: 0.5),
                               blurRadius: 6,
                             ),
                           ],
                         ),
                         child: const Center(
-                          child: Text(
-                            'v',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                              fontStyle: FontStyle.italic,
-                            ),
+                          child: Icon(
+                            Icons.check_rounded,
+                            color: Colors.white,
+                            size: 14,
                           ),
                         ),
                       )
@@ -108,59 +104,21 @@ class ModelGridCard extends StatelessWidget {
                 ),
               ),
 
-              // Extra Gems Tag if available
-              if (model.hasExtraGems)
-                Positioned(
-                  bottom: 52,
-                  left: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2C2411).withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.gemYellow.withValues(alpha: 0.6),
-                        width: 0.8,
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.diamond,
-                          color: AppColors.gemYellow,
-                          size: 11,
-                        ),
-                        SizedBox(width: 3),
-                        Text(
-                          'Extra Gems',
-                          style: TextStyle(
-                            color: AppColors.gemYellow,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-              // Bottom Info: Name, Age Pill & Animated Video Call Button
+              // 4. Bottom Info: Name & Age Pill on Left, Round Video Call Button on Right
               Positioned(
                 left: 10,
                 right: 8,
                 bottom: 10,
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Left Column: Name & Age Pill
+                    // Left Column: User Name (Ellipsis) & Age Pill
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Name
+                          // Display Name with overflow ellipsis (...)
                           Text(
                             model.name,
                             style: const TextStyle(
@@ -169,7 +127,7 @@ class ModelGridCard extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                               shadows: [
                                 Shadow(
-                                  color: Colors.black,
+                                  color: Colors.black87,
                                   blurRadius: 6,
                                 ),
                               ],
@@ -179,11 +137,11 @@ class ModelGridCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
 
-                          // Age pill (e.g. pink capsule with red dot + 21) matching Screenshot
+                          // Country / Location Red indicator & Age pill (e.g. 🔴 24)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE91E63),
+                              color: const Color(0xFFFF2A6D),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Row(
@@ -197,12 +155,12 @@ class ModelGridCard extends StatelessWidget {
                                     color: Color(0xFFD50000),
                                   ),
                                 ),
-                                const SizedBox(width: 3),
+                                const SizedBox(width: 3.5),
                                 Text(
                                   '${model.age}',
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 10,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -213,10 +171,33 @@ class ModelGridCard extends StatelessWidget {
                       ),
                     ),
 
-                    // Right: Animated Video Call Button with Lottie-like ripple & pulse waves
-                    AnimatedCallButton(
+                    const SizedBox(width: 6),
+
+                    // Right: White Circular Video Call Button with Purple Camera Icon
+                    GestureDetector(
                       onTap: onVideoCallTap,
-                      size: 40,
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.videocam_rounded,
+                            color: Color(0xFF9C27B0),
+                            size: 22,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),

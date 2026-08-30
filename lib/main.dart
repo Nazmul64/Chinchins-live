@@ -35,11 +35,14 @@ void main() async {
 }
 
 class ChinchinsLiveApp extends StatelessWidget {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
   const ChinchinsLiveApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Chinchins Live',
       debugShowCheckedModeBanner: true,
       theme: AppTheme.darkTheme,

@@ -49,14 +49,43 @@ class ApiConstants {
   static String get withdrawHistory => '$baseUrl/withdraw/history';
   static String withdrawDetails(String id) => '$baseUrl/withdraw/$id';
   
-  // Video & Audio Calling endpoints
+  // Video & Audio Calling endpoints (Legacy & Standard RESTful /api/calls)
+  static String get calls => '$baseUrl/calls';
+  static String callById(dynamic id) => '$baseUrl/calls/$id';
+  static String callAcceptById(dynamic id) => '$baseUrl/calls/$id/accept';
+  static String callRejectById(dynamic id) => '$baseUrl/calls/$id/reject';
+  static String callCancelById(dynamic id) => '$baseUrl/calls/$id/cancel';
+  static String callEndById(dynamic id) => '$baseUrl/calls/$id/end';
+  static String callOfferById(dynamic id) => '$baseUrl/calls/$id/offer';
+  static String callAnswerById(dynamic id) => '$baseUrl/calls/$id/answer';
+  static String callIceCandidateById(dynamic id) => '$baseUrl/calls/$id/ice-candidate';
+  static String callSignalById(dynamic id) => '$baseUrl/calls/$id/signal';
+
   static String get callConfig => '$baseUrl/call/config';
   static String get callRandomMatch => '$baseUrl/call/random-match';
   static String get callInitiate => '$baseUrl/call/initiate';
+  static String get callIncoming => '$baseUrl/call/incoming';
+  static String callStatus(dynamic id) => '$baseUrl/call/status/$id';
+  static String get callRinging => '$baseUrl/call/ringing';
+  static String get callAccept => '$baseUrl/call/accept';
+  static String get callReject => '$baseUrl/call/reject';
+  static String get callCancel => '$baseUrl/call/cancel';
   static String get callStart => '$baseUrl/call/start';
+  static String get callIceServers => '$baseUrl/call/ice-servers';
+  static String get callSignalSend => '$baseUrl/call/signal/send';
+  static String get callSignalReceive => '$baseUrl/call/signal/receive';
+  static String get callSignalClear => '$baseUrl/call/signal/clear';
   static String get callEnd => '$baseUrl/call/end';
   static String get callDeductInterval => '$baseUrl/call/deduct-interval';
   static String get callHistory => '$baseUrl/call/history';
+
+  // User Presence & Heartbeat endpoints
+  static String get userHeartbeat => '$baseUrl/user/heartbeat';
+  static String get userStatus => '$baseUrl/user/status';
+  static String get userFcmToken => '$baseUrl/user/fcm-token';
+  static String userPresence(String id) => '$baseUrl/user/presence/$id';
+  static String get usersOnline => '$baseUrl/users/online';
+  static String get callWaitIncoming => '$baseUrl/call/wait-incoming';
 
   // KYC Verification endpoints
   static String get kycInstructions => '$baseUrl/kyc/instructions';

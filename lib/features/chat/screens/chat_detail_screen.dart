@@ -9,6 +9,9 @@ import '../../../core/widgets/video_call_pill.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/gift_picker_modal.dart';
 import '../../call/screens/video_call_screen.dart';
+import '../../call/services/call_api_service.dart';
+import '../../call/services/call_sound_manager.dart';
+import '../../wallet/widgets/recharge_gems_sheet.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../../core/data/mock_data.dart';
 
@@ -126,7 +129,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
-  void _openVideoCall() {
+  Future<void> _openVideoCall() async {
     final model = MockData.models.firstWhere(
       (m) => m.id == widget.thread.modelId || m.name == widget.thread.name,
       orElse: () => ModelProfile(
@@ -144,12 +147,100 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       ),
     );
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => VideoCallScreen(model: model),
+    // 1. 🔑 Instant 0ms Outgoing Ringtone
+    CallSoundManager.playOutgoingRingtone();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: AppColors.neonPink),
+              SizedBox(height: 14),
+              Text(
+                'Connecting Video Call...',
+                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
       ),
     );
+
+    try {
+      final res = await CallApiService.initiateCall(
+        receiverId: model.id,
+        receiverAccountId: model.accountId,
+        callType: 'video',
+      );
+
+      if (!mounted) {
+        CallSoundManager.stopRingtone();
+        return;
+      }
+      Navigator.pop(context); // Close progress dialog
+
+      if (res['success'] == true) {
+        final int? callId = res['call_id'] is int
+            ? res['call_id'] as int
+            : int.tryParse(res['call_id']?.toString() ?? '');
+        final channelName = res['channel_name']?.toString();
+        final isFreeTrial = res['is_free_trial'] == true;
+        final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
+        final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (model.pricePerMin > 0 ? model.pricePerMin : 100);
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VideoCallScreen(
+              model: model,
+              callId: callId,
+              channelName: channelName,
+              isFreeTrial: isFreeTrial,
+              freeDurationSeconds: freeSecs,
+              ratePerMinute: ratePerMin,
+              dialToneUrl: res['dial_tone_url']?.toString(),
+            ),
+          ),
+        ).then((_) => CallSoundManager.stopRingtone());
+      } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
+        CallSoundManager.stopRingtone();
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => RechargeGemsSheet(
+            model: model,
+            onRechargeSuccess: () {
+              _openVideoCall();
+            },
+          ),
+        );
+      } else {
+        CallSoundManager.stopRingtone();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message'] ?? 'Could not initiate call.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } catch (e) {
+      CallSoundManager.stopRingtone();
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Call error: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   void _openProfile() {

@@ -1,15 +1,35 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/app_logger.dart';
 import '../../../core/widgets/cached_image_loader.dart';
+import '../services/call_api_service.dart';
+import '../services/call_sound_manager.dart';
 import 'video_call_screen.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final ModelProfile model;
+  final int? callId;
+  final String? channelName;
+  final bool isFreeTrial;
+  final int freeDurationSeconds;
+  final int ratePerMinute;
+  final String? ringtoneUrl;
+  final String? callerName;
+  final String? callerAvatar;
 
   const IncomingCallScreen({
     super.key,
     required this.model,
+    this.callId,
+    this.channelName,
+    this.isFreeTrial = false,
+    this.freeDurationSeconds = 10,
+    this.ratePerMinute = 100,
+    this.ringtoneUrl,
+    this.callerName,
+    this.callerAvatar,
   });
 
   @override
@@ -20,10 +40,14 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+  Timer? _statusPollTimer;
+  Timer? _timeoutTimer;
+  bool _isProcessingAction = false;
 
   @override
   void initState() {
     super.initState();
+    AppLogger.info('WebRTC', 'INCOMING_CALL_RECEIVED');
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -32,48 +56,140 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    // ১. তাৎক্ষণিক ইনফিনিট লুপে ইনকামিং রিংটোন বাজানো
+    CallSoundManager.playIncomingRingtone(widget.ringtoneUrl);
+
+    // ২. সার্ভারকে রিংগিং কনফার্ম করা
+    if (widget.callId != null) {
+      CallApiService.confirmRinging(callId: widget.callId!);
+    }
+
+    // ৩. কলার কল কেটে দিলে সাথে সাথে রিসিভার স্ক্রিন ক্লোজ করার জন্য স্ট্যাটাস সিঙ্ক
+    _startStatusPolling();
+
+    // ৪. ৪৫ সেকেন্ড উত্তর না দিলে অটো মিসড কল
+    _timeoutTimer = Timer(const Duration(seconds: 45), () {
+      _stopRingtoneAndDismiss('Missed call');
+    });
+  }
+
+  void _startStatusPolling() {
+    if (widget.callId == null) return;
+    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 1200), (timer) async {
+      final statusData = await CallApiService.getCallStatus(widget.callId!);
+      if (!mounted) return;
+      if (statusData != null) {
+        final status = (statusData['status'] ?? statusData['data']?['status'])?.toString().toLowerCase();
+        final isTerminated = statusData['is_terminated'] == true || statusData['data']?['is_terminated'] == true;
+        
+        if (status == 'cancelled' || status == 'ended' || status == 'rejected' || isTerminated) {
+          timer.cancel();
+          _stopRingtoneAndDismiss('Call cancelled by caller');
+        }
+      }
+    });
+  }
+
+  void _stopRingtoneAndDismiss(String reason) {
+    _statusPollTimer?.cancel();
+    _timeoutTimer?.cancel();
+    CallSoundManager.stopRingtone();
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(reason),
+          backgroundColor: AppColors.cardDarkElevated,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
   void dispose() {
+    _statusPollTimer?.cancel();
+    _timeoutTimer?.cancel();
+    CallSoundManager.stopRingtone();
     _pulseController.dispose();
     super.dispose();
   }
 
-  void _acceptCall() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => VideoCallScreen(model: widget.model),
-      ),
-    );
+  Future<void> _acceptCall() async {
+    if (_isProcessingAction) return;
+    _isProcessingAction = true;
+    AppLogger.info('WebRTC', 'CALL_ACCEPTED');
+    
+    _statusPollTimer?.cancel();
+    _timeoutTimer?.cancel();
+
+    // রিংটোন সাথে সাথে বন্ধ
+    await CallSoundManager.stopRingtone();
+
+    // ব্যাকএন্ডে রিসিভ বাটন প্রেস নোটিফাই করা
+    if (widget.callId != null) {
+      await CallApiService.acceptCall(callId: widget.callId!);
+    }
+
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoCallScreen(
+            model: widget.model,
+            callId: widget.callId,
+            channelName: widget.channelName,
+            isFreeTrial: widget.isFreeTrial,
+            freeDurationSeconds: widget.freeDurationSeconds,
+            ratePerMinute: widget.ratePerMinute,
+            isIncoming: true, // রিসিভার মোড সক্রিয়
+          ),
+        ),
+      );
+    }
   }
 
-  void _declineCall() {
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Call from ${widget.model.name} declined'),
-        backgroundColor: AppColors.cardDarkElevated,
-        duration: const Duration(seconds: 1),
-      ),
-    );
+  Future<void> _declineCall() async {
+    if (_isProcessingAction) return;
+    _isProcessingAction = true;
+    _statusPollTimer?.cancel();
+    _timeoutTimer?.cancel();
+
+    await CallSoundManager.stopRingtone();
+
+    if (widget.callId != null) {
+      await CallApiService.rejectCall(callId: widget.callId!);
+    }
+
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Call from ${widget.model.name} declined'),
+          backgroundColor: AppColors.cardDarkElevated,
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final avatarUrl = widget.callerAvatar ?? widget.model.avatarUrl;
+    final displayName = widget.callerName ?? widget.model.name;
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Fullscreen Background Image of Caller matching Image 5
+          // কলারের ব্যাকগ্রাউন্ড ছবি
           CachedImageLoader(
-            imageUrl: widget.model.avatarUrl,
+            imageUrl: avatarUrl,
             fit: BoxFit.cover,
           ),
-
-          // Gradient overlay for visual clarity
+          
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -89,7 +205,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
             ),
           ),
 
-          // 2. Caller Info Card matching Image 5
+          // কলার ইনফো কার্ড
           Positioned(
             left: 24,
             bottom: 180,
@@ -115,7 +231,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                 children: [
                   Row(
                     children: [
-                      // Avatar
                       Container(
                         width: 44,
                         height: 44,
@@ -125,19 +240,17 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                         ),
                         child: ClipOval(
                           child: CachedImageLoader(
-                            imageUrl: widget.model.avatarUrl,
+                            imageUrl: avatarUrl,
                             fit: BoxFit.cover,
                           ),
                         ),
                       ),
                       const SizedBox(width: 10),
-
-                      // Name & Badges
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            widget.model.name,
+                            displayName,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
@@ -147,7 +260,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              // Age badge
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                 decoration: BoxDecoration(
@@ -171,8 +283,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                                 ),
                               ),
                               const SizedBox(width: 6),
-
-                              // Location
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                                 decoration: BoxDecoration(
@@ -201,8 +311,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                     ],
                   ),
                   const SizedBox(height: 12),
-
-                  // "VIDEO NOW!" Title & Subtitle matching Screenshot 5
                   const Text(
                     'VIDEO NOW!',
                     style: TextStyle(
@@ -214,7 +322,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                   ),
                   const SizedBox(height: 2),
                   const Text(
-                    'Sexy Girl request video chat!',
+                    'Video chat request received!',
                     style: TextStyle(
                       color: Colors.white70,
                       fontSize: 12,
@@ -226,7 +334,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
             ),
           ),
 
-          // 3. Bottom Accept / Decline Buttons matching Screenshot 5
+          // কল রিসিভ ও ডিক্লাইন বাটন
           Positioned(
             bottom: 50,
             left: 40,
@@ -234,7 +342,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Decline (Red Button)
                 GestureDetector(
                   onTap: _declineCall,
                   child: Container(
@@ -258,8 +365,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                     ),
                   ),
                 ),
-
-                // Accept (Green Glowing Pulse Button)
                 AnimatedBuilder(
                   animation: _pulseAnimation,
                   builder: (context, child) {

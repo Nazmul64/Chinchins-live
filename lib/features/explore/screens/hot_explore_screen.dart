@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -7,12 +7,7 @@ import '../widgets/explore_header.dart';
 import '../widgets/model_grid_card.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../call/screens/video_call_screen.dart';
-import '../../call/screens/incoming_call_screen.dart';
-import '../../call/screens/random_match_screen.dart';
 import '../../call/services/call_api_service.dart';
-import '../../party/screens/party_rooms_screen.dart';
-import '../../party/screens/create_room_screen.dart';
-import '../../wallet/widgets/recharge_gems_sheet.dart';
 
 class HotExploreScreen extends StatefulWidget {
   const HotExploreScreen({super.key});
@@ -24,7 +19,9 @@ class HotExploreScreen extends StatefulWidget {
 class _HotExploreScreenState extends State<HotExploreScreen> {
   int _selectedTabIndex = 0;
   List<ModelProfile> _models = [];
-  String _selectedLanguage = 'All';
+  String _selectedCountryCode = 'BGD';
+  String _selectedCountryName = 'Bangladesh';
+  String _searchQuery = '';
   bool _isLoading = false;
 
   @override
@@ -66,7 +63,7 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
 
       // 2. Fetch live users from Laravel REST API
       final liveFeed = await ProfileApiService.getHomeFeed(
-        country: _selectedLanguage != 'All' ? _selectedLanguage : null,
+        country: _selectedCountryName != 'All' ? _selectedCountryName : null,
       );
 
       bool isExcludedUser(ModelProfile profile) {
@@ -99,214 +96,46 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
         combined.add(user);
       }
 
+      // Filter by Tab: If Match tab (index 1), only show online users!
+      List<ModelProfile> filtered = combined;
+      if (_selectedTabIndex == 1) {
+        filtered = filtered.where((m) => m.isOnline).toList();
+      }
+
+      // Filter by search query if present
+      if (_searchQuery.trim().isNotEmpty) {
+        final q = _searchQuery.trim().toLowerCase();
+        filtered = filtered.where((m) =>
+          m.name.toLowerCase().contains(q) ||
+          m.location.toLowerCase().contains(q) ||
+          m.accountId.contains(q)
+        ).toList();
+      }
+
       if (mounted) {
         setState(() {
-          _models = combined;
+          _models = filtered;
+          _isLoading = false;
         });
       }
-    } catch (_) {}
-    if (mounted) setState(() => _isLoading = false);
+    } catch (e) {
+      debugPrint('Error loading home feed: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _onTabSelected(int index) {
-    if (index == 2 || index == 3) {
-      // 2: Match 🔥, 3: Video Call 📹
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const RandomMatchScreen(),
-        ),
-      );
-      return;
-    }
-    setState(() {
-      _selectedTabIndex = index;
-    });
-  }
-
-  void _openHostProfile(ModelProfile model) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => HostProfileScreen(model: model),
-      ),
-    );
-  }
-
-  Future<void> _startVideoCall(ModelProfile model) async {
-    // Show quick progress dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const Center(
-        child: Card(
-          color: Color(0xFF1E1830),
-          child: Padding(
-            padding: EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: AppColors.neonPink),
-                SizedBox(height: 14),
-                Text(
-                  'Connecting Video Call...',
-                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    try {
-      final res = await CallApiService.initiateCall(
-        receiverId: model.id,
-        callType: 'video',
-      );
-
-      if (!mounted) return;
-      Navigator.pop(context); // Close progress dialog
-
-      if (res['success'] == true) {
-        final callId = res['call_id'] is int
-            ? res['call_id'] as int
-            : int.tryParse(res['call_id']?.toString() ?? '1') ?? 1;
-        final isFreeTrial = res['is_free_trial'] == true;
-        final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
-
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => VideoCallScreen(
-              model: model,
-              callId: callId,
-              isFreeTrial: isFreeTrial,
-              freeDurationSeconds: freeSecs,
-            ),
-          ),
-        );
-      } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (context) => RechargeGemsSheet(
-            onRechargeSuccess: () {
-              _startVideoCall(model);
-            },
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(res['message'] ?? 'Could not initiate call.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Call error: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+    if (_selectedTabIndex != index) {
+      setState(() {
+        _selectedTabIndex = index;
+      });
+      _loadHomeFeed();
     }
   }
 
-  void _simulateIncomingCall() {
-    final caller = _models.firstWhere(
-      (m) => m.name.contains('Nosimon') || m.name.contains('sexy'),
-      orElse: () => _models.first,
-    );
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => IncomingCallScreen(model: caller),
-      ),
-    );
-  }
-
-  void _showSayHelloDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: AppColors.cardDarkElevated,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: AppColors.orangeGradient,
-                ),
-                child: const Icon(Icons.waving_hand_rounded, color: Colors.white, size: 30),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Say Hello to Online Hosts!',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Send an instant wave to 5 available hosts in your area to start chatting.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
-                    ),
-                  ),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.warmOrange,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      ),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('✨ Greetings sent to 5 online hosts!'),
-                            backgroundColor: AppColors.neonPurple,
-                          ),
-                        );
-                      },
-                      child: const Text('Say Hello', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showLanguageSelector() {
+  void _showCountrySelector() {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.cardDarkElevated,
@@ -314,7 +143,12 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
-        final languages = ['All', 'Bengali', 'English', 'Hindi', 'Spanish'];
+        final countries = [
+          {'code': 'BGD', 'name': 'Bangladesh 🇧🇩', 'value': 'Bangladesh'},
+          {'code': 'IND', 'name': 'India 🇮🇳', 'value': 'India'},
+          {'code': 'USA', 'name': 'United States 🇺🇸', 'value': 'USA'},
+          {'code': 'ALL', 'name': 'Global 🌍', 'value': 'All'},
+        ];
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
@@ -333,7 +167,7 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
               ),
               const SizedBox(height: 16),
               const Text(
-                'Select Language Region',
+                'Select Region / Country',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -341,11 +175,11 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              ...languages.map((lang) {
-                final isSelected = _selectedLanguage == lang;
+              ...countries.map((c) {
+                final isSelected = _selectedCountryCode == c['code'];
                 return ListTile(
                   title: Text(
-                    lang,
+                    c['name']!,
                     style: TextStyle(
                       color: isSelected ? AppColors.neonPink : Colors.white,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
@@ -356,7 +190,8 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
                       : null,
                   onTap: () {
                     setState(() {
-                      _selectedLanguage = lang;
+                      _selectedCountryCode = c['code']!;
+                      _selectedCountryName = c['value']!;
                     });
                     Navigator.pop(context);
                     _loadHomeFeed();
@@ -370,6 +205,112 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
     );
   }
 
+  void _showSearchDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        String tempSearch = _searchQuery;
+        return AlertDialog(
+          backgroundColor: AppColors.cardDarkElevated,
+          title: const Text('Search Streamers', style: TextStyle(color: Colors.white, fontSize: 18)),
+          content: TextField(
+            autofocus: true,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Enter name or ID...',
+              hintStyle: const TextStyle(color: Colors.white54),
+              filled: true,
+              fillColor: Colors.black26,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            onChanged: (val) => tempSearch = val,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                setState(() => _searchQuery = '');
+                Navigator.pop(context);
+                _loadHomeFeed();
+              },
+              child: const Text('Clear', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.neonPink),
+              onPressed: () {
+                setState(() => _searchQuery = tempSearch);
+                Navigator.pop(context);
+                _loadHomeFeed();
+              },
+              child: const Text('Search', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _openHostProfile(ModelProfile model) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HostProfileScreen(model: model),
+      ),
+    );
+  }
+
+  Future<void> _startVideoCall(ModelProfile model) async {
+    final targetUserId = int.tryParse(model.id) ?? int.tryParse(model.accountId) ?? 2;
+
+    try {
+      final initiateRes = await CallApiService.initiateCall(
+        receiverId: targetUserId,
+        callType: 'video',
+      );
+
+      final callData = (initiateRes != null && initiateRes['data'] is Map)
+          ? initiateRes['data']
+          : (initiateRes != null && initiateRes['call'] is Map ? initiateRes['call'] : initiateRes);
+
+      final callId = callData?['call_id'] ?? callData?['id'] ?? DateTime.now().millisecondsSinceEpoch;
+      final channelName = callData?['channel_name'] ?? 'call_room_${callId}_$targetUserId';
+
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoCallScreen(
+            model: model,
+            callId: callId,
+            channelName: channelName,
+            isFreeTrial: callData?['is_free_trial'] == true,
+            freeDurationSeconds: callData?['free_duration_seconds'] ?? 10,
+            ratePerMinute: model.pricePerMin,
+            isIncoming: false,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoCallScreen(
+            model: model,
+            callId: DateTime.now().millisecondsSinceEpoch,
+            channelName: 'call_room_fallback_$targetUserId',
+            isFreeTrial: false,
+            freeDurationSeconds: 10,
+            ratePerMinute: model.pricePerMin,
+            isIncoming: false,
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -377,103 +318,78 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top App Bar matching Screenshot 1
+            // Top App Bar with Hot, Match, Search & Country Pill
             ExploreHeader(
               selectedTabIndex: _selectedTabIndex,
               onTabSelected: _onTabSelected,
-              onSearchTap: _simulateIncomingCall,
-              onLanguageTap: _showLanguageSelector,
-              onSayHelloTap: _showSayHelloDialog,
+              onSearchTap: _showSearchDialog,
+              onCountryTap: _showCountrySelector,
+              selectedCountryCode: _selectedCountryCode,
             ),
 
-            // Body Content based on Tab
+            // User Cards 2-Column Grid
             Expanded(
-              child: _selectedTabIndex == 1
-                  ? const PartyRoomsScreen()
-                  : _isLoading && _models.isEmpty
-                      ? const Center(
-                          child: CircularProgressIndicator(color: AppColors.neonPink),
-                        )
-                      : _models.isEmpty
-                          ? RefreshIndicator(
-                              color: AppColors.neonPink,
-                              backgroundColor: AppColors.cardDark,
-                              onRefresh: _loadHomeFeed,
-                              child: ListView(
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                children: [
-                                  SizedBox(height: MediaQuery.of(context).size.height * 0.25),
-                                  const Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.wifi_tethering_off_rounded, color: AppColors.textMuted, size: 54),
-                                        SizedBox(height: 14),
-                                        Text(
-                                          'No Live Streamers Online',
-                                          style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
-                                        ),
-                                        SizedBox(height: 6),
-                                        Text(
-                                          'Pull down to refresh or check back soon',
-                                          style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                                        ),
-                                      ],
+              child: _isLoading && _models.isEmpty
+                  ? const Center(
+                      child: CircularProgressIndicator(color: AppColors.neonPink),
+                    )
+                  : _models.isEmpty
+                      ? RefreshIndicator(
+                          color: AppColors.neonPink,
+                          backgroundColor: AppColors.cardDark,
+                          onRefresh: _loadHomeFeed,
+                          child: ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: [
+                              SizedBox(height: MediaQuery.of(context).size.height * 0.25),
+                              const Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.wifi_tethering_off_rounded, color: AppColors.textMuted, size: 54),
+                                    SizedBox(height: 14),
+                                    Text(
+                                      'No Streamers Found',
+                                      style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : RefreshIndicator(
-                              color: AppColors.neonPink,
-                              backgroundColor: AppColors.cardDark,
-                              onRefresh: () async {
-                                await _loadHomeFeed();
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                child: GridView.builder(
-                                  itemCount: _models.length,
-                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    childAspectRatio: 0.72,
-                                    crossAxisSpacing: 10,
-                                    mainAxisSpacing: 10,
-                                  ),
-                                  itemBuilder: (context, index) {
-                                    final model = _models[index];
-                                    return ModelGridCard(
-                                      model: model,
-                                      onTap: () => _openHostProfile(model),
-                                      onVideoCallTap: () => _startVideoCall(model),
-                                    );
-                                  },
+                                    SizedBox(height: 6),
+                                    Text(
+                                      'Pull down to refresh or check back soon',
+                                      style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                                    ),
+                                  ],
                                 ),
                               ),
+                            ],
+                          ),
+                        )
+                      : RefreshIndicator(
+                          color: AppColors.neonPink,
+                          backgroundColor: AppColors.cardDark,
+                          onRefresh: _loadHomeFeed,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            child: GridView.builder(
+                              itemCount: _models.length,
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                childAspectRatio: 0.68, // Exact portrait proportion
+                                crossAxisSpacing: 10,
+                                mainAxisSpacing: 10,
+                              ),
+                              itemBuilder: (context, index) {
+                                final model = _models[index];
+                                return ModelGridCard(
+                                  model: model,
+                                  onTap: () => _openHostProfile(model),
+                                  onVideoCallTap: () => _startVideoCall(model),
+                                );
+                              },
                             ),
+                          ),
+                        ),
             ),
           ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (context) => const CreateRoomScreen(),
-          );
-        },
-        backgroundColor: AppColors.neonPink,
-        elevation: 8,
-        icon: const Icon(Icons.mic_external_on_rounded, color: Colors.white),
-        label: const Text(
-          'Host Room',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 13,
-          ),
         ),
       ),
     );

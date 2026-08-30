@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Chinchins Live requires camera access for live 1-on-1 video calling.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Chinchins Live requires microphone access for audio and video calls.</string>
 </dict>
 </plist>

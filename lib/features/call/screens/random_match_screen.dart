@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
 import '../services/call_api_service.dart';
+import '../services/call_sound_manager.dart';
 import 'video_call_screen.dart';
 
 class RandomMatchScreen extends StatefulWidget {
@@ -110,6 +111,9 @@ class _RandomMatchScreenState extends State<RandomMatchScreen>
     if (_matchedProfile == null || _isConnecting) return;
     _countdownTimer?.cancel();
 
+    // 1. 🔑 Instant 0ms Outgoing Ringtone
+    CallSoundManager.playOutgoingRingtone();
+
     setState(() => _isConnecting = true);
 
     final res = await CallApiService.initiateCall(
@@ -117,12 +121,18 @@ class _RandomMatchScreenState extends State<RandomMatchScreen>
       callType: 'video',
     );
 
-    if (!mounted) return;
+    if (!mounted) {
+      CallSoundManager.stopRingtone();
+      return;
+    }
 
     if (res['success'] == true) {
-      final callId = res['call_id'] is int ? res['call_id'] as int : int.tryParse(res['call_id']?.toString() ?? '1') ?? 1;
+      final int? callId = res['call_id'] is int ? res['call_id'] as int : int.tryParse(res['call_id']?.toString() ?? '');
       final isFreeTrial = res['is_free_trial'] == true;
       final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
+
+      final channelName = res['channel_name']?.toString();
+      final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (_matchedProfile!.pricePerMin > 0 ? _matchedProfile!.pricePerMin : 100);
 
       Navigator.pushReplacement(
         context,
@@ -130,12 +140,16 @@ class _RandomMatchScreenState extends State<RandomMatchScreen>
           builder: (context) => VideoCallScreen(
             model: _matchedProfile!,
             callId: callId,
+            channelName: channelName,
             isFreeTrial: isFreeTrial,
             freeDurationSeconds: freeSecs,
+            ratePerMinute: ratePerMin,
+            dialToneUrl: res['dial_tone_url']?.toString(),
           ),
         ),
       );
     } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
+      CallSoundManager.stopRingtone();
       setState(() => _isConnecting = false);
       showModalBottomSheet(
         context: context,
@@ -148,6 +162,7 @@ class _RandomMatchScreenState extends State<RandomMatchScreen>
         ),
       );
     } else {
+      CallSoundManager.stopRingtone();
       setState(() => _isConnecting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

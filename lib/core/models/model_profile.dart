@@ -2,6 +2,7 @@ import '../widgets/cached_image_loader.dart';
 
 class ModelProfile {
   final String id;
+  final String accountId;
   final String name;
   final String? firstName;
   final String? lastName;
@@ -30,6 +31,7 @@ class ModelProfile {
 
   const ModelProfile({
     required this.id,
+    this.accountId = '',
     required this.name,
     this.firstName,
     this.lastName,
@@ -56,6 +58,9 @@ class ModelProfile {
     this.closeFriendsStatus = 'Close Friends (0/3)',
     this.receivedGifts = const {},
   });
+
+  /// Computed account ID with fallback
+  String get effectiveAccountId => accountId.isNotEmpty ? accountId : id;
 
   /// Computed full name
   String get fullName {
@@ -120,8 +125,9 @@ class ModelProfile {
       parsedLevel = int.tryParse(levelDigits) ?? 4;
     }
 
-    // Account ID or primary ID
-    final accountId = json['account_id']?.toString() ?? json['id']?.toString() ?? '602281635';
+    // Primary database ID and public Account ID
+    final primaryId = json['id']?.toString() ?? json['user_id']?.toString() ?? json['account_id']?.toString() ?? '1';
+    final accountId = json['account_id']?.toString() ?? json['id']?.toString() ?? primaryId;
 
     final firstName = json['first_name']?.toString();
     final lastName = json['last_name']?.toString();
@@ -168,7 +174,8 @@ class ModelProfile {
     }
 
     return ModelProfile(
-      id: accountId,
+      id: primaryId,
+      accountId: accountId,
       name: displayName,
       firstName: firstName,
       lastName: lastName,

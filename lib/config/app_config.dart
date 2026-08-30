@@ -1,4 +1,4 @@
-class AppConfig {
+﻿class AppConfig {
   // Base REST API URL
   static const String baseUrl = 'https://chinchins.live/api';
 
@@ -6,9 +6,12 @@ class AppConfig {
   static const String reverbAppKey = 'chinchins_key_2026';
   static const String reverbHost = 'chinchins.live';
   static const int reverbPort = 443;
+  static const int reverbWsPort = 8080;
+  static const int reverbWssPort = 443;
+  static const bool reverbUseTLS = true;
   static const String reverbScheme = 'https';
   static const String reverbWsPath = '/ws';
-  static const String authEndpoint = 'https://chinchins.live/broadcasting/auth';
+  static const String authEndpoint = 'https://chinchins.live/api/broadcasting/auth';
 
   // WebRTC ICE Servers (STUN/TURN) Config
   static const Map<String, dynamic> rtcConfiguration = {

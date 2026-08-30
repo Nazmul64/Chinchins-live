@@ -5,14 +5,17 @@ class CallSoundManager {
   static AudioPlayer? _player;
   static bool _isPlaying = false;
 
-  /// Play outgoing phone dialing / ringtone sound effect in loop
-  static Future<void> playOutgoingRingtone() async {
+  static Future<void> playOutgoingRingtone([String? customUrl]) async {
     if (_isPlaying) return;
     try {
       _player ??= AudioPlayer();
       await _player!.setReleaseMode(ReleaseMode.loop);
       await _player!.setVolume(1.0);
-      await _player!.play(AssetSource('sounds/calling_ringtone.wav'));
+      if (customUrl != null && customUrl.startsWith('http')) {
+        await _player!.play(UrlSource(customUrl));
+      } else {
+        await _player!.play(AssetSource('sounds/calling_ringtone.wav'));
+      }
       _isPlaying = true;
       AppLogger.info('CallSound', 'Playing outgoing calling ringtone sound...');
     } catch (e, st) {
@@ -20,7 +23,24 @@ class CallSoundManager {
     }
   }
 
-  /// Stop calling sound effect
+  static Future<void> playIncomingRingtone([String? customUrl]) async {
+    if (_isPlaying) return;
+    try {
+      _player ??= AudioPlayer();
+      await _player!.setReleaseMode(ReleaseMode.loop);
+      await _player!.setVolume(1.0);
+      if (customUrl != null && customUrl.startsWith('http')) {
+        await _player!.play(UrlSource(customUrl));
+      } else {
+        await _player!.play(AssetSource('sounds/calling_ringtone.wav'));
+      }
+      _isPlaying = true;
+      AppLogger.info('CallSound', 'Playing incoming phone ringing sound...');
+    } catch (e, st) {
+      AppLogger.error('IncomingCallSoundError', e, st);
+    }
+  }
+
   static Future<void> stopRingtone() async {
     if (!_isPlaying && _player == null) return;
     try {
@@ -34,7 +54,6 @@ class CallSoundManager {
     }
   }
 
-  /// Dispose player
   static Future<void> dispose() async {
     try {
       if (_player != null) {

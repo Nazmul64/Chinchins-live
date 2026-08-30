@@ -8,6 +8,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../widgets/gifts_received_grid.dart';
 import '../../call/screens/video_call_screen.dart';
+import '../../call/services/call_api_service.dart';
+import '../../call/services/call_sound_manager.dart';
 import '../../chat/screens/chat_detail_screen.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
 
@@ -63,13 +65,168 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     });
   }
 
-  void _startVideoCall() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => VideoCallScreen(model: widget.model),
+  Future<void> _startVideoCall() async {
+    CallSoundManager.playOutgoingRingtone();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: AppColors.neonPink),
+              SizedBox(height: 14),
+              Text(
+                'Connecting Video Call...',
+                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
       ),
     );
+
+    try {
+      final res = await CallApiService.initiateCall(
+        receiverId: widget.model.id,
+        receiverAccountId: widget.model.accountId,
+        callType: 'video',
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close progress dialog
+
+      if (res['success'] == true) {
+        final int? callId = res['call_id'] is int
+            ? res['call_id'] as int
+            : int.tryParse(res['call_id']?.toString() ?? '');
+        final channelName = res['channel_name']?.toString();
+        final isFreeTrial = res['is_free_trial'] == true;
+        final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
+        final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100);
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VideoCallScreen(
+              model: widget.model,
+              callId: callId,
+              channelName: channelName,
+              isFreeTrial: isFreeTrial,
+              freeDurationSeconds: freeSecs,
+              ratePerMinute: ratePerMin,
+              dialToneUrl: res['dial_tone_url']?.toString(),
+            ),
+          ),
+        );
+      } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
+        CallSoundManager.stopRingtone();
+        _showRechargeSheet();
+      } else {
+        CallSoundManager.stopRingtone();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message'] ?? 'Could not initiate call.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } catch (e) {
+      CallSoundManager.stopRingtone();
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Call error: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _startAudioCall() async {
+    CallSoundManager.playOutgoingRingtone();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: AppColors.neonPink),
+              SizedBox(height: 14),
+              Text(
+                'Connecting Audio Call...',
+                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final res = await CallApiService.initiateCall(
+        receiverId: widget.model.id,
+        receiverAccountId: widget.model.accountId,
+        callType: 'audio',
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close progress dialog
+
+      if (res['success'] == true) {
+        final int? callId = res['call_id'] is int
+            ? res['call_id'] as int
+            : int.tryParse(res['call_id']?.toString() ?? '');
+        final channelName = res['channel_name']?.toString();
+        final isFreeTrial = res['is_free_trial'] == true;
+        final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
+        final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100);
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VideoCallScreen(
+              model: widget.model,
+              callId: callId,
+              channelName: channelName,
+              isFreeTrial: isFreeTrial,
+              freeDurationSeconds: freeSecs,
+              ratePerMinute: ratePerMin,
+              dialToneUrl: res['dial_tone_url']?.toString(),
+            ),
+          ),
+        );
+      } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
+        CallSoundManager.stopRingtone();
+        _showRechargeSheet();
+      } else {
+        CallSoundManager.stopRingtone();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message'] ?? 'Could not initiate call.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } catch (e) {
+      CallSoundManager.stopRingtone();
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Call error: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   void _showRechargeSheet() {
@@ -692,8 +849,8 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                     GestureDetector(
                       onTap: _sendHiGreeting,
                       child: Container(
-                        width: 50,
-                        height: 50,
+                        width: 48,
+                        height: 48,
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
@@ -707,14 +864,36 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                             'Hi',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 16,
+                              fontSize: 15,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
+
+                    // Audio Call Button (Circular green icon)
+                    GestureDetector(
+                      onTap: _startAudioCall,
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                          border: Border.all(color: const Color(0xFF10B981), width: 1.5),
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.call_rounded,
+                            color: Color(0xFF10B981),
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
 
                     // Video Call Action Bar (1800/min) matching Screenshot 3
                     Expanded(
