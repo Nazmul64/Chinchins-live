@@ -100,8 +100,10 @@ class ChatThread {
   final String lastMessage;
   final String lastMessagePrefix; // e.g. [Video Call], [Image]
   final String time;
+  final DateTime? lastMessageAt;
   final int unreadCount;
   final bool isOnline;
+  final int videoCallRate;
   final String? badgeEmoji; // e.g. "❤️", "⭐", "🦋"
   final List<ChatMessage> messages;
 
@@ -113,8 +115,10 @@ class ChatThread {
     required this.lastMessage,
     this.lastMessagePrefix = '',
     required this.time,
+    this.lastMessageAt,
     this.unreadCount = 0,
     this.isOnline = true,
+    this.videoCallRate = 1800,
     this.badgeEmoji,
     required this.messages,
   });
@@ -123,12 +127,14 @@ class ChatThread {
     final userId = json['user_id']?.toString() ?? json['id']?.toString() ?? '';
     final name = json['name']?.toString() ?? json['display_name']?.toString() ?? 'Host';
     final avatar = json['avatar_url']?.toString() ?? json['avatar']?.toString() ?? '';
-    final isOnline = json['is_online'] == true;
+    final isOnline = json['is_online'] == true || json['is_active'] == true;
     final unread = (json['unread_count'] is int) ? json['unread_count'] as int : 0;
+    final rate = (json['video_call_rate'] is int) ? json['video_call_rate'] as int : 1800;
 
     String lastMsgText = '';
     String lastMsgPrefix = '';
     String timeStr = 'Just now';
+    DateTime? lastMsgAt;
 
     if (json['last_message'] is Map) {
       final lm = json['last_message'] as Map<String, dynamic>;
@@ -142,8 +148,19 @@ class ChatThread {
         lastMsgPrefix = '[Voice Note]';
       }
       timeStr = lm['time']?.toString() ?? 'Just now';
+      if (lm['created_at'] != null) {
+        try {
+          lastMsgAt = DateTime.parse(lm['created_at'].toString());
+        } catch (_) {}
+      }
     } else if (json['last_message'] != null) {
       lastMsgText = json['last_message'].toString();
+    }
+
+    if (json['updated_at'] != null && lastMsgAt == null) {
+      try {
+        lastMsgAt = DateTime.parse(json['updated_at'].toString());
+      } catch (_) {}
     }
 
     return ChatThread(
@@ -154,8 +171,10 @@ class ChatThread {
       lastMessage: lastMsgText.isNotEmpty ? lastMsgText : 'Say hi! 💕',
       lastMessagePrefix: lastMsgPrefix,
       time: timeStr,
+      lastMessageAt: lastMsgAt,
       unreadCount: unread,
       isOnline: isOnline,
+      videoCallRate: rate,
       messages: [],
     );
   }

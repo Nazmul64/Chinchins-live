@@ -9,6 +9,7 @@ import '../../messages/screens/messages_screen.dart';
 import '../../me/screens/me_screen.dart';
 import '../../call/screens/incoming_call_screen.dart';
 import '../../call/services/call_api_service.dart';
+import '../../chat/services/chat_api_service.dart';
 import '../../../main.dart';
 
 class MainNavigationScreen extends StatefulWidget {
@@ -36,6 +37,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   void initState() {
     super.initState();
+    ChatApiService.getConversations();
     _initWebSocketSignaling();
     _startUserHeartbeat();
     _startIncomingCallListener();
@@ -192,7 +194,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               label: 'Home',
             ),
 
-            // "Messages" Tab with unread badge '22' matching Screenshot 1
+            // "Messages" Tab with dynamic unread badge
             BottomNavigationBarItem(
               icon: Padding(
                 padding: const EdgeInsets.only(bottom: 4),
@@ -204,24 +206,33 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                       color: _currentIndex == 1 ? Colors.white : AppColors.textMuted,
                       size: 24,
                     ),
-                    Positioned(
-                      top: -4,
-                      right: -8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE91E63),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          '22',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
+                    ValueListenableBuilder<int>(
+                      valueListenable: ChatApiService.totalUnreadBadgeNotifier,
+                      builder: (context, badgeCount, _) {
+                        if (badgeCount <= 0) return const SizedBox.shrink();
+                        return Positioned(
+                          top: -4,
+                          right: -8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE91E63),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Center(
+                              child: Text(
+                                badgeCount > 99 ? '99+' : '$badgeCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                   ],
                 ),

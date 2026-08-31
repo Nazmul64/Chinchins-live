@@ -6,6 +6,9 @@ import '../../../core/constants/api_constants.dart';
 import '../../auth/services/auth_api_service.dart';
 
 class ChatApiService {
+  /// Global real-time unread badge notifier for bottom bar and header
+  static final ValueNotifier<int> totalUnreadBadgeNotifier = ValueNotifier<int>(0);
+
   static dynamic _safeJsonDecode(String body) {
     try {
       return jsonDecode(body);
@@ -14,25 +17,44 @@ class ChatApiService {
     }
   }
 
-  /// Get conversations list (Inbox)
+  /// Helper to get current user ID
+  static Future<String?> _getCurrentUserId() async {
+    final savedUser = await AuthApiService.getSavedUser();
+    return savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+  }
+
+  /// Get conversations list (Inbox) - Real Dynamic Server Data
   static Future<Map<String, dynamic>?> getConversations() async {
     try {
       final token = await AuthApiService.getToken();
+      final currentUserId = await _getCurrentUserId();
+
       final headers = {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (currentUserId != null) 'X-User-Id': currentUserId,
       };
 
-      final response = await http.get(
-        Uri.parse(ApiConstants.messages),
-        headers: headers,
-      ).timeout(const Duration(seconds: 10));
+      final queryParams = <String, String>{};
+      if (currentUserId != null && currentUserId.isNotEmpty) {
+        queryParams['user_id'] = currentUserId;
+      }
+
+      final uri = Uri.parse(ApiConstants.messages).replace(
+        queryParameters: queryParams.isNotEmpty ? queryParams : null,
+      );
+
+      final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final res = _safeJsonDecode(response.body);
         if (res != null && res['data'] != null) {
-          return res['data'] as Map<String, dynamic>;
+          final data = res['data'] as Map<String, dynamic>;
+          if (data['total_unread_badge'] is int) {
+            totalUnreadBadgeNotifier.value = data['total_unread_badge'] as int;
+          }
+          return data;
         }
       }
     } catch (e) {
@@ -42,16 +64,25 @@ class ChatApiService {
   }
 
   /// Get messages with a specific user
-  static Future<Map<String, dynamic>?> getMessagesWithUser(dynamic userId, {int page = 1, int perPage = 50}) async {
+  static Future<Map<String, dynamic>?> getMessagesWithUser(dynamic targetUserId, {int page = 1, int perPage = 50}) async {
     try {
       final token = await AuthApiService.getToken();
+      final currentUserId = await _getCurrentUserId();
+
       final headers = {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (currentUserId != null) 'X-User-Id': currentUserId,
       };
 
-      final url = Uri.parse('${ApiConstants.messagesByUser(userId)}?page=$page&per_page=$perPage');
+      final queryParams = <String, String>{
+        'page': page.toString(),
+        'per_page': perPage.toString(),
+        if (currentUserId != null && currentUserId.isNotEmpty) 'user_id': currentUserId,
+      };
+
+      final url = Uri.parse(ApiConstants.messagesByUser(targetUserId)).replace(queryParameters: queryParams);
       final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -77,9 +108,12 @@ class ChatApiService {
   }) async {
     try {
       final token = await AuthApiService.getToken();
+      final currentUserId = await _getCurrentUserId();
+
       final headers = {
         'Accept': 'application/json',
         if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (currentUserId != null) 'X-User-Id': currentUserId,
       };
 
       final uri = Uri.parse(ApiConstants.messageSend);
@@ -90,6 +124,10 @@ class ChatApiService {
         request.headers.addAll(headers);
         request.fields['receiver_id'] = receiverId.toString();
         request.fields['type'] = type;
+        if (currentUserId != null) {
+          request.fields['user_id'] = currentUserId;
+          request.fields['sender_id'] = currentUserId;
+        }
         if (message != null && message.isNotEmpty) {
           request.fields['message'] = message;
         }
@@ -132,6 +170,8 @@ class ChatApiService {
         final Map<String, dynamic> payload = {
           'receiver_id': receiverId,
           'type': type,
+          if (currentUserId != null) 'user_id': currentUserId,
+          if (currentUserId != null) 'sender_id': currentUserId,
         };
         if (message != null && message.isNotEmpty) {
           payload['message'] = message;
@@ -186,16 +226,24 @@ class ChatApiService {
   static Future<bool> markAsRead(dynamic senderId) async {
     try {
       final token = await AuthApiService.getToken();
+      final currentUserId = await _getCurrentUserId();
+
       final headers = {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (currentUserId != null) 'X-User-Id': currentUserId,
+      };
+
+      final payload = {
+        'sender_id': senderId,
+        if (currentUserId != null) 'user_id': currentUserId,
       };
 
       final response = await http.post(
         Uri.parse(ApiConstants.messagesRead),
         headers: headers,
-        body: jsonEncode({'sender_id': senderId}),
+        body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 8));
 
       return response.statusCode == 200;

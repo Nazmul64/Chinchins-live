@@ -1,5 +1,5 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../../core/data/mock_data.dart';
 import '../../../core/models/chat_message.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/profile_api_service.dart';
@@ -18,18 +18,40 @@ class MessagesScreen extends StatefulWidget {
 
 class _MessagesScreenState extends State<MessagesScreen> {
   int _activeSubTabIndex = 0; // 0: Messages, 1: Intimacy
-  late List<ChatThread> _threads;
+  List<ChatThread> _threads = [];
   List<ModelProfile> _liveHosts = [];
+  bool _isLoading = true;
+  Timer? _realtimePollTimer;
 
   @override
   void initState() {
     super.initState();
-    _threads = List.from(MockData.chatThreads);
-    _loadConversations();
+    _loadConversations(initial: true);
     _loadLiveHosts();
+    _startRealtimePolling();
   }
 
-  Future<void> _loadConversations() async {
+  @override
+  void dispose() {
+    _realtimePollTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startRealtimePolling() {
+    _realtimePollTimer?.cancel();
+    // Real-time polling every 3.5 seconds to refresh incoming messages & auto-greetings
+    _realtimePollTimer = Timer.periodic(const Duration(milliseconds: 3500), (_) {
+      if (mounted) {
+        _loadConversations(silent: true);
+      }
+    });
+  }
+
+  Future<void> _loadConversations({bool initial = false, bool silent = false}) async {
+    if (initial && mounted) {
+      setState(() => _isLoading = true);
+    }
+
     try {
       final res = await ChatApiService.getConversations();
       if (res != null && mounted) {
@@ -38,28 +60,39 @@ class _MessagesScreenState extends State<MessagesScreen> {
               .map((c) => ChatThread.fromJson(c as Map<String, dynamic>))
               .toList();
 
-          if (convList.isNotEmpty) {
-            setState(() {
-              // Combine live conversations with fallback mock threads
-              final liveIds = convList.map((c) => c.modelId).toSet();
-              final remainingMocks = MockData.chatThreads
-                  .where((t) => !liveIds.contains(t.modelId))
-                  .toList();
-              _threads = [...convList, ...remainingMocks];
-            });
-          }
+          // Sort conversations by latest message timestamp (most recent at top)
+          convList.sort((a, b) {
+            if (a.lastMessageAt != null && b.lastMessageAt != null) {
+              return b.lastMessageAt!.compareTo(a.lastMessageAt!);
+            }
+            if (a.lastMessageAt != null) return -1;
+            if (b.lastMessageAt != null) return 1;
+            return 0;
+          });
+
+          setState(() {
+            _threads = convList;
+            _isLoading = false;
+          });
+          return;
         }
       }
     } catch (_) {}
+
+    if (mounted && initial) {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _loadLiveHosts() async {
-    final hosts = await ProfileApiService.getHomeFeed();
-    if (hosts.isNotEmpty && mounted) {
-      setState(() {
-        _liveHosts = hosts;
-      });
-    }
+    try {
+      final hosts = await ProfileApiService.getHomeFeed();
+      if (hosts.isNotEmpty && mounted) {
+        setState(() {
+          _liveHosts = hosts;
+        });
+      }
+    } catch (_) {}
   }
 
   void _openChat(ChatThread thread) {
@@ -69,7 +102,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
         builder: (context) => ChatDetailScreen(thread: thread),
       ),
     ).then((_) {
-      _loadConversations();
+      _loadConversations(silent: true);
     });
   }
 
@@ -143,12 +176,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top Bar matching Screenshot 3
+            // Top Bar matching Screenshot
             Padding(
               padding: const EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 8),
               child: Row(
                 children: [
-                  // "Messages" title with red indicator dot
+                  // "Messages" title with real-time unread indicator dot
                   GestureDetector(
                     onTap: () => setState(() => _activeSubTabIndex = 0),
                     child: Row(
@@ -163,13 +196,20 @@ class _MessagesScreenState extends State<MessagesScreen> {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.badgePink,
-                          ),
+                        ValueListenableBuilder<int>(
+                          valueListenable: ChatApiService.totalUnreadBadgeNotifier,
+                          builder: (context, count, _) {
+                            final hasUnread = count > 0 || _threads.any((t) => t.unreadCount > 0);
+                            if (!hasUnread) return const SizedBox.shrink();
+                            return Container(
+                              width: 7,
+                              height: 7,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.badgePink,
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -234,28 +274,91 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
             // Chat Threads List
             Expanded(
-              child: RefreshIndicator(
-                color: AppColors.neonPink,
-                backgroundColor: AppColors.cardDark,
-                onRefresh: _loadConversations,
-                child: ListView.separated(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  itemCount: _threads.length,
-                  separatorBuilder: (context, index) => const Divider(
-                    color: AppColors.cardBorder,
-                    height: 1,
-                    indent: 84,
-                    endIndent: 16,
-                  ),
-                  itemBuilder: (context, index) {
-                    final thread = _threads[index];
-                    return ChatThreadTile(
-                      thread: thread,
-                      onTap: () => _openChat(thread),
-                    );
-                  },
-                ),
-              ),
+              child: _isLoading && _threads.isEmpty
+                  ? const Center(
+                      child: CircularProgressIndicator(color: AppColors.neonPink),
+                    )
+                  : RefreshIndicator(
+                      color: AppColors.neonPink,
+                      backgroundColor: AppColors.cardDark,
+                      onRefresh: () => _loadConversations(initial: false),
+                      child: _threads.isEmpty
+                          ? ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: [
+                                const SizedBox(height: 120),
+                                Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 80,
+                                        height: 80,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: AppColors.cardDarkElevated,
+                                          border: Border.all(color: AppColors.cardBorder),
+                                        ),
+                                        child: const Icon(
+                                          Icons.chat_bubble_outline_rounded,
+                                          color: AppColors.neonPink,
+                                          size: 38,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      const Text(
+                                        'No conversations yet',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      const Text(
+                                        'View host profiles or start a new chat!',
+                                        style: TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 20),
+                                      ElevatedButton.icon(
+                                        onPressed: _showNewChatDialog,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.neonPink,
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                        ),
+                                        icon: const Icon(Icons.add, size: 18),
+                                        label: const Text('Start Chatting'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            )
+                          : ListView.separated(
+                              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                              itemCount: _threads.length,
+                              separatorBuilder: (context, index) => const Divider(
+                                color: AppColors.cardBorder,
+                                height: 1,
+                                indent: 84,
+                                endIndent: 16,
+                              ),
+                              itemBuilder: (context, index) {
+                                final thread = _threads[index];
+                                return ChatThreadTile(
+                                  thread: thread,
+                                  onTap: () => _openChat(thread),
+                                );
+                              },
+                            ),
+                    ),
             ),
           ],
         ),

@@ -609,16 +609,26 @@ class ProfileApiService {
   static Future<Map<String, dynamic>?> recordProfileView(dynamic hostId) async {
     try {
       final token = await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final viewerId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
       final url = Uri.parse(ApiConstants.profileView(hostId));
+
+      final payload = {
+        'host_id': hostId,
+        if (viewerId != null) 'viewer_id': viewerId,
+        if (viewerId != null) 'user_id': viewerId,
+      };
 
       final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          if (viewerId != null) 'X-User-Id': viewerId,
         },
-        body: jsonEncode({'host_id': hostId}),
+        body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
