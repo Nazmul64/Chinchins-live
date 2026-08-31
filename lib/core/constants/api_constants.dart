@@ -94,7 +94,34 @@ class ApiConstants {
   static String get kycAiDetect => '$baseUrl/kyc/ai-detect';
   static String get kycFaceVerifyStep => '$baseUrl/kyc/face/verify-step';
   static String get kycFaceUnlock => '$baseUrl/kyc/face/unlock';
+  // KYC Video Verification
   static String get kycVideoVerify => '$baseUrl/kyc/video-verify';
+
+  // Match Tab & Random Match endpoints
+  static String get match => '$baseUrl/match';
+  static String get matchStatus => '$baseUrl/match/status';
+  static String get matchHosts => '$baseUrl/match/hosts';
+  static String get matchStart => '$baseUrl/match/start';
+
+  // Profile View Notification & Auto-Callback Trigger
+  static String profileView(dynamic id) => '$baseUrl/profile/$id/view';
+
+  // In-App Messaging & Chat endpoints
+  static String get messages => '$baseUrl/messages';
+  static String get messagesConversations => '$baseUrl/messages/conversations';
+  static String messagesByUser(dynamic userId) => '$baseUrl/messages/$userId';
+  static String get messageSend => '$baseUrl/messages/send';
+  static String get messagesRead => '$baseUrl/messages/read';
+
+  // Gifts & Rewards Endpoints
+  static String get giftsCatalog => '$baseUrl/gifts';
+  static String get giftsStore => '$baseUrl/gifts/catalog';
+  static String giftsReceived(dynamic userId) => '$baseUrl/gifts/received/$userId';
+  static String profileGifts(dynamic userId) => '$baseUrl/profile/$userId/gifts';
+  static String get giftsReceivedMe => '$baseUrl/gifts/received/me';
+  static String get sendGift => '$baseUrl/gifts/send';
+  static String profileTopFans(dynamic userId) => '$baseUrl/profile/$userId/top-fans';
+  static String profileLike(dynamic userId) => '$baseUrl/profile/$userId/like';
 }
 
 

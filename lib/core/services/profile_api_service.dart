@@ -604,4 +604,33 @@ class ProfileApiService {
     } catch (_) {}
     return false;
   }
+
+  /// Record profile view and trigger automated host greeting / callback
+  static Future<Map<String, dynamic>?> recordProfileView(dynamic hostId) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.profileView(hostId));
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'host_id': hostId}),
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final data = _safeJsonDecode(response.body);
+        if (data != null && data['data'] != null) {
+          return data['data'] as Map<String, dynamic>;
+        }
+      }
+    } catch (e) {
+      debugPrint('[ProfileApiService] recordProfileView error: $e');
+    }
+    return null;
+  }
 }
+

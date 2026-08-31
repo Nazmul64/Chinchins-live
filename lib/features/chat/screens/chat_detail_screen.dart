@@ -8,6 +8,8 @@ import '../../../core/widgets/cached_image_loader.dart';
 import '../../../core/widgets/video_call_pill.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/gift_picker_modal.dart';
+import '../services/chat_api_service.dart';
+import '../../auth/services/auth_api_service.dart';
 import '../../call/screens/video_call_screen.dart';
 import '../../call/services/call_api_service.dart';
 import '../../call/services/call_sound_manager.dart';
@@ -31,12 +33,66 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late List<ChatMessage> _messages;
+  String _myUserId = '5';
+  int _freeMessagesRemaining = 5;
+  bool _isLoadingMessages = false;
 
   @override
   void initState() {
     super.initState();
     _messages = List.from(widget.thread.messages);
+    _initChatUserAndMessages();
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  }
+
+  Future<void> _initChatUserAndMessages() async {
+    try {
+      final savedUser = await AuthApiService.getSavedUser();
+      if (savedUser != null) {
+        _myUserId = savedUser['id']?.toString() ?? '5';
+      }
+    } catch (_) {}
+
+    // Mark conversation read on server
+    ChatApiService.markAsRead(widget.thread.modelId);
+
+    // Fetch real chat history from server
+    await _loadServerMessages();
+  }
+
+  Future<void> _loadServerMessages() async {
+    setState(() => _isLoadingMessages = true);
+    try {
+      final res = await ChatApiService.getMessagesWithUser(widget.thread.modelId);
+      if (res != null && mounted) {
+        if (res['free_messages_remaining'] is int) {
+          _freeMessagesRemaining = res['free_messages_remaining'] as int;
+        }
+
+        if (res['messages'] is List) {
+          final serverMsgs = (res['messages'] as List).map((m) {
+            return ChatMessage.fromJson(
+              m as Map<String, dynamic>,
+              myUserId: _myUserId,
+              partnerName: widget.thread.name,
+              partnerAvatar: widget.thread.avatarUrl,
+            );
+          }).toList();
+
+          if (serverMsgs.isNotEmpty) {
+            setState(() {
+              _messages = serverMsgs;
+              _isLoadingMessages = false;
+            });
+            _scrollToBottom();
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+    if (mounted) {
+      setState(() => _isLoadingMessages = false);
+    }
   }
 
   @override
@@ -56,14 +112,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
 
     final now = DateFormat('HH:mm').format(DateTime.now());
     final newMsg = ChatMessage(
       id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
-      senderId: 'me',
+      senderId: _myUserId,
       senderName: 'Me',
       senderAvatar: MockData.imgMoyna,
       text: text,
@@ -79,24 +135,95 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     _scrollToBottom();
 
-    // Simulate instant cute reply from host
-    Future.delayed(const Duration(milliseconds: 1400), () {
-      if (!mounted) return;
-      final replyMsg = ChatMessage(
-        id: 'reply_${DateTime.now().millisecondsSinceEpoch}',
-        senderId: widget.thread.modelId,
-        senderName: widget.thread.name,
-        senderAvatar: widget.thread.avatarUrl,
-        text: 'Aww sweet! Call me on video right now so we can talk privately ❤️',
-        type: MessageType.text,
-        time: DateFormat('HH:mm').format(DateTime.now()),
-        isFromMe: false,
+    // Call RESTful send message API
+    final res = await ChatApiService.sendMessage(
+      receiverId: widget.thread.modelId,
+      message: text,
+      type: 'text',
+    );
+
+    if (!mounted) return;
+
+    if (res['is_limit_reached'] == true || res['code'] == 'MESSAGE_LIMIT_REACHED') {
+      // Free message limit reached! Prompt coin recharge modal
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => RechargeGemsSheet(
+          onRechargeSuccess: () {
+            _sendMessage();
+          },
+        ),
       );
-      setState(() {
-        _messages.add(replyMsg);
+    } else if (res['success'] == true) {
+      if (res['data']?['sender']?['free_messages_remaining'] is int) {
+        setState(() {
+          _freeMessagesRemaining = res['data']['sender']['free_messages_remaining'] as int;
+        });
+      }
+    } else {
+      // Simulate cute automated reply if offline/test mode
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (!mounted) return;
+        final replyMsg = ChatMessage(
+          id: 'reply_${DateTime.now().millisecondsSinceEpoch}',
+          senderId: widget.thread.modelId,
+          senderName: widget.thread.name,
+          senderAvatar: widget.thread.avatarUrl,
+          text: 'Aww sweet! Call me on video right now so we can talk privately ❤️',
+          type: MessageType.text,
+          time: DateFormat('HH:mm').format(DateTime.now()),
+          isFromMe: false,
+        );
+        setState(() {
+          _messages.add(replyMsg);
+        });
+        _scrollToBottom();
       });
-      _scrollToBottom();
+    }
+  }
+
+  Future<void> _sendVoiceNote() async {
+    final now = DateFormat('HH:mm').format(DateTime.now());
+    final voiceMsg = ChatMessage(
+      id: 'voice_${DateTime.now().millisecondsSinceEpoch}',
+      senderId: _myUserId,
+      senderName: 'Me',
+      senderAvatar: MockData.imgMoyna,
+      text: 'Voice Message (0:04)',
+      type: MessageType.voice,
+      time: now,
+      isFromMe: true,
+      callDurationSeconds: 4,
+    );
+
+    setState(() {
+      _messages.add(voiceMsg);
     });
+    _scrollToBottom();
+
+    final res = await ChatApiService.sendMessage(
+      receiverId: widget.thread.modelId,
+      message: 'Voice Message',
+      type: 'voice',
+      duration: 4,
+    );
+
+    if (!mounted) return;
+
+    if (res['is_limit_reached'] == true || res['code'] == 'MESSAGE_LIMIT_REACHED') {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => RechargeGemsSheet(
+          onRechargeSuccess: () {
+            _sendVoiceNote();
+          },
+        ),
+      );
+    }
   }
 
   void _sendGift(GiftItem gift) {
@@ -381,6 +508,36 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       ),
       body: Column(
         children: [
+          // Free messages remaining indicator banner
+          if (_freeMessagesRemaining > 0)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+              color: const Color(0xFF1E1430),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.neonPink, size: 13),
+                  const SizedBox(width: 6),
+                  Text(
+                    '$_freeMessagesRemaining free ${_freeMessagesRemaining == 1 ? "message" : "messages"} remaining',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          if (_isLoadingMessages)
+            const LinearProgressIndicator(
+              minHeight: 2,
+              backgroundColor: Colors.transparent,
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.neonPink),
+            ),
+
           // Chat messages timeline
           Expanded(
             child: ListView.builder(
@@ -458,15 +615,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           color: AppColors.onlineGreen,
                           size: 24,
                         ),
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('🎙️ Hold to record voice message'),
-                              backgroundColor: AppColors.cardDarkElevated,
-                              duration: Duration(seconds: 1),
-                            ),
-                          );
-                        },
+                        onPressed: _sendVoiceNote,
+                        tooltip: 'Send Voice Note',
                       ),
 
                       // Send Button

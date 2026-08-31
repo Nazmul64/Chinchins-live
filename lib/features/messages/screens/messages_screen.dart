@@ -6,6 +6,7 @@ import '../../../core/services/profile_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../widgets/chat_thread_tile.dart';
+import '../../chat/services/chat_api_service.dart';
 import '../../chat/screens/chat_detail_screen.dart';
 
 class MessagesScreen extends StatefulWidget {
@@ -24,7 +25,32 @@ class _MessagesScreenState extends State<MessagesScreen> {
   void initState() {
     super.initState();
     _threads = List.from(MockData.chatThreads);
+    _loadConversations();
     _loadLiveHosts();
+  }
+
+  Future<void> _loadConversations() async {
+    try {
+      final res = await ChatApiService.getConversations();
+      if (res != null && mounted) {
+        if (res['conversations'] is List) {
+          final convList = (res['conversations'] as List)
+              .map((c) => ChatThread.fromJson(c as Map<String, dynamic>))
+              .toList();
+
+          if (convList.isNotEmpty) {
+            setState(() {
+              // Combine live conversations with fallback mock threads
+              final liveIds = convList.map((c) => c.modelId).toSet();
+              final remainingMocks = MockData.chatThreads
+                  .where((t) => !liveIds.contains(t.modelId))
+                  .toList();
+              _threads = [...convList, ...remainingMocks];
+            });
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadLiveHosts() async {
@@ -43,9 +69,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
         builder: (context) => ChatDetailScreen(thread: thread),
       ),
     ).then((_) {
-      setState(() {
-        // Refresh state
-      });
+      _loadConversations();
     });
   }
 
@@ -210,21 +234,27 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
             // Chat Threads List
             Expanded(
-              child: ListView.separated(
-                itemCount: _threads.length,
-                separatorBuilder: (context, index) => const Divider(
-                  color: AppColors.cardBorder,
-                  height: 1,
-                  indent: 84,
-                  endIndent: 16,
+              child: RefreshIndicator(
+                color: AppColors.neonPink,
+                backgroundColor: AppColors.cardDark,
+                onRefresh: _loadConversations,
+                child: ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  itemCount: _threads.length,
+                  separatorBuilder: (context, index) => const Divider(
+                    color: AppColors.cardBorder,
+                    height: 1,
+                    indent: 84,
+                    endIndent: 16,
+                  ),
+                  itemBuilder: (context, index) {
+                    final thread = _threads[index];
+                    return ChatThreadTile(
+                      thread: thread,
+                      onTap: () => _openChat(thread),
+                    );
+                  },
                 ),
-                itemBuilder: (context, index) {
-                  final thread = _threads[index];
-                  return ChatThreadTile(
-                    thread: thread,
-                    onTap: () => _openChat(thread),
-                  );
-                },
               ),
             ),
           ],

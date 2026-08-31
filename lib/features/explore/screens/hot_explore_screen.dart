@@ -1,12 +1,14 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../widgets/explore_header.dart';
 import '../widgets/model_grid_card.dart';
+import '../widgets/match_tab_view.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../call/screens/video_call_screen.dart';
+import '../../call/screens/random_match_screen.dart';
 import '../../call/services/call_api_service.dart';
 
 class HotExploreScreen extends StatefulWidget {
@@ -270,12 +272,12 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
         callType: 'video',
       );
 
-      final callData = (initiateRes != null && initiateRes['data'] is Map)
+      final callData = (initiateRes['data'] is Map)
           ? initiateRes['data']
-          : (initiateRes != null && initiateRes['call'] is Map ? initiateRes['call'] : initiateRes);
+          : (initiateRes['call'] is Map ? initiateRes['call'] : initiateRes);
 
-      final callId = callData?['call_id'] ?? callData?['id'] ?? DateTime.now().millisecondsSinceEpoch;
-      final channelName = callData?['channel_name'] ?? 'call_room_${callId}_$targetUserId';
+      final callId = callData['call_id'] ?? callData['id'] ?? DateTime.now().millisecondsSinceEpoch;
+      final channelName = callData['channel_name'] ?? 'call_room_${callId}_$targetUserId';
 
       if (!mounted) return;
       Navigator.push(
@@ -327,67 +329,78 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
               selectedCountryCode: _selectedCountryCode,
             ),
 
-            // User Cards 2-Column Grid
+            // User Cards 2-Column Grid OR Match Tab View
             Expanded(
-              child: _isLoading && _models.isEmpty
-                  ? const Center(
-                      child: CircularProgressIndicator(color: AppColors.neonPink),
+              child: _selectedTabIndex == 1
+                  ? MatchTabView(
+                      onStartMatching: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const RandomMatchScreen(),
+                          ),
+                        );
+                      },
                     )
-                  : _models.isEmpty
-                      ? RefreshIndicator(
-                          color: AppColors.neonPink,
-                          backgroundColor: AppColors.cardDark,
-                          onRefresh: _loadHomeFeed,
-                          child: ListView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            children: [
-                              SizedBox(height: MediaQuery.of(context).size.height * 0.25),
-                              const Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.wifi_tethering_off_rounded, color: AppColors.textMuted, size: 54),
-                                    SizedBox(height: 14),
-                                    Text(
-                                      'No Streamers Found',
-                                      style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                  : (_isLoading && _models.isEmpty
+                      ? const Center(
+                          child: CircularProgressIndicator(color: AppColors.neonPink),
+                        )
+                      : _models.isEmpty
+                          ? RefreshIndicator(
+                              color: AppColors.neonPink,
+                              backgroundColor: AppColors.cardDark,
+                              onRefresh: _loadHomeFeed,
+                              child: ListView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                children: [
+                                  SizedBox(height: MediaQuery.of(context).size.height * 0.25),
+                                  const Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.wifi_tethering_off_rounded, color: AppColors.textMuted, size: 54),
+                                        SizedBox(height: 14),
+                                        Text(
+                                          'No Streamers Found',
+                                          style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                                        ),
+                                        SizedBox(height: 6),
+                                        Text(
+                                          'Pull down to refresh or check back soon',
+                                          style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                                        ),
+                                      ],
                                     ),
-                                    SizedBox(height: 6),
-                                    Text(
-                                      'Pull down to refresh or check back soon',
-                                      style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                                    ),
-                                  ],
+                                  ),
+                                ],
+                              ),
+                            )
+                          : RefreshIndicator(
+                              color: AppColors.neonPink,
+                              backgroundColor: AppColors.cardDark,
+                              onRefresh: _loadHomeFeed,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                child: GridView.builder(
+                                  itemCount: _models.length,
+                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    childAspectRatio: 0.68, // Exact portrait proportion
+                                    crossAxisSpacing: 10,
+                                    mainAxisSpacing: 10,
+                                  ),
+                                  itemBuilder: (context, index) {
+                                    final model = _models[index];
+                                    return ModelGridCard(
+                                      model: model,
+                                      onTap: () => _openHostProfile(model),
+                                      onVideoCallTap: () => _startVideoCall(model),
+                                    );
+                                  },
                                 ),
                               ),
-                            ],
-                          ),
-                        )
-                      : RefreshIndicator(
-                          color: AppColors.neonPink,
-                          backgroundColor: AppColors.cardDark,
-                          onRefresh: _loadHomeFeed,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            child: GridView.builder(
-                              itemCount: _models.length,
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
-                                childAspectRatio: 0.68, // Exact portrait proportion
-                                crossAxisSpacing: 10,
-                                mainAxisSpacing: 10,
-                              ),
-                              itemBuilder: (context, index) {
-                                final model = _models[index];
-                                return ModelGridCard(
-                                  model: model,
-                                  onTap: () => _openHostProfile(model),
-                                  onVideoCallTap: () => _startVideoCall(model),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
+                            )),
             ),
           ],
         ),

@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../../core/services/signaling_service.dart';
@@ -362,6 +362,50 @@ class WebRTCCallService {
     _startSignalingPolling(callId, channelName, false, onRemoteStreamConnected, onCallEnded);
   }
 
+  String _sanitizeSdp(String rawSdp) {
+    if (rawSdp.isEmpty) return '';
+    var sdp = rawSdp.trim();
+
+    // 1. Unescape escaped characters
+    sdp = sdp.replaceAll(r'\r\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\r', '\n');
+    sdp = sdp.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+
+    // 2. Locate SDP starting boundary (must start with v=0)
+    final v0Index = sdp.indexOf('v=0');
+    if (v0Index >= 0) {
+      sdp = sdp.substring(v0Index);
+    }
+
+    // 3. Filter line-by-line: every valid SDP line starts with <type>=<value>
+    final lines = sdp.split('\n');
+    final validLines = <String>[];
+    for (final rawLine in lines) {
+      final line = rawLine.trim();
+      if (line.isEmpty) continue;
+      // SDP line format is strictly single lower-case letter followed by '='
+      if (RegExp(r'^[a-z]=[^\r\n]*$', caseSensitive: false).hasMatch(line)) {
+        var cleanLine = line;
+        // Strip trailing quotes or escape slashes from json formatting
+        while (cleanLine.endsWith('"') || cleanLine.endsWith("'") || cleanLine.endsWith('\\')) {
+          cleanLine = cleanLine.substring(0, cleanLine.length - 1).trim();
+        }
+        if (cleanLine.isNotEmpty) {
+          validLines.add(cleanLine);
+        }
+      } else {
+        // If we hit non-SDP characters (e.g. JSON closing braces/quotes), stop parsing
+        if (validLines.isNotEmpty && (line.startsWith('}') || line.startsWith('{') || line.startsWith('"') || line.startsWith(','))) {
+          break;
+        }
+      }
+    }
+
+    if (validLines.isEmpty) return '';
+
+    // WebRTC RFC standard requires CRLF (\r\n) on every line including the last line
+    return '${validLines.join('\r\n')}\r\n';
+  }
+
   String _extractSdp(Map signal, Map payload) {
     dynamic raw = payload['sdp'] ??
         signal['sdp'] ??
@@ -375,8 +419,10 @@ class WebRTCCallService {
         signal['data'];
 
     // 1. Unnest map if needed
-    if (raw is Map) {
-      raw = raw['sdp'] ?? raw['description'] ?? raw['session_description'] ?? raw['payload'] ?? raw['data'];
+    while (raw is Map) {
+      final inner = raw['sdp'] ?? raw['description'] ?? raw['session_description'] ?? raw['payload'] ?? raw['data'];
+      if (inner == null || inner == raw) break;
+      raw = inner;
     }
 
     if (raw == null) return '';
@@ -404,26 +450,7 @@ class WebRTCCallService {
       break;
     }
 
-    // 3. Unescape escaped CRLF characters
-    if (sdp.contains(r'\r\n')) {
-      sdp = sdp.replaceAll(r'\r\n', '\r\n');
-    }
-    if (sdp.contains(r'\n')) {
-      sdp = sdp.replaceAll(r'\n', '\n');
-    }
-
-    // 4. Locate SDP starting boundary (must start with v=0)
-    final v0Index = sdp.indexOf('v=0');
-    if (v0Index >= 0) {
-      sdp = sdp.substring(v0Index);
-    }
-
-    // 5. Clean up any trailing quotes or brackets
-    if (sdp.endsWith('"') || sdp.endsWith("'")) {
-      sdp = sdp.substring(0, sdp.length - 1);
-    }
-
-    return sdp.trim();
+    return _sanitizeSdp(sdp);
   }
 
   void _setupWebSocketSignaling(

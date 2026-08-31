@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
 class ExploreHeader extends StatelessWidget {
@@ -47,47 +47,48 @@ class ExploreHeader extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               ),
-              const SizedBox(width: 8),
-
-              // Country Pill (🔴 BGD ⌄) matching Screenshot
-              GestureDetector(
-                onTap: onCountryTap,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF5B1066),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 9,
-                        height: 9,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFFFF2A6D),
+              // Country Pill (🔴 BGD ⌄) matching Screenshot (Shown on Hot tab)
+              if (selectedTabIndex == 0) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: onCountryTap,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF5B1066),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 9,
+                          height: 9,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFFFF2A6D),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        selectedCountryCode,
-                        style: const TextStyle(
+                        const SizedBox(width: 5),
+                        Text(
+                          selectedCountryCode,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        const Icon(
+                          Icons.keyboard_arrow_down_rounded,
                           color: Colors.white,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.bold,
+                          size: 16,
                         ),
-                      ),
-                      const SizedBox(width: 3),
-                      const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        color: Colors.white,
-                        size: 16,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ],
