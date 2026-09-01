@@ -23,7 +23,7 @@ class CachedImageLoader extends StatelessWidget {
   /// Automatically normalizes relative paths, local files, or placeholder hosts
   static String normalize(String? rawUrl) {
     if (rawUrl == null || rawUrl.trim().isEmpty) return '';
-    String url = rawUrl.trim();
+    String url = rawUrl.trim().replaceAll('\\', '/');
 
     if (url.startsWith('file://')) {
       return url.replaceFirst('file://', '');
@@ -34,13 +34,19 @@ class CachedImageLoader extends StatelessWidget {
         (url.startsWith('/') &&
             !url.startsWith('/storage') &&
             !url.startsWith('/uploads') &&
-            !url.startsWith('/profiles'))) {
+            !url.startsWith('/profiles') &&
+            !url.startsWith('/avatars'))) {
       return url;
     }
 
-    String baseHost = ApiConstants.baseUrl.replaceAll(RegExp(r'/api/?$'), '');
+    String baseHost = ApiConstants.liveDomain;
     if (baseHost.endsWith('/')) {
       baseHost = baseHost.substring(0, baseHost.length - 1);
+    }
+
+    // Convert any cleartext http://chinchins.live to secure https://
+    if (url.startsWith('http://chinchins.live')) {
+      url = url.replaceFirst('http://', 'https://');
     }
 
     // Replace placeholder domains or local hostnames
@@ -53,16 +59,19 @@ class CachedImageLoader extends StatelessWidget {
     if (url.contains('127.0.0.1')) {
       url = url.replaceAll('http://127.0.0.1:8000', baseHost).replaceAll('https://127.0.0.1:8000', baseHost).replaceAll('http://127.0.0.1', baseHost);
     }
+    if (url.contains('10.0.2.2')) {
+      url = url.replaceAll('http://10.0.2.2:8000', baseHost).replaceAll('https://10.0.2.2:8000', baseHost).replaceAll('http://10.0.2.2', baseHost);
+    }
 
-    // If it's a relative path from Laravel (e.g. "profiles/15/avatar.jpg", "/uploads/...", "/storage/...")
+    // If it's a relative path from Laravel (e.g. "storage/avatars/host.jpg", "profiles/...", "uploads/...")
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       if (url.startsWith('/')) {
         url = url.substring(1);
       }
-      if (url.startsWith('uploads/') || url.startsWith('storage/')) {
+      if (url.startsWith('uploads/') || url.startsWith('storage/') || url.startsWith('profiles/') || url.startsWith('avatars/')) {
         url = '$baseHost/$url';
       } else {
-        url = '$baseHost/uploads/$url';
+        url = '$baseHost/storage/$url';
       }
     }
 
@@ -86,7 +95,6 @@ class CachedImageLoader extends StatelessWidget {
           height: height,
           fit: fit,
           errorBuilder: (context, error, stackTrace) {
-            debugPrint('[Local Image Error] Path: $cleanUrl | Error: $error');
             return _buildErrorWidget();
           },
         );
@@ -107,8 +115,8 @@ class CachedImageLoader extends StatelessWidget {
           color: AppColors.cardDark,
           child: const Center(
             child: SizedBox(
-              width: 20,
-              height: 20,
+              width: 18,
+              height: 18,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
                 valueColor: AlwaysStoppedAnimation<Color>(AppColors.neonPink),
@@ -117,15 +125,12 @@ class CachedImageLoader extends StatelessWidget {
           ),
         ),
         errorWidget: (context, url, error) {
-          debugPrint('[Network Image Cache Error] URL: $cleanUrl | Error: $error');
-          // Graceful fallback to Image.network if cached_network_image has an issue
           return Image.network(
             cleanUrl,
             width: width,
             height: height,
             fit: fit,
             errorBuilder: (context, err, stack) {
-              debugPrint('[Network Image Direct Error] URL: $cleanUrl | Error: $err');
               return _buildErrorWidget();
             },
           );
@@ -146,15 +151,22 @@ class CachedImageLoader extends StatelessWidget {
   }
 
   Widget _buildErrorWidget() {
+    final isLargePhoto = width != null && width! > 80;
     return Container(
       width: width,
       height: height,
-      color: AppColors.cardDarkElevated,
-      child: const Center(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF2E1A47), Color(0xFF1B112C)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
         child: Icon(
-          Icons.person,
-          color: AppColors.textMuted,
-          size: 28,
+          isLargePhoto ? Icons.photo_size_select_actual_outlined : Icons.person_rounded,
+          color: const Color(0xFFCE93D8),
+          size: isLargePhoto ? 32 : 24,
         ),
       ),
     );

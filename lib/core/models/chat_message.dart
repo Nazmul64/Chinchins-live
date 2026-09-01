@@ -50,19 +50,55 @@ class ChatMessage {
     String partnerName = '',
     String partnerAvatar = '',
   }) {
-    final senderIdStr = json['sender_id']?.toString() ?? '';
-    final isFromMe = myUserId.isNotEmpty && senderIdStr == myUserId;
+    final senderIdStr = json['sender_id']?.toString() ?? json['user_id']?.toString() ?? '';
+    final isFromMe = myUserId.isNotEmpty && (senderIdStr == myUserId || json['is_from_me'] == true);
 
-    final typeStr = json['type']?.toString().toLowerCase() ?? 'text';
+    // Detect media URL comprehensively
+    String? mediaUrl = json['media_url']?.toString() ??
+        json['image_url']?.toString() ??
+        json['file_url']?.toString() ??
+        json['voice_url']?.toString() ??
+        json['audio_url']?.toString() ??
+        json['attachment_url']?.toString() ??
+        json['media_path']?.toString() ??
+        json['file_path']?.toString() ??
+        json['photo_url']?.toString() ??
+        json['image']?.toString() ??
+        json['photo']?.toString() ??
+        json['voice']?.toString() ??
+        json['audio']?.toString() ??
+        json['file']?.toString() ??
+        json['path']?.toString() ??
+        json['media']?.toString() ??
+        json['attachment']?.toString();
+
+    if (mediaUrl != null && mediaUrl.isEmpty) {
+      mediaUrl = null;
+    }
+
+    final rawType = json['type']?.toString().toLowerCase() ?? '';
+    final rawMsg = json['message']?.toString() ?? json['text']?.toString() ?? '';
+
     MessageType type = MessageType.text;
-    if (typeStr == 'voice') {
+    if (rawType == 'voice' ||
+        rawType == 'audio' ||
+        json['voice_url'] != null ||
+        json['audio_url'] != null ||
+        (mediaUrl != null && (mediaUrl.endsWith('.m4a') || mediaUrl.endsWith('.mp3') || mediaUrl.endsWith('.aac') || mediaUrl.endsWith('.wav') || mediaUrl.endsWith('.ogg')))) {
       type = MessageType.voice;
-    } else if (typeStr == 'image') {
+    } else if (rawType == 'image' ||
+        rawType == 'photo' ||
+        rawType == 'picture' ||
+        json['image_url'] != null ||
+        json['photo_url'] != null ||
+        (mediaUrl != null && (mediaUrl.endsWith('.jpg') || mediaUrl.endsWith('.png') || mediaUrl.endsWith('.webp') || mediaUrl.endsWith('.jpeg') || mediaUrl.endsWith('.gif')))) {
       type = MessageType.image;
-    } else if (typeStr == 'gift') {
+    } else if (rawType == 'gift') {
       type = MessageType.gift;
-    } else if (typeStr == 'call_record' || typeStr == 'video_call') {
+    } else if (rawType == 'call_record' || rawType == 'video_call' || rawType == 'call') {
       type = MessageType.callRecord;
+    } else if (rawMsg == 'Photo' && mediaUrl != null) {
+      type = MessageType.image;
     }
 
     String timeStr = 'Just now';
@@ -75,19 +111,43 @@ class ChatMessage {
       } catch (_) {
         timeStr = json['time']?.toString() ?? 'Just now';
       }
+    } else if (json['time'] != null) {
+      timeStr = json['time'].toString();
     }
+
+    final senderObj = json['sender'] is Map<String, dynamic> ? json['sender'] as Map<String, dynamic> : null;
+    final senderName = isFromMe
+        ? 'Me'
+        : (senderObj?['name'] ?? senderObj?['display_name'] ?? json['sender_name'] ?? (partnerName.isNotEmpty ? partnerName : 'Host'));
+
+    final senderAvatar = isFromMe
+        ? ''
+        : (senderObj?['avatar_url'] ??
+            senderObj?['avatar'] ??
+            senderObj?['cover_photo_url'] ??
+            senderObj?['profile_photo'] ??
+            json['sender_avatar'] ??
+            json['avatar_url'] ??
+            json['avatar'] ??
+            partnerAvatar);
+
+    final dur = json['duration'] is int
+        ? json['duration'] as int
+        : int.tryParse(json['duration']?.toString() ?? '');
 
     return ChatMessage(
       id: json['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
       senderId: senderIdStr,
-      senderName: isFromMe ? 'Me' : partnerName,
-      senderAvatar: isFromMe ? '' : partnerAvatar,
-      text: json['message']?.toString() ?? json['text']?.toString() ?? '',
+      senderName: senderName.toString(),
+      senderAvatar: senderAvatar.toString(),
+      text: rawMsg,
       type: type,
       time: timeStr,
       isFromMe: isFromMe,
-      imageUrl: json['media_url']?.toString(),
-      callDurationSeconds: (json['duration'] is int) ? json['duration'] as int : null,
+      imageUrl: mediaUrl,
+      callDurationSeconds: dur,
+      giftName: json['gift_name']?.toString() ?? json['gift']?['name']?.toString(),
+      giftEmoji: json['gift_emoji']?.toString() ?? json['gift']?['emoji']?.toString(),
     );
   }
 }
@@ -124,12 +184,36 @@ class ChatThread {
   });
 
   factory ChatThread.fromJson(Map<String, dynamic> json) {
-    final userId = json['user_id']?.toString() ?? json['id']?.toString() ?? '';
-    final name = json['name']?.toString() ?? json['display_name']?.toString() ?? 'Host';
-    final avatar = json['avatar_url']?.toString() ?? json['avatar']?.toString() ?? '';
+    final userId = json['user_id']?.toString() ??
+        json['id']?.toString() ??
+        json['host_id']?.toString() ??
+        json['sender_id']?.toString() ??
+        '';
+    final name = json['name']?.toString() ??
+        json['display_name']?.toString() ??
+        json['user']?['name']?.toString() ??
+        json['user']?['display_name']?.toString() ??
+        json['host']?['name']?.toString() ??
+        json['host']?['display_name']?.toString() ??
+        'Host';
+    final avatar = json['avatar_url']?.toString() ??
+        json['avatar']?.toString() ??
+        json['profile_photo']?.toString() ??
+        json['cover_photo_url']?.toString() ??
+        json['photo']?.toString() ??
+        json['image']?.toString() ??
+        json['user']?['avatar_url']?.toString() ??
+        json['user']?['avatar']?.toString() ??
+        json['host']?['avatar_url']?.toString() ??
+        json['host']?['avatar']?.toString() ??
+        '';
     final isOnline = json['is_online'] == true || json['is_active'] == true;
-    final unread = (json['unread_count'] is int) ? json['unread_count'] as int : 0;
-    final rate = (json['video_call_rate'] is int) ? json['video_call_rate'] as int : 1800;
+    final unread = (json['unread_count'] is int)
+        ? json['unread_count'] as int
+        : (int.tryParse(json['unread_count']?.toString() ?? '0') ?? 0);
+    final rate = (json['video_call_rate'] is int)
+        ? json['video_call_rate'] as int
+        : (int.tryParse(json['video_call_rate']?.toString() ?? '1800') ?? 1800);
 
     String lastMsgText = '';
     String lastMsgPrefix = '';
@@ -138,13 +222,13 @@ class ChatThread {
 
     if (json['last_message'] is Map) {
       final lm = json['last_message'] as Map<String, dynamic>;
-      lastMsgText = lm['text']?.toString() ?? '';
+      lastMsgText = lm['text']?.toString() ?? lm['message']?.toString() ?? '';
       final msgType = lm['type']?.toString() ?? '';
-      if (msgType == 'video_call') {
+      if (msgType == 'video_call' || msgType == 'call') {
         lastMsgPrefix = '[Video Call]';
-      } else if (msgType == 'image') {
+      } else if (msgType == 'image' || msgType == 'photo') {
         lastMsgPrefix = '[Image]';
-      } else if (msgType == 'voice') {
+      } else if (msgType == 'voice' || msgType == 'audio') {
         lastMsgPrefix = '[Voice Note]';
       }
       timeStr = lm['time']?.toString() ?? 'Just now';

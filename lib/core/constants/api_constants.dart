@@ -122,6 +122,18 @@ class ApiConstants {
   static String get sendGift => '$baseUrl/gifts/send';
   static String profileTopFans(dynamic userId) => '$baseUrl/profile/$userId/top-fans';
   static String profileLike(dynamic userId) => '$baseUrl/profile/$userId/like';
+
+  // App OTA In-App Updates, Remote Config & Device Registration
+  static String get appCheckUpdate => '$baseUrl/app/check-update';
+  static String get appRemoteConfig => '$baseUrl/app/remote-config';
+  static String get appConfig => '$baseUrl/app/config';
+  static String get appDeviceRegister => '$baseUrl/app/device/register';
+  static String get deviceRegister => '$baseUrl/device/register';
+
+  // Real-Time Notifications & Push Engine
+  static String get notifications => '$baseUrl/notifications';
+  static String get userNotifications => '$baseUrl/user/notifications';
+  static String get testPushNotification => '$baseUrl/notifications/test-push';
 }
 
 

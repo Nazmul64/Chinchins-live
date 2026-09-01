@@ -2,6 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/signaling_service.dart';
+import '../../../core/services/remote_config_service.dart';
+import '../../../core/services/app_update_service.dart';
+import '../../../core/services/device_registration_service.dart';
+import '../../../core/services/notification_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../../explore/screens/hot_explore_screen.dart';
@@ -42,6 +46,25 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     _startUserHeartbeat();
     _startIncomingCallListener();
     _startLongPollStream();
+    _initAppServices();
+  }
+
+  void _initAppServices() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // 1. Fetch live remote configurations & feature toggles
+      await RemoteConfigService.instance.fetchRemoteConfig();
+
+      // 2. Check for In-App OTA Updates (display modal if new version/force update available)
+      if (mounted) {
+        await AppUpdateService.checkForUpdates(context);
+      }
+
+      // 3. Register device specifications & push wake token on VPS
+      await DeviceRegistrationService.registerDevice();
+
+      // 4. Start polling real-time notification alerts (profile views, gifts, calls)
+      NotificationApiService.instance.startNotificationPolling();
+    });
   }
 
   void _initWebSocketSignaling() async {
@@ -150,6 +173,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     _incomingCallPollTimer?.cancel();
     _heartbeatTimer?.cancel();
     _wsIncomingCallSub?.cancel();
+    NotificationApiService.instance.stopNotificationPolling();
     super.dispose();
   }
 

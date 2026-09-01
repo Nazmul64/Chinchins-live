@@ -9,6 +9,8 @@ import '../../../core/data/mock_data.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/services/local_image_cache.dart';
+import '../../../core/services/app_update_service.dart';
+import '../../../core/services/remote_config_service.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../profile/screens/edit_profile_media_screen.dart';
@@ -19,6 +21,7 @@ import '../../wallet/services/wallet_api_service.dart';
 import '../../party/screens/create_room_screen.dart';
 import '../../kyc/screens/kyc_verification_screen.dart';
 import '../../kyc/services/kyc_api_service.dart';
+import '../../messages/screens/notifications_screen.dart';
 
 class MeScreen extends StatefulWidget {
   const MeScreen({super.key});
@@ -507,6 +510,84 @@ class _MeScreenState extends State<MeScreen> {
               }
             },
             child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _checkAppUpdatesManually() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Checking for OTA updates...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+    await AppUpdateService.checkForUpdates(
+      context,
+      autoShowDialog: true,
+      showToastIfUpToDate: true,
+    );
+  }
+
+  void _showCustomerServiceDialog() {
+    final remoteConfig = RemoteConfigService.instance.config;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1829),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: AppColors.primaryPink.withOpacity(0.4)),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.support_agent_rounded, color: AppColors.primaryPink),
+            SizedBox(width: 8),
+            Text('Customer Support', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Need help or experiencing issues? Contact our official 24/7 Live Support team:',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.chat_rounded, color: Colors.greenAccent, size: 20),
+              ),
+              title: const Text('WhatsApp Support', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              subtitle: Text(remoteConfig.supportWhatsapp, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.email_rounded, color: Colors.lightBlueAccent, size: 20),
+              ),
+              title: const Text('Email Support', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              subtitle: Text(remoteConfig.supportEmail, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close', style: TextStyle(color: AppColors.primaryPink, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1238,11 +1319,59 @@ class _MeScreenState extends State<MeScreen> {
                         children: [
                           _buildGridMenuItem(Icons.diamond_rounded, 'Buy Coin', AppColors.neonPink, onTap: () => _openWalletScreen(initialTabIndex: 0)),
                           _buildGridMenuItem(Icons.verified_user_rounded, 'KYC\nVerify', const Color(0xFF00E676), onTap: _openKycScreen),
-                          _buildGridMenuItem(Icons.star_rounded, 'My Level', const Color(0xFFFF7043)),
-                          _buildGridMenuItem(Icons.support_agent_rounded, 'Customer\nService', const Color(0xFFAB47BC)),
+                          _buildGridMenuItem(Icons.notifications_active_rounded, 'Notifications\nAlerts', const Color(0xFFFF7043), onTap: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+                          }),
+                          _buildGridMenuItem(Icons.support_agent_rounded, 'Customer\nService', const Color(0xFFAB47BC), onTap: _showCustomerServiceDialog),
                         ],
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // 7. App OTA Update & Version Card
+                GestureDetector(
+                  onTap: _checkAppUpdatesManually,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardDark,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.cardBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryPink.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.system_update_rounded, color: AppColors.primaryPink, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Check for App Updates', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
+                              SizedBox(height: 2),
+                              Text('Version 1.0.0 (Build 1) • OTA Live Updates', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text('Check', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),

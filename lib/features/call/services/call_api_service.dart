@@ -204,20 +204,30 @@ class CallApiService {
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map) {
+          final callSession = decoded['call_session'];
           final data = decoded['data'];
           final bool hasIncoming = decoded['has_incoming_call'] == true ||
+              decoded['is_incoming'] == true ||
+              (callSession != null && callSession is Map && callSession.isNotEmpty) ||
               (decoded['status'] == true && data != null && data is Map && data.isNotEmpty && decoded['has_incoming_call'] != false) ||
               (decoded['call_id'] != null || (data is Map && data['call_id'] != null));
           if (hasIncoming) {
             final Map<String, dynamic> result = {};
+            if (callSession is Map) {
+              result.addAll(Map<String, dynamic>.from(callSession));
+            }
             if (data is Map) {
               result.addAll(Map<String, dynamic>.from(data));
             }
             decoded.forEach((k, v) {
-              if (k != 'data' && !result.containsKey(k)) {
+              if (k != 'data' && k != 'call_session' && !result.containsKey(k)) {
                 result[k.toString()] = v;
               }
             });
+            // Normalize call_id and id
+            if (result['id'] != null && result['call_id'] == null) {
+              result['call_id'] = result['id'];
+            }
             return result;
           }
         }

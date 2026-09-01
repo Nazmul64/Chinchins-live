@@ -130,16 +130,23 @@ class ChatApiService {
         }
         if (message != null && message.isNotEmpty) {
           request.fields['message'] = message;
+        } else if (voiceFile != null) {
+          request.fields['message'] = '[Voice Note]';
+        } else if (imageFile != null) {
+          request.fields['message'] = 'Photo';
         }
+
         if (duration != null) {
           request.fields['duration'] = duration.toString();
         }
 
         if (voiceFile != null && voiceFile.existsSync()) {
           request.files.add(await http.MultipartFile.fromPath('voice_file', voiceFile.path));
+          request.files.add(await http.MultipartFile.fromPath('file', voiceFile.path));
         }
         if (imageFile != null && imageFile.existsSync()) {
           request.files.add(await http.MultipartFile.fromPath('image_file', imageFile.path));
+          request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
         }
 
         final streamedResponse = await request.send().timeout(const Duration(seconds: 15));

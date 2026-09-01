@@ -275,17 +275,27 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
+        bool trialJustEnded = false;
         setState(() {
           _callSeconds++;
           if (_isFreeTrialActive && _freeTrialRemaining > 0) {
             _freeTrialRemaining--;
             if (_freeTrialRemaining <= 0) {
               _isFreeTrialActive = false;
+              trialJustEnded = true;
             }
           }
         });
 
-        if (widget.callId != null && (_callSeconds % 60 == 0 || (_freeTrialRemaining == 0 && _isFreeTrialActive))) {
+        if (trialJustEnded) {
+          // Free trial completed (10 seconds)
+          if (_userGems < _ratePerMinute) {
+            // Insufficient coins after free trial -> immediately prompt recharge
+            _showRechargePopup();
+          } else if (widget.callId != null) {
+            _sendInCallPulse();
+          }
+        } else if (widget.callId != null && _callSeconds % 60 == 0 && !_isFreeTrialActive) {
           _sendInCallPulse();
         }
       }
@@ -1035,7 +1045,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     );
   }
 
-  Widget _buildDebugChip(String label, String value, Color color) {
+  Widget _buildDebugChip(String label, String value, Color color) { 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(

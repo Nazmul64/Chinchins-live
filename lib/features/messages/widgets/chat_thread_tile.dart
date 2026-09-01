@@ -29,16 +29,32 @@ class ChatThreadTile extends StatelessWidget {
                   height: 54,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF8E24AA), Color(0xFFE91E63)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     border: Border.all(
                       color: AppColors.cardBorder,
                       width: 1.5,
                     ),
                   ),
                   child: ClipOval(
-                    child: CachedImageLoader(
-                      imageUrl: thread.avatarUrl,
-                      fit: BoxFit.cover,
-                    ),
+                    child: thread.avatarUrl.isNotEmpty
+                        ? CachedImageLoader(
+                            imageUrl: thread.avatarUrl,
+                            fit: BoxFit.cover,
+                          )
+                        : Center(
+                            child: Text(
+                              thread.name.isNotEmpty ? thread.name[0].toUpperCase() : 'U',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 22,
+                              ),
+                            ),
+                          ),
                   ),
                 ),
                 if (thread.isOnline)

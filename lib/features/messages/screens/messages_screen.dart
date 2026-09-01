@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../../core/models/chat_message.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/profile_api_service.dart';
+import '../../../core/services/notification_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../widgets/chat_thread_tile.dart';
+import 'notifications_screen.dart';
 import '../../chat/services/chat_api_service.dart';
 import '../../chat/screens/chat_detail_screen.dart';
 
@@ -59,6 +61,33 @@ class _MessagesScreenState extends State<MessagesScreen> {
           final convList = (res['conversations'] as List)
               .map((c) => ChatThread.fromJson(c as Map<String, dynamic>))
               .toList();
+
+          // Enhance threads with live hosts data if avatar or details are missing
+          for (int i = 0; i < convList.length; i++) {
+            final t = convList[i];
+            if (t.avatarUrl.isEmpty) {
+              final matchingHost = _liveHosts.where(
+                (h) => h.id == t.modelId || h.name.toLowerCase() == t.name.toLowerCase(),
+              ).firstOrNull;
+              if (matchingHost != null && matchingHost.avatarUrl.isNotEmpty) {
+                convList[i] = ChatThread(
+                  id: t.id,
+                  modelId: t.modelId,
+                  name: t.name,
+                  avatarUrl: matchingHost.avatarUrl,
+                  lastMessage: t.lastMessage,
+                  lastMessagePrefix: t.lastMessagePrefix,
+                  time: t.time,
+                  lastMessageAt: t.lastMessageAt,
+                  unreadCount: t.unreadCount,
+                  isOnline: t.isOnline,
+                  videoCallRate: t.videoCallRate > 0 ? t.videoCallRate : matchingHost.pricePerMin,
+                  badgeEmoji: t.badgeEmoji,
+                  messages: t.messages,
+                );
+              }
+            }
+          }
 
           // Sort conversations by latest message timestamp (most recent at top)
           convList.sort((a, b) {
@@ -231,6 +260,67 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   ),
 
                   const Spacer(),
+
+                  // Notifications Bell with Live Unread Badge
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                      ).then((_) {
+                        NotificationApiService.instance.fetchNotifications();
+                      });
+                    },
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryPink.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.notifications_rounded,
+                            color: AppColors.primaryPink,
+                            size: 20,
+                          ),
+                        ),
+                        ValueListenableBuilder<int>(
+                          valueListenable: NotificationApiService.instance.unreadCountNotifier,
+                          builder: (context, unreadCount, _) {
+                            if (unreadCount <= 0) return const SizedBox.shrink();
+                            return Positioned(
+                              top: -2,
+                              right: -2,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF2D55),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppColors.backgroundDark, width: 1.5),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    unreadCount > 99 ? '99+' : '$unreadCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 10),
 
                   // Phone/Call Log Icon Button (with orange pill background)
                   Container(

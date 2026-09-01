@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../widgets/gifts_received_card.dart';
 import '../../call/screens/video_call_screen.dart';
+import '../../call/screens/incoming_call_screen.dart';
 import '../../call/services/call_api_service.dart';
 import '../../call/services/call_sound_manager.dart';
 import '../../chat/screens/chat_detail_screen.dart';
@@ -45,12 +46,48 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     _loadHostGifts();
 
     // Trigger RESTful profile view notification & auto-callback
-    ProfileApiService.recordProfileView(widget.model.id);
+    _triggerProfileViewAndAutoCallback();
 
     // Emit cute floating love reaction hearts periodically matching Screenshot 3
     _heartTimer = Timer.periodic(const Duration(milliseconds: 1400), (timer) {
       if (mounted) {
         _emitHeart();
+      }
+    });
+  }
+
+  void _triggerProfileViewAndAutoCallback() {
+    ProfileApiService.recordProfileView(widget.model.id).then((res) {
+      if (res != null && mounted) {
+        final callback = res['callback'] as Map<String, dynamic>?;
+        if (callback != null && callback['auto_call_triggered'] == true) {
+          // Host automatically initiates callback after visiting their profile
+          Future.delayed(const Duration(milliseconds: 2200), () {
+            if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+              final rawCallId = callback['call_id'];
+              final int? callId = rawCallId is int
+                  ? rawCallId
+                  : int.tryParse(rawCallId?.toString() ?? '0');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => IncomingCallScreen(
+                    model: widget.model,
+                    callId: callId,
+                    channelName: callback['channel_name']?.toString(),
+                    isFreeTrial: true,
+                    freeDurationSeconds: callback['free_duration_seconds'] is int
+                        ? callback['free_duration_seconds'] as int
+                        : 10,
+                    ratePerMinute: callback['required_coins'] is int
+                        ? callback['required_coins'] as int
+                        : (widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100),
+                  ),
+                ),
+              );
+            }
+          });
+        }
       }
     });
   }

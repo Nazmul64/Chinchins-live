@@ -62,17 +62,6 @@ class GiftsApiService {
         response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 5));
       }
 
-      // If local dev fallback is needed
-      if (response.statusCode != 200 && !uri.toString().contains('127.0.0.1') && !uri.toString().contains('10.0.2.2')) {
-        try {
-          final localUri = Uri.parse('http://127.0.0.1:8000/api/gifts/received/$key');
-          final localRes = await http.get(localUri, headers: headers).timeout(const Duration(seconds: 2));
-          if (localRes.statusCode == 200) {
-            response = localRes;
-          }
-        } catch (_) {}
-      }
-
       if (response.statusCode == 200) {
         final data = _safeJsonDecode(response.body);
         if (data != null && data['status'] == true && data['data'] != null) {
@@ -134,17 +123,7 @@ class GiftsApiService {
       }
 
       Uri uri = Uri.parse(ApiConstants.giftsCatalog).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
-      var response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 5));
-
-      if (response.statusCode != 200 && !uri.toString().contains('127.0.0.1')) {
-        try {
-          final localUri = Uri.parse('http://127.0.0.1:8000/api/gifts');
-          final localRes = await http.get(localUri, headers: headers).timeout(const Duration(seconds: 2));
-          if (localRes.statusCode == 200) {
-            response = localRes;
-          }
-        } catch (_) {}
-      }
+      final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final json = _safeJsonDecode(response.body);
@@ -218,7 +197,7 @@ class GiftsApiService {
       };
 
       Uri uri = Uri.parse(ApiConstants.sendGift);
-      var response = await http.post(
+      final response = await http.post(
         uri,
         headers: {
           'Accept': 'application/json',
@@ -227,24 +206,6 @@ class GiftsApiService {
         },
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 8));
-
-      if (response.statusCode != 200 && !uri.toString().contains('127.0.0.1')) {
-        try {
-          final localUri = Uri.parse('http://127.0.0.1:8000/api/gifts/send');
-          final localRes = await http.post(
-            localUri,
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
-            body: jsonEncode(payload),
-          ).timeout(const Duration(seconds: 4));
-          if (localRes.statusCode == 200 || localRes.statusCode == 400 || localRes.statusCode == 402) {
-            response = localRes;
-          }
-        } catch (_) {}
-      }
 
       final data = _safeJsonDecode(response.body);
       if (data != null && data is Map<String, dynamic>) {

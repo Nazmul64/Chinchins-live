@@ -49,6 +49,7 @@ class AppColors {
 
   // Accent Colors
   static const Color neonPink = Color(0xFFFF2D75);
+  static const Color primaryPink = Color(0xFFFF2D75);
   static const Color neonPurple = Color(0xFFB324D7);
   static const Color vibrantOrange = Color(0xFFFF6D00);
   static const Color warmOrange = Color(0xFFFF4500);
