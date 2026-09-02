@@ -17,12 +17,11 @@ import '../../profile/screens/host_profile_screen.dart';
 import '../../profile/screens/edit_profile_media_screen.dart';
 import '../../wallet/screens/wallet_screen.dart';
 import '../../wallet/screens/withdraw_screen.dart';
-import '../../wallet/screens/withdraw_history_screen.dart';
+import '../../wallet/screens/monthly_card_screen.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../../party/screens/create_room_screen.dart';
 import '../../kyc/screens/kyc_verification_screen.dart';
 import '../../kyc/services/kyc_api_service.dart';
-import '../../messages/screens/notifications_screen.dart';
 
 class MeScreen extends StatefulWidget {
   const MeScreen({super.key});
@@ -135,13 +134,15 @@ class _MeScreenState extends State<MeScreen> {
     });
   }
 
-  void _openWithdrawHistoryScreen() {
+  void _openMonthlyCardScreen([int initialCardIndex = 0]) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => const WithdrawHistoryScreen(),
+        builder: (context) => MonthlyCardScreen(initialCardIndex: initialCardIndex),
       ),
-    );
+    ).then((_) {
+      _loadUserProfile();
+    });
   }
 
   void _openMyHostProfile() {
@@ -1029,16 +1030,15 @@ class _MeScreenState extends State<MeScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // 3. Three Main Balance / Action Cards (My Gems, Withdraw, Beans Center)
+                // 3. Balance Cards: My Gems & Beans Center (Matching Screenshot 1)
                 Row(
                   children: [
                     // My Gems Card
                     Expanded(
-                      flex: 5,
                       child: GestureDetector(
                         onTap: _openRechargeSheet,
                         child: Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFF381F4B), Color(0xFF231433)],
@@ -1048,37 +1048,36 @@ class _MeScreenState extends State<MeScreen> {
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: AppColors.neonPurple.withValues(alpha: 0.3)),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text('My Gems', style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600)),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.neonPink.withValues(alpha: 0.2),
-                                      borderRadius: BorderRadius.circular(6),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Text('My Gems', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                                        SizedBox(width: 4),
+                                        Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 14),
+                                      ],
                                     ),
-                                    child: const Text('Top-up', style: TextStyle(color: AppColors.neonPink, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 16),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
+                                    const SizedBox(height: 6),
+                                    Text(
                                       '$_myGems',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.gemYellow.withValues(alpha: 0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 24),
                               ),
                             ],
                           ),
@@ -1087,51 +1086,49 @@ class _MeScreenState extends State<MeScreen> {
                     ),
                     const SizedBox(width: 10),
 
-                    // Withdraw / Cash Out Card
+                    // Beans Center Card
                     Expanded(
-                      flex: 5,
                       child: GestureDetector(
                         onTap: _openWithdrawScreen,
                         child: Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF143328), Color(0xFF0D211A)],
+                              colors: [Color(0xFF1F2445), Color(0xFF141730)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.onlineGreen.withValues(alpha: 0.4)),
+                            border: Border.all(color: const Color(0xFF536DFE).withValues(alpha: 0.3)),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text('Cash Out', style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600)),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.onlineGreen.withValues(alpha: 0.2),
-                                      borderRadius: BorderRadius.circular(6),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text('Beans Center', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                                        SizedBox(width: 4),
+                                        Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 14),
+                                      ],
                                     ),
-                                    child: const Text('bKash/Nagad', style: TextStyle(color: AppColors.onlineGreen, fontSize: 9, fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
+                                    SizedBox(height: 6),
+                                    Text(
+                                      '0',
+                                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              const SizedBox(height: 6),
-                              const Row(
-                                children: [
-                                  Icon(Icons.payments_rounded, color: AppColors.onlineGreen, size: 16),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Withdraw',
-                                    style: TextStyle(color: AppColors.onlineGreen, fontSize: 14, fontWeight: FontWeight.bold),
-                                  ),
-                                  Spacer(),
-                                  Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 16),
-                                ],
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.egg_rounded, color: Colors.amber, size: 24),
                               ),
                             ],
                           ),
@@ -1140,9 +1137,134 @@ class _MeScreenState extends State<MeScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+
+                // 4. "Spend Less, Get More Gems! Update to New User Weekly Card" VIP Banner (Matching Screenshot 1)
+                GestureDetector(
+                  onTap: () => _openMonthlyCardScreen(0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF2E1C38), Color(0xFF1E172A)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.amber.withValues(alpha: 0.5), width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.amber.withValues(alpha: 0.15),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.card_giftcard_rounded, color: Colors.white, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Spend Less, Get More Gems!',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Update to New User Weekly Card',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.amber,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(color: Colors.amber.withValues(alpha: 0.4), blurRadius: 6),
+                            ],
+                          ),
+                          child: const Text(
+                            'View',
+                            style: TextStyle(
+                              color: Colors.black87,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 14),
 
-                // 4. Create Party Room Banner matching Screenshot 2
+                // 5. Action Menu Grid (Matching Screenshot 1: SVIP, My Bag, Gems Center, Payment details, My Level, Reward...)
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardDark,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.cardBorder, width: 0.8),
+                  ),
+                  child: Column(
+                    children: [
+                      // Row 1 (SVIP, My Bag, Gems Center, Payment details)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildGridMenuItem(Icons.workspace_premium_rounded, 'SVIP', const Color(0xFFFFB300), onTap: () => _openMonthlyCardScreen(1)),
+                          _buildGridMenuItem(Icons.backpack_rounded, 'My Bag', const Color(0xFFAB47BC), onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('My Bag: You have 0 items currently.')),
+                            );
+                          }),
+                          _buildGridMenuItem(Icons.diamond_rounded, 'Gems Center', const Color(0xFF00E676), onTap: () => _openWalletScreen(initialTabIndex: 0)),
+                          _buildGridMenuItem(Icons.account_balance_wallet_rounded, 'Payment\ndetails', const Color(0xFF42A5F5), onTap: () => _openWalletScreen(initialTabIndex: 1)),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+
+                      // Row 2 (My Level, Reward, KYC Verify, Support)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildGridMenuItem(Icons.military_tech_rounded, 'My Level', const Color(0xFFFF7043), onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Level 1: Newbie VIP Member')),
+                            );
+                          }),
+                          _buildGridMenuItem(Icons.calendar_month_rounded, 'Reward', const Color(0xFF00E5FF), onTap: () => _openMonthlyCardScreen(0)),
+                          _buildGridMenuItem(Icons.verified_user_rounded, 'KYC\nVerify', const Color(0xFF10B981), onTap: _openKycScreen),
+                          _buildGridMenuItem(Icons.support_agent_rounded, 'Customer\nService', const Color(0xFFEC4899), onTap: _showCustomerServiceDialog),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // 6. Create Party Room Banner
                 GestureDetector(
                   onTap: () {
                     Navigator.push(
@@ -1184,149 +1306,6 @@ class _MeScreenState extends State<MeScreen> {
                         const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 22),
                       ],
                     ),
-                  ),
-                ),
-                // 5. KYC Verification Card
-                GestureDetector(
-                  onTap: _openKycScreen,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF231738), Color(0xFF171329)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: _kycStatus == 'approved'
-                            ? Colors.greenAccent.withValues(alpha: 0.5)
-                            : _kycStatus == 'pending'
-                                ? Colors.amber.withValues(alpha: 0.5)
-                                : AppColors.neonPurple.withValues(alpha: 0.35),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(9),
-                          decoration: BoxDecoration(
-                            gradient: _kycStatus == 'approved'
-                                ? const LinearGradient(colors: [Color(0xFF00E676), Color(0xFF00B0FF)])
-                                : _kycStatus == 'pending'
-                                    ? const LinearGradient(colors: [Color(0xFFFFB300), Color(0xFFFF6D00)])
-                                    : AppColors.primaryGradient,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            _kycStatus == 'approved'
-                                ? Icons.verified_rounded
-                                : _kycStatus == 'pending'
-                                    ? Icons.hourglass_top_rounded
-                                    : Icons.verified_user_rounded,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Text(
-                                    'KYC Verification',
-                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: _kycStatus == 'approved'
-                                          ? const Color(0xFF064E3B)
-                                          : _kycStatus == 'pending'
-                                              ? const Color(0xFF78350F)
-                                              : const Color(0xFF312E81),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(
-                                        color: _kycStatus == 'approved'
-                                            ? Colors.greenAccent
-                                            : _kycStatus == 'pending'
-                                                ? Colors.amber
-                                                : const Color(0xFF818CF8),
-                                        width: 0.6,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      _kycStatus == 'approved'
-                                          ? 'Verified'
-                                          : _kycStatus == 'pending'
-                                              ? 'Pending'
-                                              : 'Submit Now',
-                                      style: TextStyle(
-                                        color: _kycStatus == 'approved'
-                                            ? Colors.greenAccent
-                                            : _kycStatus == 'pending'
-                                                ? Colors.amber
-                                                : const Color(0xFFA5B4FC),
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              const Text(
-                                'NID, Passport, or Birth Certificate',
-                                style: TextStyle(color: AppColors.textMuted, fontSize: 11),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 20),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // 6. Action Menu Grid (2 rows x 4 items)
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.cardDark,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.cardBorder, width: 0.8),
-                  ),
-                  child: Column(
-                    children: [
-                      // Row 1
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildGridMenuItem(Icons.account_balance_wallet_rounded, 'Wallet', const Color(0xFFFFB300), onTap: () => _openWalletScreen(initialTabIndex: 0)),
-                          _buildGridMenuItem(Icons.payments_rounded, 'Withdraw\nCoins', const Color(0xFF00E676), onTap: _openWithdrawScreen),
-                          _buildGridMenuItem(Icons.receipt_long_rounded, 'Deposit\nHistory', const Color(0xFF42A5F5), onTap: () => _openWalletScreen(initialTabIndex: 1)),
-                          _buildGridMenuItem(Icons.history_rounded, 'Withdraw\nHistory', const Color(0xFF80D8FF), onTap: _openWithdrawHistoryScreen),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-
-                      // Row 2
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildGridMenuItem(Icons.diamond_rounded, 'Buy Coin', AppColors.neonPink, onTap: () => _openWalletScreen(initialTabIndex: 0)),
-                          _buildGridMenuItem(Icons.verified_user_rounded, 'KYC\nVerify', const Color(0xFF00E676), onTap: _openKycScreen),
-                          _buildGridMenuItem(Icons.notifications_active_rounded, 'Notifications\nAlerts', const Color(0xFFFF7043), onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
-                          }),
-                          _buildGridMenuItem(Icons.support_agent_rounded, 'Customer\nService', const Color(0xFFAB47BC), onTap: _showCustomerServiceDialog),
-                        ],
-                      ),
-                    ],
                   ),
                 ),
                 const SizedBox(height: 14),

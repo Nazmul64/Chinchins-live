@@ -44,6 +44,13 @@ class ApiConstants {
   static String get depositHistory => '$baseUrl/deposit/history';
   static String get walletTransactions => '$baseUrl/wallet/transactions';
   
+  // VIP Privilege Cards (Monthly & Weekly Cards)
+  static String get vipCards => '$baseUrl/vip-cards';
+  static String get monthlyCards => '$baseUrl/vip-cards';
+  static String get vipCardsMySubscriptions => '$baseUrl/vip-cards/my-subscriptions';
+  static String get vipCardsPurchase => '$baseUrl/vip-cards/purchase';
+  static String get vipCardsClaimDaily => '$baseUrl/vip-cards/claim-daily';
+  
   // Withdrawal / Cash Out endpoints
   static String get withdrawInfo => '$baseUrl/withdraw/info';
   static String get withdrawCalculate => '$baseUrl/withdraw/calculate';
