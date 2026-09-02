@@ -208,6 +208,57 @@ class AuthApiService {
     }
   }
 
+  /// Check if user has an existing saved login session
+  static Future<bool> isLoggedIn() async {
+    final token = await getToken();
+    return token != null && token.isNotEmpty;
+  }
+
+  /// Verify session with backend or fallback to cached user
+  static Future<Map<String, dynamic>?> checkAuthSession() async {
+    try {
+      final token = await getToken();
+      if (token == null || token.isEmpty) return null;
+
+      final headers = {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+
+      // 1. Try /api/auth/check or /api/auth/me or /api/user
+      http.Response? response;
+      try {
+        response = await http.get(Uri.parse(ApiConstants.authCheck), headers: headers).timeout(const Duration(seconds: 6));
+      } catch (_) {
+        try {
+          response = await http.get(Uri.parse(ApiConstants.userProfile), headers: headers).timeout(const Duration(seconds: 6));
+        } catch (_) {}
+      }
+
+      if (response != null && response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map) {
+          final userData = decoded['data']?['user'] ?? decoded['user'] ?? decoded['data'];
+          if (userData is Map<String, dynamic>) {
+            await saveUser(userData);
+            return userData;
+          }
+        }
+        return await getSavedUser();
+      } else if (response != null && response.statusCode == 401) {
+        // Token was explicitly revoked / invalid
+        await logout();
+        return null;
+      }
+
+      // If server is slow or temporary network error, use cached user to keep user logged in!
+      return await getSavedUser();
+    } catch (e) {
+      // Offline fallback: Keep user logged in with cached session
+      return await getSavedUser();
+    }
+  }
+
   /// Save user token & profile in local storage
   static Future<void> _saveSession({
     required String token,
@@ -244,7 +295,7 @@ class AuthApiService {
     return null;
   }
 
-  /// Clear session on logout
+  /// Clear session on explicit manual logout ONLY
   static Future<void> logout() async {
     try {
       final token = await getToken();
@@ -257,7 +308,7 @@ class AuthApiService {
             'Accept': 'application/json',
             'Authorization': 'Bearer $token',
           },
-        ).timeout(const Duration(seconds: 5));
+        ).timeout(const Duration(seconds: 4));
       }
     } catch (_) {}
 

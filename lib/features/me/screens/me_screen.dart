@@ -12,6 +12,7 @@ import '../../../core/services/local_image_cache.dart';
 import '../../../core/services/app_update_service.dart';
 import '../../../core/services/remote_config_service.dart';
 import '../../auth/services/auth_api_service.dart';
+import '../../auth/screens/login_screen.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../profile/screens/edit_profile_media_screen.dart';
 import '../../wallet/screens/wallet_screen.dart';
@@ -1426,7 +1427,11 @@ class _MeScreenState extends State<MeScreen> {
               Navigator.pop(dialogCtx);
               await AuthApiService.logout();
               if (context.mounted) {
-                Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  (route) => false,
+                );
               }
             },
             child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),

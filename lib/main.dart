@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/app_logger.dart';
-import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,7 +20,7 @@ void main() async {
     return true;
   };
 
-  AppLogger.info('AppInit', 'Chinchins Live Debug Mode Active');
+  AppLogger.info('AppInit', 'Chinchins Live Production Active');
   // Set system UI overlay style to dark with translucent navigation
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -46,7 +46,7 @@ class ChinchinsLiveApp extends StatelessWidget {
       title: 'Chinchins Live',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      home: const LoginScreen(),
+      home: const SplashScreen(),
     );
   }
 }
