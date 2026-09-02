@@ -36,6 +36,7 @@ class WebRTCCallService {
   int iceCandidatesReceived = 0;
   String lastError = 'None';
   Function()? onDebugUpdate;
+  Function(RTCIceConnectionState state)? onIceStateChanged;
 
   void _log(String msg) {
     final time = DateTime.now().toIso8601String().substring(11, 19);
@@ -53,6 +54,46 @@ class WebRTCCallService {
   MediaStream? get localStream => _localStream;
   MediaStream? get remoteStream => _remoteStream;
   bool get hasRemoteStream => remoteRenderer.srcObject != null;
+
+  static String preferCodec(String sdp, String codec) {
+    if (sdp.isEmpty) return sdp;
+    final lines = sdp.split('\r\n');
+    int? mLineIndex;
+    String? payload;
+
+    for (int i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith('m=video')) {
+        mLineIndex = i;
+      }
+      if (lines[i].contains('a=rtpmap:') && lines[i].toLowerCase().contains(codec.toLowerCase())) {
+        final parts = lines[i].split(' ');
+        if (parts.isNotEmpty && parts[0].contains(':')) {
+          payload = parts[0].split(':')[1];
+          break;
+        }
+      }
+    }
+
+    if (mLineIndex == null || payload == null) return sdp;
+
+    final mLineElements = lines[mLineIndex].split(' ');
+    if (mLineElements.length < 4) return sdp;
+
+    final newMLine = <String>[];
+    newMLine.add(mLineElements[0]); // m=video
+    newMLine.add(mLineElements[1]); // port
+    newMLine.add(mLineElements[2]); // proto
+    newMLine.add(payload);          // Put Preferred Codec First
+
+    for (int i = 3; i < mLineElements.length; i++) {
+      if (mLineElements[i] != payload) {
+        newMLine.add(mLineElements[i]);
+      }
+    }
+
+    lines[mLineIndex] = newMLine.join(' ');
+    return lines.join('\r\n');
+  }
 
   Future<bool> initializeMedia({bool isAudioOnly = false}) async {
     try {
@@ -75,7 +116,10 @@ class WebRTCCallService {
                 'mandatory': {
                   'minWidth': '640',
                   'minHeight': '480',
-                  'minFrameRate': '30',
+                  'maxWidth': '1280',
+                  'maxHeight': '720',
+                  'minFrameRate': '15',
+                  'maxFrameRate': '30',
                 },
                 'optional': [],
               },
@@ -83,10 +127,11 @@ class WebRTCCallService {
 
       try {
         _localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-      } catch (_) {
+      } catch (e) {
+        _log('High resolution camera failed, falling back to basic user media: $e');
         _localStream = await navigator.mediaDevices.getUserMedia({
           'audio': true,
-          'video': !isAudioOnly,
+          'video': isAudioOnly ? false : {'facingMode': 'user'},
         });
       }
 
@@ -254,9 +299,15 @@ class WebRTCCallService {
       pc.onIceConnectionState = (RTCIceConnectionState state) {
         iceState = state.toString().split('.').last.replaceAll('RTCIceConnectionState', '');
         _log('ICE_CONNECTION_STATE: $iceState');
+        onIceStateChanged?.call(state);
         if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
             state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
           _log('ICE_CONNECTED_SUCCESS');
+        } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
+          _log('ICE_CONNECTION_FAILED! Attempting ICE restart...');
+          try {
+            pc.restartIce();
+          } catch (_) {}
         }
       };
 
@@ -309,10 +360,12 @@ class WebRTCCallService {
     if (pc == null) return;
 
     try {
-      final offer = await pc.createOffer({
+      final rawOffer = await pc.createOffer({
         'offerToReceiveAudio': 1,
         'offerToReceiveVideo': 1,
       });
+      final mungedSdp = preferCodec(rawOffer.sdp ?? '', 'VP8');
+      final offer = RTCSessionDescription(mungedSdp, rawOffer.type);
       await pc.setLocalDescription(offer);
       offerState = 'Sent';
       _log('OFFER_CREATED_AND_SENT (sdp length: ${offer.sdp?.length ?? 0})');
@@ -617,10 +670,12 @@ class WebRTCCallService {
             _log('SET_REMOTE_DESCRIPTION_OFFER_SUCCESS');
             await _drainPendingCandidates();
 
-            final answer = await _peerConnection!.createAnswer({
+            final rawAnswer = await _peerConnection!.createAnswer({
               'offerToReceiveAudio': 1,
               'offerToReceiveVideo': 1,
             });
+            final mungedSdp = preferCodec(rawAnswer.sdp ?? '', 'VP8');
+            final answer = RTCSessionDescription(mungedSdp, rawAnswer.type);
             await _peerConnection!.setLocalDescription(answer);
             answerState = 'Sent';
             _log('ANSWER_CREATED_AND_SENT (sdp len: ${answer.sdp?.length ?? 0})');

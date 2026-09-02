@@ -71,6 +71,7 @@ class ApiConstants {
   static String get callReject => '$baseUrl/call/reject';
   static String get callCancel => '$baseUrl/call/cancel';
   static String get callStart => '$baseUrl/call/start';
+  static String get callConnected => '$baseUrl/call/connected';
   static String get callIceServers => '$baseUrl/call/ice-servers';
   static String get callSignalSend => '$baseUrl/call/signal/send';
   static String get callSignalReceive => '$baseUrl/call/signal/receive';

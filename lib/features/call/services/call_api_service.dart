@@ -488,6 +488,39 @@ class CallApiService {
     }
   }
 
+  static Future<bool> notifyCallConnected({
+    required dynamic callId,
+    String mediaStatus = 'connected',
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
+      final url = Uri.parse(ApiConstants.callConnected);
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (userId != null) 'X-User-Id': userId,
+      };
+
+      final payload = {
+        'call_id': callId,
+        'media_status': mediaStatus,
+      };
+
+      final response = await http
+          .post(url, headers: headers, body: jsonEncode(payload))
+          .timeout(const Duration(seconds: 8));
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e, st) {
+      AppLogger.error('NotifyCallConnectedError', e, st);
+      return false;
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> getIceServers() async {
     try {
       final token = await AuthApiService.getToken();

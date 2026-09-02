@@ -44,7 +44,7 @@ class ChinchinsLiveApp extends StatelessWidget {
     return MaterialApp(
       navigatorKey: navigatorKey,
       title: 'Chinchins Live',
-      debugShowCheckedModeBanner: true,
+      debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       home: const LoginScreen(),
     );

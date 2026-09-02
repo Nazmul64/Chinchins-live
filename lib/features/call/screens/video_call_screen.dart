@@ -47,8 +47,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   bool _hasStartedWebRTC = false;
   bool _isEndingCall = false;
 
-  bool _showDebugOverlay = true;
-  bool _isLogsExpanded = true;
+  bool _showDebugOverlay = false;
+  bool _isLogsExpanded = false;
 
   int _callSeconds = 0;
   Timer? _timer;
@@ -62,6 +62,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   int _freeTrialRemaining = 0;
   int _ratePerMinute = 100;
   bool _isPulseInProgress = false;
+  bool _hasStartedTimer = false;
 
   @override
   void initState() {
@@ -76,6 +77,13 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       if (mounted) setState(() {});
     };
 
+    _webrtcService.onIceStateChanged = (RTCIceConnectionState state) {
+      if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
+          state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
+        _onMediaConnected();
+      }
+    };
+
     if (!widget.isIncoming) {
       _isConnectingCall = true;
       CallSoundManager.playOutgoingRingtone(widget.dialToneUrl);
@@ -85,6 +93,28 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
     _initWebRTCMediaAndFlow();
     _loadUserBalance();
+  }
+
+  void _onMediaConnected([MediaStream? stream]) {
+    if (stream != null) {
+      _webrtcService.remoteRenderer.srcObject = stream;
+    }
+    CallSoundManager.stopRingtone();
+    if (mounted && _isConnectingCall) {
+      setState(() {
+        _isConnectingCall = false;
+      });
+    }
+    if (!_hasStartedTimer) {
+      _hasStartedTimer = true;
+      if (widget.callId != null) {
+        CallApiService.notifyCallConnected(
+          callId: widget.callId!,
+          mediaStatus: 'connected',
+        );
+      }
+      _startTimer();
+    }
   }
 
   Future<void> _initWebRTCMediaAndFlow() async {
@@ -104,13 +134,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           callId: widget.callId,
           channelName: widget.channelName,
           onRemoteStreamConnected: (stream) {
-            if (mounted) {
-              setState(() {
-                _isConnectingCall = false;
-                _webrtcService.remoteRenderer.srcObject = stream;
-              });
-              _startTimer();
-            }
+            _onMediaConnected(stream);
           },
           onCallEnded: () {
             if (mounted && !_isEndingCall) {
@@ -134,14 +158,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           callId: widget.callId,
           channelName: widget.channelName,
           onRemoteStreamConnected: (stream) {
-            if (mounted) {
-              CallSoundManager.stopRingtone();
-              setState(() {
-                _isConnectingCall = false;
-                _webrtcService.remoteRenderer.srcObject = stream;
-              });
-              _startTimer();
-            }
+            _onMediaConnected(stream);
           },
           onCallEnded: () {
             if (mounted && !_isEndingCall) {
