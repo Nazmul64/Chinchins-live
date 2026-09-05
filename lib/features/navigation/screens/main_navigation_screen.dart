@@ -71,12 +71,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
-      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString();
+      final accountId = savedUser?['account_id']?.toString() ?? savedUser?['display_id']?.toString();
       if (token != null && token.isNotEmpty) {
         final signaling = SignalingService();
         await signaling.init(token);
-        if (userId != null) {
-          await signaling.subscribeToUser(userId);
+        if (userId != null || accountId != null) {
+          await signaling.subscribeToUser(userId ?? accountId, accountId: accountId);
         }
         _wsIncomingCallSub?.cancel();
         _wsIncomingCallSub = signaling.onIncomingCall.listen((data) {

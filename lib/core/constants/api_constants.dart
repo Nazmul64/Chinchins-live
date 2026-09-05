@@ -17,9 +17,12 @@ class ApiConstants {
   static String get userProfile => '$baseUrl/user';
   static String get logout => '$baseUrl/logout';
 
-  // Feed / Home endpoints
+  // Feed / Home / Search endpoints
   static String get homeFeed => '$baseUrl/home';
   static String get users => '$baseUrl/users';
+  static String get search => '$baseUrl/search';
+  static String get usersSearch => '$baseUrl/users/search';
+  static String searchUsers(String query) => '$baseUrl/search?q=${Uri.encodeComponent(query)}';
 
   // Profile endpoints
   static String get profileMe => '$baseUrl/profile/me';
@@ -34,6 +37,10 @@ class ApiConstants {
   static String get updateGallery => '$baseUrl/profile/update-gallery';
   static String get clearGallery => '$baseUrl/profile/clear-gallery';
   static String get profileStatus => '$baseUrl/profile/status';
+  static String get profileBases => '$baseUrl/profile-bases';
+  static String get levels => '$baseUrl/profile-bases';
+  static String get levelStatus => '$baseUrl/user/level-status';
+  static String levelStatusForUser(dynamic id) => '$baseUrl/user/level-status?user_id=$id';
 
   // Wallet, Payment, Deposit & Withdrawal endpoints
   static String get walletBalance => '$baseUrl/wallet/balance';
@@ -47,6 +54,7 @@ class ApiConstants {
   // VIP Privilege Cards (Monthly & Weekly Cards)
   static String get vipCards => '$baseUrl/vip-cards';
   static String get monthlyCards => '$baseUrl/vip-cards';
+  static String get vipBanner => '$baseUrl/vip-cards/banner';
   static String get vipCardsMySubscriptions => '$baseUrl/vip-cards/my-subscriptions';
   static String get vipCardsPurchase => '$baseUrl/vip-cards/purchase';
   static String get vipCardsClaimDaily => '$baseUrl/vip-cards/claim-daily';
@@ -88,6 +96,9 @@ class ApiConstants {
   static String get callEnd => '$baseUrl/call/end';
   static String get callDeductInterval => '$baseUrl/call/deduct-interval';
   static String get callHistory => '$baseUrl/call/history';
+  static String get callRechargeSheet => '$baseUrl/call/recharge-sheet';
+  static String get callQuickMessages => '$baseUrl/call/quick-messages';
+  static String get callSendQuickMessage => '$baseUrl/call/send-quick-message';
 
   // User Presence & Heartbeat endpoints
   static String get userHeartbeat => '$baseUrl/user/heartbeat';

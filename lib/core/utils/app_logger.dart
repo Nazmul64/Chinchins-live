@@ -20,7 +20,7 @@ class LogEntry {
 }
 
 class AppLogger {
-  static bool isDebugEnabled = true;
+  static bool isDebugEnabled = false;
 
   // In-memory log buffer for on-screen debug viewer
   static final List<LogEntry> logs = [];

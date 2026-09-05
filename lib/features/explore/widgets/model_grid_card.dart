@@ -1,10 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../../core/widgets/online_badge.dart';
 
-class ModelGridCard extends StatelessWidget {
+class ModelGridCard extends StatefulWidget {
   final ModelProfile model;
   final VoidCallback onTap;
   final VoidCallback onVideoCallTap;
@@ -17,9 +17,38 @@ class ModelGridCard extends StatelessWidget {
   });
 
   @override
+  State<ModelGridCard> createState() => _ModelGridCardState();
+}
+
+class _ModelGridCardState extends State<ModelGridCard> with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _pulseScale;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
+
+    _pulseScale = Tween<double>(begin: 1.0, end: 1.08).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final model = widget.model;
+
     return GestureDetector(
-      onTap: onTap,
+      onTap: widget.onTap,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
@@ -53,14 +82,14 @@ class ModelGridCard extends StatelessWidget {
                       Color(0x66000000),
                       Color(0xEE0B0B14),
                     ],
-                    stops: [0.0, 0.45, 0.70, 1.0],
+                    stops: [0.0, 0.40, 0.68, 1.0],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   ),
                 ),
               ),
 
-              // 3. Top Badges: Online on left, Blue Verified checkmark badge on right
+              // 3. Top Badges: Online & Your Follow on left, Blue Verified checkmark badge on right
               Positioned(
                 top: 8,
                 left: 8,
@@ -68,17 +97,67 @@ class ModelGridCard extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Online badge (🟢 Online)
-                    if (model.isOnline)
-                      const OnlineBadge(showText: true)
-                    else
-                      const SizedBox.shrink(),
+                    // Left: Online badge + "Your Follow" badge
+                    Flexible(
+                      child: Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          if (model.isOnline)
+                            const OnlineBadge(showText: true),
+
+                          // "Your Follow" Pink Badge
+                          if (model.isFollowed || model.customBadge == 'Your Follow')
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFFF2A6D), Color(0xFFFF5252)],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFFF2A6D).withValues(alpha: 0.45),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.favorite_rounded,
+                                    color: Colors.white,
+                                    size: 10,
+                                  ),
+                                  SizedBox(width: 3),
+                                  Text(
+                                    'Your Follow',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(width: 4),
 
                     // Blue Verified Checkmark (✓) Icon on top right
                     if (model.isVerified)
                       Container(
-                        width: 22,
-                        height: 22,
+                        width: 20,
+                        height: 20,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: const Color(0xFF00A2FF),
@@ -94,7 +173,7 @@ class ModelGridCard extends StatelessWidget {
                           child: Icon(
                             Icons.check_rounded,
                             color: Colors.white,
-                            size: 14,
+                            size: 13,
                           ),
                         ),
                       )
@@ -104,15 +183,15 @@ class ModelGridCard extends StatelessWidget {
                 ),
               ),
 
-              // 4. Bottom Info: Name & Age Pill on Left, Round Video Call Button on Right
+              // 4. Bottom Info: Name & Flag/Age Pill on Left, Round Animated Video Call Button on Right
               Positioned(
-                left: 10,
+                left: 9,
                 right: 8,
-                bottom: 10,
+                bottom: 9,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Left Column: User Name (Ellipsis) & Age Pill
+                    // Left Column: User Name (Ellipsis) & Age Pill with Country Flag
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,7 +202,7 @@ class ModelGridCard extends StatelessWidget {
                             model.name,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 15,
+                              fontSize: 14.5,
                               fontWeight: FontWeight.bold,
                               shadows: [
                                 Shadow(
@@ -137,25 +216,49 @@ class ModelGridCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
 
-                          // Country / Location Red indicator & Age pill (e.g. 🔴 24)
+                          // Country Flag Icon & Age pill (e.g. 🇧🇩 🔴 24)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFF2A6D),
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(0xFFFF2A6D),
+                                  Color(0xFFE91E63),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                               borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFF2A6D).withValues(alpha: 0.4),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                // Country Flag
+                                Text(
+                                  model.countryFlag,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                const SizedBox(width: 3.5),
+
+                                // Red indicator dot
                                 Container(
-                                  width: 6,
-                                  height: 6,
+                                  width: 5.5,
+                                  height: 5.5,
                                   decoration: const BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: Color(0xFFD50000),
                                   ),
                                 ),
-                                const SizedBox(width: 3.5),
+                                const SizedBox(width: 3),
+
+                                // Age text
                                 Text(
                                   '${model.age}',
                                   style: const TextStyle(
@@ -173,28 +276,37 @@ class ModelGridCard extends StatelessWidget {
 
                     const SizedBox(width: 6),
 
-                    // Right: White Circular Video Call Button with Purple Camera Icon
+                    // Right: Animated White Circular Video Call Button with Purple Camera Icon
                     GestureDetector(
-                      onTap: onVideoCallTap,
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.35),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                      onTap: widget.onVideoCallTap,
+                      child: ScaleTransition(
+                        scale: _pulseScale,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF9C27B0).withValues(alpha: 0.45),
+                                blurRadius: 10,
+                                spreadRadius: 1.5,
+                                offset: const Offset(0, 2),
+                              ),
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.videocam_rounded,
+                              color: Color(0xFF9C27B0), // Vibrant purple camera icon
+                              size: 24,
                             ),
-                          ],
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.videocam_rounded,
-                            color: Color(0xFF9C27B0),
-                            size: 22,
                           ),
                         ),
                       ),
@@ -209,3 +321,4 @@ class ModelGridCard extends StatelessWidget {
     );
   }
 }
+

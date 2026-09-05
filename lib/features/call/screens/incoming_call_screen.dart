@@ -125,11 +125,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _timeoutTimer?.cancel();
 
     // রিংটোন সাথে সাথে বন্ধ
-    await CallSoundManager.stopRingtone();
+    CallSoundManager.stopRingtone();
 
-    // ব্যাকএন্ডে রিসিভ বাটন প্রেস নোটিফাই করা
+    // ব্যাকএন্ডে রিসিভ বাটন প্রেস নোটিফাই করা (অ্যাসিনক্রোনাসলি ব্যাকগ্রাউন্ডে)
     if (widget.callId != null) {
-      await CallApiService.acceptCall(callId: widget.callId!);
+      unawaited(CallApiService.acceptCall(callId: widget.callId!));
     }
 
     if (mounted) {

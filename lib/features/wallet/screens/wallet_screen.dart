@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/utils/app_logger.dart';
 import '../services/wallet_api_service.dart';
 import 'withdraw_screen.dart';
 
@@ -145,22 +144,6 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
             onPressed: _loadAllWalletData,
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF1E293B),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Colors.greenAccent, width: 1.2),
-        ),
-        icon: const Icon(Icons.bug_report_rounded, color: Colors.greenAccent, size: 18),
-        label: ValueListenableBuilder<int>(
-          valueListenable: AppLogger.logCountNotifier,
-          builder: (context, count, _) => Text(
-            count > 0 ? 'Debug Logs ($count)' : 'Debug Logs',
-            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-          ),
-        ),
-        onPressed: () => AppLogger.showDebugConsole(context),
       ),
       body: RefreshIndicator(
         color: AppColors.neonPink,
@@ -919,11 +902,6 @@ class _DepositSheetModalState extends State<DepositSheetModal> {
         SnackBar(
           content: Text(res['message'] ?? 'Failed to submit deposit'),
           backgroundColor: Colors.redAccent,
-          action: SnackBarAction(
-            label: 'VIEW LOG',
-            textColor: Colors.yellowAccent,
-            onPressed: () => AppLogger.showDebugConsole(context),
-          ),
         ),
       );
     }

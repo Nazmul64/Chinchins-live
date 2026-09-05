@@ -560,18 +560,35 @@ class CallApiService {
           'stun:stun1.l.google.com:19302',
           'stun:stun2.l.google.com:19302',
           'stun:stun3.l.google.com:19302',
+          'stun:stun4.l.google.com:19302',
+          'stun:stun.cloudflare.com:3478',
+          'stun:global.stun.twilio.com:3478',
           'stun:stun.relay.metered.ca:80',
         ],
       },
       {
         'urls': [
+          'turn:openrelay.metered.ca:80',
+          'turn:openrelay.metered.ca:80?transport=tcp',
+          'turn:openrelay.metered.ca:443',
+          'turn:openrelay.metered.ca:443?transport=tcp',
+          'turns:openrelay.metered.ca:443?transport=tcp',
+          'turns:openrelay.metered.ca:5349',
           'turn:global.relay.metered.ca:80',
           'turn:global.relay.metered.ca:80?transport=tcp',
           'turn:global.relay.metered.ca:443',
+          'turn:global.relay.metered.ca:443?transport=tcp',
           'turns:global.relay.metered.ca:443?transport=tcp',
+          'turns:global.relay.metered.ca:5349',
+          'turn:standard.relay.metered.ca:80',
+          'turn:standard.relay.metered.ca:80?transport=tcp',
+          'turn:standard.relay.metered.ca:443',
+          'turn:standard.relay.metered.ca:443?transport=tcp',
+          'turns:standard.relay.metered.ca:443?transport=tcp',
+          'turns:standard.relay.metered.ca:5349',
         ],
-        'username': 'openrelayproject',
-        'credential': 'openrelayproject',
+        'username': 'openrelay',
+        'credential': 'openrelay',
       },
     ];
   }
@@ -770,6 +787,90 @@ class CallApiService {
         'should_terminate_call': false,
         'message': 'Pulse connection issue: $e',
       };
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getRechargeSheet({dynamic hostId, dynamic userId}) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final currentUid = userId ?? savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
+      final queryParams = <String, String>{};
+      if (currentUid != null) queryParams['user_id'] = currentUid.toString();
+      if (hostId != null) queryParams['host_id'] = hostId.toString();
+
+      final url = Uri.parse(ApiConstants.callRechargeSheet).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (currentUid != null) 'X-User-Id': currentUid.toString(),
+      };
+
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded['status'] == true && decoded['data'] is Map) {
+          return Map<String, dynamic>.from(decoded['data']);
+        }
+      }
+    } catch (e, st) {
+      AppLogger.error('GetRechargeSheetError', e, st);
+    }
+    return null;
+  }
+
+  static Future<Map<String, dynamic>?> getQuickMessages() async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.callQuickMessages);
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded['status'] == true && decoded['data'] is Map) {
+          return Map<String, dynamic>.from(decoded['data']);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static Future<bool> sendQuickMessage({
+    required dynamic callId,
+    required dynamic receiverId,
+    required String message,
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
+      final url = Uri.parse(ApiConstants.callSendQuickMessage);
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (userId != null) 'X-User-Id': userId,
+      };
+
+      final payload = {
+        'call_id': callId,
+        'receiver_id': receiverId,
+        'message': message,
+      };
+
+      final response = await http
+          .post(url, headers: headers, body: jsonEncode(payload))
+          .timeout(const Duration(seconds: 6));
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (_) {
+      return false;
     }
   }
 

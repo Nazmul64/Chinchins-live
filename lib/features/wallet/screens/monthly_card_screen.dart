@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/cached_image_loader.dart';
 import '../services/vip_cards_api_service.dart';
 import '../services/wallet_api_service.dart';
 
@@ -24,7 +25,7 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
   int _userGems = 0;
 
   Timer? _countdownTimer;
-  Duration _mockTimerDuration = const Duration(days: 6, hours: 23, minutes: 59, seconds: 59);
+  int _remainingSeconds = 604740; // Default 7 days
 
   @override
   void initState() {
@@ -37,20 +38,21 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {
-          if (_mockTimerDuration.inSeconds > 0) {
-            _mockTimerDuration = _mockTimerDuration - const Duration(seconds: 1);
+          if (_remainingSeconds > 0) {
+            _remainingSeconds--;
           }
         });
       }
     });
   }
 
-  String _formatCountdown(Duration d) {
-    final days = d.inDays.toString().padLeft(2, '0');
-    final hours = (d.inHours % 24).toString().padLeft(2, '0');
-    final mins = (d.inMinutes % 60).toString().padLeft(2, '0');
-    final secs = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$days : $hours : $mins : $secs';
+  String _formatCountdown(int totalSecs) {
+    if (totalSecs <= 0) return '00 : 00 : 00 : 00';
+    final days = totalSecs ~/ 86400;
+    final hours = (totalSecs % 86400) ~/ 3600;
+    final mins = (totalSecs % 3600) ~/ 60;
+    final secs = totalSecs % 60;
+    return '${days.toString().padLeft(2, '0')} : ${hours.toString().padLeft(2, '0')} : ${mins.toString().padLeft(2, '0')} : ${secs.toString().padLeft(2, '0')}';
   }
 
   Future<void> _loadCardsAndSession() async {
@@ -92,7 +94,11 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
             'claimed_days': matchedSub['claimed_days'] ?? [],
             'countdown_timer': matchedSub['countdown_timer'],
             'current_day': matchedSub['current_day'] ?? 1,
+            'remaining_seconds': matchedSub['remaining_seconds'] ?? _remainingSeconds,
           };
+          if (matchedSub['remaining_seconds'] != null) {
+            _remainingSeconds = matchedSub['remaining_seconds'];
+          }
         }
       }
     }
@@ -101,7 +107,7 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
 
     setState(() {
       _cards = parsedCards;
-      _userGems = coinsVal is int ? coinsVal : int.tryParse(coinsVal.toString()) ?? 0;
+      _userGems = coinsVal is int ? coinsVal : (int.tryParse(coinsVal.toString()) ?? 0);
       _isLoading = false;
     });
   }
@@ -111,16 +117,17 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
     final int cardId = card['id'] ?? 1;
     final int priceCoins = card['price_coins'] ?? 0;
     final String cardName = card['name'] ?? 'VIP Privilege Card';
+    final int instantCoins = card['instant_reward_coins'] ?? 0;
 
     // Show Confirmation Sheet / Dialog
     final bool? confirm = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(22),
         decoration: const BoxDecoration(
-          color: Color(0xFF1E162B),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          color: Color(0xFF1B1429),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           border: Border(top: BorderSide(color: AppColors.neonPink, width: 1.5)),
         ),
         child: SafeArea(
@@ -133,30 +140,57 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                 decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
               ),
               const SizedBox(height: 16),
-              const Icon(Icons.stars_rounded, color: AppColors.gemYellow, size: 48),
-              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: AppColors.primaryGradient,
+                  boxShadow: [
+                    BoxShadow(color: AppColors.neonPink.withValues(alpha: 0.5), blurRadius: 20),
+                  ],
+                ),
+                child: const Icon(Icons.stars_rounded, color: Colors.white, size: 40),
+              ),
+              const SizedBox(height: 14),
               Text(
                 'Activate $cardName',
-                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
-                'Price: ${card['formatted_price_bdt']} ($priceCoins Gems)\nYou currently have $_userGems Gems',
+                'Price: ${card['formatted_price_bdt'] ?? 'BDT 300.00'} ($priceCoins Gems)\nInstant $instantCoins Gems will be credited immediately!',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black38,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 14),
+                    const SizedBox(width: 4),
+                    Text('Your Current Balance: $_userGems Gems', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 22),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: Colors.white24),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+                      child: const Text('Cancel', style: TextStyle(color: Colors.white70, fontSize: 14)),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -164,11 +198,12 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.neonPink,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 4,
                       ),
                       onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Confirm & Buy', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: const Text('Confirm & Buy', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                     ),
                   ),
                 ],
@@ -191,17 +226,28 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
     if (res['success'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(res['message'] ?? 'Card activated! Instant reward credited.'),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  res['message'] ?? 'Card activated! Instant reward credited.',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
           backgroundColor: AppColors.onlineGreen,
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 4),
         ),
       );
       _loadCardsAndSession();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(res['message'] ?? 'Insufficient balance or error.'),
-          backgroundColor: AppColors.cardDarkElevated,
+          content: Text(res['message'] ?? 'Failed to activate VIP card.'),
+          backgroundColor: const Color(0xFFB71C1C),
           duration: const Duration(seconds: 3),
         ),
       );
@@ -220,11 +266,23 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
     setState(() => _isActionInProgress = false);
 
     if (res['success'] == true) {
+      final claimedCoins = res['data']?['claimed_coins'] ?? 300;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(res['message'] ?? 'Daily check-in reward claimed!'),
+          content: Row(
+            children: [
+              const Icon(Icons.card_giftcard_rounded, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  res['message'] ?? '+$claimedCoins Gems added to your wallet!',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
           backgroundColor: AppColors.onlineGreen,
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 4),
         ),
       );
       _loadCardsAndSession();
@@ -245,35 +303,37 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E162B),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: AppColors.neonPink, width: 1),
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: AppColors.neonPink, width: 1.2),
         ),
         title: const Row(
           children: [
-            Icon(Icons.help_outline_rounded, color: AppColors.gemYellow),
+            Icon(Icons.help_outline_rounded, color: AppColors.gemYellow, size: 24),
             SizedBox(width: 8),
             Text('VIP Privilege Rules', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
           ],
         ),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '1. Instant Reward:\nUpon purchasing any Weekly or Monthly VIP card, the instant gems are credited to your main wallet balance immediately.',
-              style: TextStyle(color: Colors.white70, fontSize: 12.5),
-            ),
-            SizedBox(height: 10),
-            Text(
-              '2. Daily Check-in Schedule:\nLog into the app daily and open this page to claim your daily bonus gems into your wallet.',
-              style: TextStyle(color: Colors.white70, fontSize: 12.5),
-            ),
-            SizedBox(height: 10),
-            Text(
-              '3. Outfits & Privilege Badges:\nAvatar frames, SVIP crowns, and entry animations are unlocked automatically for the duration of the active card.',
-              style: TextStyle(color: Colors.white70, fontSize: 12.5),
-            ),
-          ],
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '1. Instant Reward:\nUpon purchasing any Weekly or Monthly VIP card, instant gems are credited to your main wallet immediately.',
+                style: TextStyle(color: Colors.white70, fontSize: 12.5, height: 1.4),
+              ),
+              SizedBox(height: 10),
+              Text(
+                '2. Daily Check-in Schedule:\nLog in every 24 hours to claim your scheduled daily bonus gems directly into your main balance.',
+                style: TextStyle(color: Colors.white70, fontSize: 12.5, height: 1.4),
+              ),
+              SizedBox(height: 10),
+              Text(
+                '3. Outfits & Exclusive Perks:\nAvatar frames, SVIP crowns, entry effects, and lucky cards are unlocked automatically for the entire validity period.',
+                style: TextStyle(color: Colors.white70, fontSize: 12.5, height: 1.4),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -311,7 +371,7 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Monthly Card',
+          'Monthly & Weekly Card',
           style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
         ),
         actions: [
@@ -322,10 +382,10 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
           const SizedBox(width: 4),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(44),
+          preferredSize: const Size.fromHeight(48),
           child: Container(
-            height: 40,
-            margin: const EdgeInsets.symmetric(horizontal: 16),
+            height: 42,
+            margin: const EdgeInsets.symmetric(horizontal: 14),
             child: TabBar(
               controller: _tabController,
               isScrollable: true,
@@ -365,28 +425,30 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
     final bool isSubscribed = sub['is_subscribed'] == true;
     final bool hasClaimedToday = sub['has_claimed_today'] == true;
     final List schedule = card['daily_schedule'] as List? ?? [];
+    final List perks = card['extra_rewards'] as List? ?? [];
     final String cardType = card['card_type'] ?? 'new_user';
+    final int currentDay = sub['current_day'] ?? 1;
 
-    // Theme Gradients matching Screenshot 2, 3, 4, 5
+    // Theme Gradients & Accent Colors
     LinearGradient heroGradient;
     Color accentColor;
     if (cardType == 'super_monthly') {
       heroGradient = const LinearGradient(
-        colors: [Color(0xFF2C194D), Color(0xFF19112E)],
+        colors: [Color(0xFF3B1768), Color(0xFF1F0D3D)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       );
       accentColor = const Color(0xFF7C4DFF);
     } else if (cardType == 'luxury_monthly') {
       heroGradient = const LinearGradient(
-        colors: [Color(0xFF142B59), Color(0xFF0B1733)],
+        colors: [Color(0xFF0D3268), Color(0xFF061838)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       );
       accentColor = const Color(0xFF2979FF);
     } else if (cardType == 'super_weekly') {
       heroGradient = const LinearGradient(
-        colors: [Color(0xFF0F3826), Color(0xFF091F15)],
+        colors: [Color(0xFF0E472E), Color(0xFF072417)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       );
@@ -394,31 +456,35 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
     } else {
       // New User Weekly Card
       heroGradient = const LinearGradient(
-        colors: [Color(0xFF4A1A2E), Color(0xFF250D1C)],
+        colors: [Color(0xFF5E1B3D), Color(0xFF2E0D1F)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       );
-      accentColor = AppColors.neonPink;
+      accentColor = const Color(0xFFFF4081);
     }
 
     return Stack(
       children: [
         SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. HERO CARD BANNER (Matching Screenshot 2, 3, 4)
+              // 1. HERO CARD BANNER
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   gradient: heroGradient,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: accentColor.withValues(alpha: 0.5), width: 1.2),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: accentColor.withValues(alpha: 0.6), width: 1.5),
                   boxShadow: [
-                    BoxShadow(color: accentColor.withValues(alpha: 0.2), blurRadius: 16, offset: const Offset(0, 4)),
+                    BoxShadow(
+                      color: accentColor.withValues(alpha: 0.3),
+                      blurRadius: 18,
+                      offset: const Offset(0, 5),
+                    ),
                   ],
                 ),
                 child: Column(
@@ -431,16 +497,37 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                card['name'] ?? 'VIP Privilege Card',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      card['name'] ?? 'VIP Privilege Card',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  if (card['badge_text'] != null) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: accentColor,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        card['badge_text'],
+                                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ]
+                                ],
                               ),
                               const SizedBox(height: 6),
-                              Row(
+                              Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   const Text('Get ', style: TextStyle(color: Colors.white70, fontSize: 13)),
                                   const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 14),
@@ -449,61 +536,67 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                                     '${card['total_return_coins']}',
                                     style: const TextStyle(color: AppColors.gemYellow, fontSize: 14, fontWeight: FontWeight.w900),
                                   ),
+                                  Text(
+                                    ' by paying 💎 ${card['price_coins']}',
+                                    style: const TextStyle(color: Colors.white60, fontSize: 12),
+                                  ),
                                 ],
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'by paying 💎 ${card['price_coins']} price',
-                                style: const TextStyle(color: Colors.white54, fontSize: 12),
-                              ),
                               const SizedBox(height: 10),
-                              // Countdown Timer Box
+                              // Live Countdown Timer Box
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                 decoration: BoxDecoration(
-                                  color: Colors.black45,
-                                  borderRadius: BorderRadius.circular(8),
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(10),
                                   border: Border.all(color: Colors.white12),
                                 ),
-                                child: Text(
-                                  _formatCountdown(_mockTimerDuration),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11.5,
-                                    fontFamily: 'monospace',
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.0,
-                                  ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.timer_outlined, color: AppColors.gemYellow, size: 13),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      _formatCountdown(_remainingSeconds),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontFamily: 'monospace',
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        // 3D Card Graphic on Right
+                        // VIP Graphic Icon
                         Container(
-                          width: 80,
-                          height: 70,
+                          width: 68,
+                          height: 68,
                           decoration: BoxDecoration(
                             gradient: AppColors.primaryGradient,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(16),
                             boxShadow: [
-                              BoxShadow(color: AppColors.neonPink.withValues(alpha: 0.6), blurRadius: 14),
+                              BoxShadow(color: accentColor.withValues(alpha: 0.6), blurRadius: 16),
                             ],
                           ),
                           child: const Center(
-                            child: Icon(Icons.card_membership_rounded, color: Colors.white, size: 40),
+                            child: Icon(Icons.card_membership_rounded, color: Colors.white, size: 36),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    // Comparison Pill Tag
+                    // Comparison Banner Tag
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.35),
-                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.black.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         card['banner_tag'] ?? 'Normal Recharge = ${card['instant_reward_coins']} | Card = ${card['total_return_coins']}+outfits',
@@ -515,72 +608,36 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
               ),
               const SizedBox(height: 14),
 
-              // 2. REWARDS BREAKDOWN (3 BOXES: Instant + Daily Check-in + Extra)
+              // 2. REWARDS 3-BOX SUMMARY
               Row(
                 children: [
-                  // Instant Reward
                   Expanded(
-                    child: _buildRewardBox(
+                    child: _buildSummaryMetricBox(
                       title: 'Instant Reward',
-                      amount: '${card['instant_reward_coins']}',
-                      icon: Icons.diamond_rounded,
-                      iconColor: AppColors.gemYellow,
+                      value: '💎 ${card['instant_reward_coins']}',
+                      highlightColor: AppColors.gemYellow,
                     ),
                   ),
                   const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    padding: EdgeInsets.symmetric(horizontal: 3),
                     child: Text('+', style: TextStyle(color: Colors.white54, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
-                  // Daily Check-in Bonus
                   Expanded(
-                    child: _buildRewardBox(
-                      title: 'Daily Check-in Bonus',
-                      amount: '${card['daily_checkin_total_coins']}',
-                      icon: Icons.card_giftcard_rounded,
-                      iconColor: const Color(0xFFFF5252),
+                    child: _buildSummaryMetricBox(
+                      title: 'Daily Check-in',
+                      value: '🎁 ${card['daily_checkin_total_coins']}',
+                      highlightColor: const Color(0xFFFF5252),
                     ),
                   ),
                   const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    padding: EdgeInsets.symmetric(horizontal: 3),
                     child: Text('+', style: TextStyle(color: Colors.white54, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
-                  // Extra Reward
                   Expanded(
-                    child: Container(
-                      height: 84,
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF181324),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white12),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text('Extra Reward', style: TextStyle(color: Colors.white60, fontSize: 9.5)),
-                          const SizedBox(height: 6),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF2B1D3D)),
-                                child: const Icon(Icons.lens_blur_rounded, color: Colors.amber, size: 14),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF2B1D3D)),
-                                child: const Icon(Icons.workspace_premium_rounded, color: AppColors.neonPink, size: 14),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF2B1D3D)),
-                                child: const Icon(Icons.style_rounded, color: Colors.cyanAccent, size: 14),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                    child: _buildSummaryMetricBox(
+                      title: 'Extra Reward',
+                      value: '${perks.isNotEmpty ? perks.length : 3} Perks',
+                      highlightColor: const Color(0xFF67E8F9),
                     ),
                   ),
                 ],
@@ -591,10 +648,10 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(width: 32, height: 1, color: AppColors.gemYellow.withValues(alpha: 0.5)),
+                  Container(width: 36, height: 1, color: AppColors.gemYellow.withValues(alpha: 0.6)),
                   const SizedBox(width: 8),
                   const Text(
-                    'Get schedule',
+                    '— Get schedule —',
                     style: TextStyle(
                       color: AppColors.gemYellow,
                       fontSize: 14,
@@ -603,12 +660,12 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Container(width: 32, height: 1, color: AppColors.gemYellow.withValues(alpha: 0.5)),
+                  Container(width: 36, height: 1, color: AppColors.gemYellow.withValues(alpha: 0.6)),
                 ],
               ),
               const SizedBox(height: 12),
 
-              // Grid of Schedule Days (4 Columns)
+              // Responsive Schedule Grid (4 Columns)
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -626,31 +683,32 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                   final String? extra = item['extra']?.toString();
                   final List claimedDays = sub['claimed_days'] as List? ?? [];
                   final bool isClaimed = claimedDays.contains(day);
+                  final bool isToday = isSubscribed && (day == currentDay);
 
-                  String dayLabel;
-                  if (day == 1) {
-                    dayLabel = '1st';
-                  } else if (day == 2) {
-                    dayLabel = '2nd';
-                  } else if (day == 3) {
-                    dayLabel = '3rd';
-                  } else {
-                    dayLabel = '${day}th';
-                  }
+                  String dayLabel = item['day_label'] ?? (day == 1 ? '1st' : (day == 2 ? '2nd' : (day == 3 ? '3rd' : '${day}th')));
 
                   return Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: isClaimed
-                          ? const Color(0xFF10281E)
-                          : (day == 1 ? const Color(0xFF2A1C3B) : const Color(0xFF151020)),
-                      borderRadius: BorderRadius.circular(12),
+                          ? const Color(0xFF0E2B1E)
+                          : (isToday
+                              ? const Color(0xFF2B1D3D)
+                              : (day == 1 ? const Color(0xFF231633) : const Color(0xFF140F20))),
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: isClaimed
-                            ? AppColors.onlineGreen.withValues(alpha: 0.6)
-                            : (day == 1 ? AppColors.neonPink.withValues(alpha: 0.5) : Colors.white12),
-                        width: 1,
+                            ? AppColors.onlineGreen
+                            : (isToday
+                                ? accentColor
+                                : (day == 1 ? accentColor.withValues(alpha: 0.5) : Colors.white12)),
+                        width: isToday || isClaimed ? 1.5 : 1.0,
                       ),
+                      boxShadow: isToday
+                          ? [
+                              BoxShadow(color: accentColor.withValues(alpha: 0.3), blurRadius: 8),
+                            ]
+                          : null,
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -658,8 +716,8 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                         Text(
                           dayLabel,
                           style: TextStyle(
-                            color: isClaimed ? AppColors.onlineGreen : Colors.white60,
-                            fontSize: 10,
+                            color: isClaimed ? AppColors.onlineGreen : Colors.white70,
+                            fontSize: 10.5,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -673,42 +731,146 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                               'x$coins',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 11,
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
                         if (extra != null && extra.isNotEmpty) ...[
-                          const SizedBox(height: 3),
+                          const SizedBox(height: 4),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                             decoration: BoxDecoration(
-                              color: AppColors.neonPink.withValues(alpha: 0.25),
+                              color: accentColor.withValues(alpha: 0.25),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
                               extra,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: AppColors.neonPink, fontSize: 8, fontWeight: FontWeight.bold),
+                              style: TextStyle(color: accentColor, fontSize: 8.5, fontWeight: FontWeight.bold),
                             ),
                           ),
                         ],
                         if (isClaimed) ...[
                           const SizedBox(height: 2),
                           const Icon(Icons.check_circle_rounded, color: AppColors.onlineGreen, size: 14),
-                        ],
+                        ] else if (isToday && !hasClaimedToday) ...[
+                          const SizedBox(height: 2),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppColors.onlineGreen,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text('Claim', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                          ),
+                        ]
                       ],
                     ),
                   );
                 },
               ),
+              const SizedBox(height: 22),
+
+              // 4. EXTRA PERKS & OUTFITS SHOWCASE
+              if (perks.isNotEmpty) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(width: 36, height: 1, color: const Color(0xFF67E8F9).withValues(alpha: 0.6)),
+                    const SizedBox(width: 8),
+                    const Text(
+                      '— Extra Outfits & Perks —',
+                      style: TextStyle(
+                        color: Color(0xFF67E8F9),
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(width: 36, height: 1, color: const Color(0xFF67E8F9).withValues(alpha: 0.6)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 2.2,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                  ),
+                  itemCount: perks.length,
+                  itemBuilder: (context, pIdx) {
+                    final perk = perks[pIdx];
+                    final String title = perk['title'] ?? 'Exclusive Perk';
+                    final String tag = perk['tag'] ?? 'Privilege';
+                    final String? imgUrl = perk['image_url'] ?? perk['image'];
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161124),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF281C3D),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: (imgUrl != null && imgUrl.isNotEmpty)
+                                ? CachedImageLoader(imageUrl: imgUrl, fit: BoxFit.contain)
+                                : const Icon(Icons.workspace_premium_rounded, color: AppColors.gemYellow, size: 22),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  title,
+                                  style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: accentColor.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    tag,
+                                    style: TextStyle(color: accentColor, fontSize: 9, fontWeight: FontWeight.bold),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
             ],
           ),
         ),
 
-        // 4. BOTTOM FLOATING ACTION BAR (Buy or Claim)
+        // 5. BOTTOM FLOATING ACTION CTA BUTTON
         Positioned(
           bottom: 0,
           left: 0,
@@ -733,7 +895,7 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                       child: _isActionInProgress
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                           : Text(
-                              hasClaimedToday ? 'Today\'s Bonus Claimed ✅' : 'Claim Today\'s Reward',
+                              hasClaimedToday ? "Today's Bonus Claimed ✅" : "Claim Today's Bonus (Day $currentDay)",
                               style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
                             ),
                     )
@@ -750,7 +912,7 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                           gradient: AppColors.primaryGradient,
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
-                            BoxShadow(color: AppColors.neonPink.withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 3)),
+                            BoxShadow(color: AppColors.neonPink.withValues(alpha: 0.5), blurRadius: 14, offset: const Offset(0, 3)),
                           ],
                         ),
                         child: Container(
@@ -759,7 +921,7 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                           child: _isActionInProgress
                               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                               : Text(
-                                  '${card['formatted_price_bdt']}',
+                                  '${card['formatted_price_bdt'] ?? 'BDT 300.00'} (${card['price_coins']} 💎)',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 16,
@@ -777,14 +939,13 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
     );
   }
 
-  Widget _buildRewardBox({
+  Widget _buildSummaryMetricBox({
     required String title,
-    required String amount,
-    required IconData icon,
-    required Color iconColor,
+    required String value,
+    required Color highlightColor,
   }) {
     return Container(
-      height: 84,
+      height: 72,
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: const Color(0xFF181324),
@@ -796,22 +957,18 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
         children: [
           Text(
             title,
-            style: const TextStyle(color: Colors.white60, fontSize: 9.5),
+            style: const TextStyle(color: Colors.white60, fontSize: 10),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: iconColor, size: 14),
-              const SizedBox(width: 3),
-              Text(
-                amount,
-                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-            ],
+          const SizedBox(height: 5),
+          Text(
+            value,
+            style: TextStyle(color: highlightColor, fontSize: 12.5, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

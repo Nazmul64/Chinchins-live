@@ -24,10 +24,17 @@ class ModelProfile {
   final int pricePerMin;
   final bool isOnline;
   final bool isVerified;
+  final bool isFollowed;
   final bool hasExtraGems;
   final String? customBadge;
   final String closeFriendsStatus;
   final Map<String, int> receivedGifts;
+  final String? avatarFrameUrl;
+  final String? badgeColor;
+  final String? badgeIcon;
+  final String? glowColor;
+  final int totalEarnedCoins;
+  final Map<String, dynamic>? levelInfo;
 
   const ModelProfile({
     required this.id,
@@ -53,14 +60,40 @@ class ModelProfile {
     this.pricePerMin = 1800,
     this.isOnline = true,
     this.isVerified = true,
+    this.isFollowed = false,
     this.hasExtraGems = false,
     this.customBadge,
     this.closeFriendsStatus = 'Close Friends (0/3)',
     this.receivedGifts = const {},
+    this.avatarFrameUrl,
+    this.badgeColor,
+    this.badgeIcon,
+    this.glowColor,
+    this.totalEarnedCoins = 0,
+    this.levelInfo,
   });
+
+  /// Country Flag emoji helper
+  String get countryFlag {
+    final loc = location.toLowerCase();
+    if (loc.contains('philippines') || loc.contains('phl') || loc.contains('ph')) return '🇵🇭';
+    if (loc.contains('bangladesh') || loc.contains('bgd') || loc.contains('bd')) return '🇧🇩';
+    if (loc.contains('india') || loc.contains('ind') || loc.contains('in')) return '🇮🇳';
+    if (loc.contains('pakistan') || loc.contains('pak') || loc.contains('pk')) return '🇵🇰';
+    if (loc.contains('united states') || loc.contains('usa') || loc.contains('us')) return '🇺🇸';
+    if (loc.contains('nepal') || loc.contains('npl') || loc.contains('np')) return '🇳🇵';
+    if (loc.contains('indonesia') || loc.contains('idn') || loc.contains('id')) return '🇮🇩';
+    if (loc.contains('vietnam') || loc.contains('vn')) return '🇻🇳';
+    if (loc.contains('thailand') || loc.contains('th')) return '🇹🇭';
+    if (loc.contains('malaysia') || loc.contains('my')) return '🇲🇾';
+    return '🇧🇩';
+  }
 
   /// Computed account ID with fallback
   String get effectiveAccountId => accountId.isNotEmpty ? accountId : id;
+
+  /// Computed active user level
+  int get currentLevel => (levelInfo?['current_level'] as int?) ?? level;
 
   /// Computed full name
   String get fullName {
@@ -125,9 +158,13 @@ class ModelProfile {
       parsedLevel = int.tryParse(levelDigits) ?? 4;
     }
 
-    // Primary database ID and public Account ID
-    final primaryId = json['id']?.toString() ?? json['user_id']?.toString() ?? json['account_id']?.toString() ?? '1';
-    final accountId = json['account_id']?.toString() ?? json['id']?.toString() ?? primaryId;
+    // Primary database ID and public 8-digit Account ID
+    final primaryId = json['id']?.toString() ?? json['user_id']?.toString() ?? '1';
+    final accountId = json['account_id']?.toString() ??
+        json['display_id']?.toString() ??
+        json['uid']?.toString() ??
+        json['id']?.toString() ??
+        primaryId;
 
     final firstName = json['first_name']?.toString();
     final lastName = json['last_name']?.toString();
@@ -173,6 +210,30 @@ class ModelProfile {
       coverPhoto = parsedGallery.isNotEmpty ? parsedGallery.first : avatar;
     }
 
+    // Frame URL / Base Frame URL
+    final rawFrame = json['avatar_frame_url'] ??
+        json['base_frame_url'] ??
+        json['frame_image_url'] ??
+        json['frame_url'] ??
+        json['base_frame_image'];
+    final String? avatarFrame = (rawFrame != null && rawFrame.toString().trim().isNotEmpty)
+        ? normalizeImg(rawFrame)
+        : null;
+
+    final badgeColor = json['badge_color']?.toString() ??
+        (json['level_info'] is Map ? json['level_info']['badge_color']?.toString() : null);
+    final badgeIcon = json['badge_icon']?.toString() ??
+        (json['level_info'] is Map ? json['level_info']['badge_icon']?.toString() : null);
+    final glowColor = json['glow_color']?.toString() ??
+        (json['level_info'] is Map ? json['level_info']['glow_color']?.toString() : null);
+    final totalEarned = json['total_earned_coins'] is int
+        ? json['total_earned_coins']
+        : (int.tryParse('${json['total_earned_coins']}') ?? 0);
+
+    final Map<String, dynamic>? levelInfoMap = json['level_info'] is Map
+        ? Map<String, dynamic>.from(json['level_info'])
+        : null;
+
     return ModelProfile(
       id: primaryId,
       accountId: accountId,
@@ -199,7 +260,16 @@ class ModelProfile {
           : (int.tryParse('${json['video_call_rate']}') ?? 1800),
       isOnline: json['is_active'] == true || json['is_active'] == 1 || json['is_active'] == '1' || json['status'] == 'Active',
       isVerified: json['is_verified'] == true || json['is_verified'] == 1 || json['is_verified'] == '1',
+      isFollowed: json['is_followed'] == true || json['is_following'] == true || json['followed'] == true || json['is_favorite'] == true,
+      hasExtraGems: json['has_extra_gems'] == true || json['extra_gems'] == true,
+      customBadge: json['custom_badge']?.toString(),
       closeFriendsStatus: 'Close Friends (${json['close_friends_count'] ?? 0}/3)',
+      avatarFrameUrl: avatarFrame,
+      badgeColor: badgeColor,
+      badgeIcon: badgeIcon,
+      glowColor: glowColor,
+      totalEarnedCoins: totalEarned,
+      levelInfo: levelInfoMap,
     );
   }
 
@@ -225,6 +295,15 @@ class ModelProfile {
       'video_call_rate': pricePerMin,
       'is_active': isOnline,
       'is_verified': isVerified,
+      'is_followed': isFollowed,
+      'has_extra_gems': hasExtraGems,
+      'custom_badge': customBadge,
+      'avatar_frame_url': avatarFrameUrl,
+      'badge_color': badgeColor,
+      'badge_icon': badgeIcon,
+      'glow_color': glowColor,
+      'total_earned_coins': totalEarnedCoins,
+      'level_info': levelInfo,
     };
   }
 }

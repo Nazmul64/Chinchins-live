@@ -1,16 +1,17 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../../core/models/model_profile.dart';
-import '../../../core/models/gift_item.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
-import '../../chat/widgets/gift_picker_modal.dart';
+import '../../../core/widgets/avatar_with_frame.dart';
 import '../../wallet/services/wallet_api_service.dart';
-import '../../wallet/widgets/continue_call_recharge_dialog.dart';
+import '../../wallet/widgets/in_call_recharge_gems_sheet.dart';
 import '../services/call_api_service.dart';
 import '../services/call_sound_manager.dart';
 import '../services/webrtc_call_service.dart';
+import '../widgets/webrtc_debug_modal.dart';
 
 class VideoCallScreen extends StatefulWidget {
   final ModelProfile model;
@@ -28,7 +29,7 @@ class VideoCallScreen extends StatefulWidget {
     this.callId,
     this.channelName,
     this.isFreeTrial = false,
-    this.freeDurationSeconds = 10,
+    this.freeDurationSeconds = 16,
     this.ratePerMinute = 100,
     this.isIncoming = false,
     this.dialToneUrl,
@@ -43,39 +44,39 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   bool _isCameraReady = false;
   bool _isConnectingCall = true;
   bool _isSwappedVideo = false;
-  bool _isSpeakerOn = true;
   bool _hasStartedWebRTC = false;
   bool _isEndingCall = false;
-
-  bool _showDebugOverlay = false;
-  bool _isLogsExpanded = false;
 
   int _callSeconds = 0;
   Timer? _timer;
   Timer? _pollingTimer;
-  bool _isMuted = false;
-  bool _isCameraOff = false;
-  String? _activeGiftShower;
   int _userGems = 0;
-  bool _isRechargeDialogVisible = false;
-  bool _isFreeTrialActive = false;
-  int _freeTrialRemaining = 0;
+  bool _isRechargeSheetOpen = false;
+  bool _isVideoBlurred = false;
+  bool _isFreeTrialActive = true;
+  int _freeTrialRemaining = 16;
   int _ratePerMinute = 100;
   bool _isPulseInProgress = false;
   bool _hasStartedTimer = false;
 
+  // In-call Quick Messages & Free Chances
+  int _freeMessageChances = 2;
+  String? _sentMessageFeedback;
+  final List<String> _quickMessages = [
+    'Be my girlfriend',
+    "Hi , what's up babe ?",
+    'Can we talk privately?',
+    'You look so pretty! ❤️',
+  ];
+
   @override
   void initState() {
     super.initState();
-    _isFreeTrialActive = widget.isFreeTrial;
-    _freeTrialRemaining = widget.freeDurationSeconds;
+    _isFreeTrialActive = true;
+    _freeTrialRemaining = widget.freeDurationSeconds > 0 ? widget.freeDurationSeconds : 16;
     _ratePerMinute = widget.ratePerMinute > 0
         ? widget.ratePerMinute
         : (widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100);
-
-    _webrtcService.onDebugUpdate = () {
-      if (mounted) setState(() {});
-    };
 
     _webrtcService.onIceStateChanged = (RTCIceConnectionState state) {
       if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
@@ -88,7 +89,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _isConnectingCall = true;
       CallSoundManager.playOutgoingRingtone(widget.dialToneUrl);
     } else {
-      _isConnectingCall = false; // রিসিভারের ক্ষেত্রে ডায়াল টোন বন্ধ থাকবে
+      _isConnectingCall = false;
     }
 
     _initWebRTCMediaAndFlow();
@@ -100,7 +101,17 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _webrtcService.remoteRenderer.srcObject = stream;
     }
     CallSoundManager.stopRingtone();
-    if (mounted && _isConnectingCall) {
+
+    // Force maximum loud speakerphone audio
+    _webrtcService.toggleSpeakerphone(true);
+    Future.delayed(const Duration(milliseconds: 300), () {
+      _webrtcService.toggleSpeakerphone(true);
+    });
+    Future.delayed(const Duration(milliseconds: 800), () {
+      _webrtcService.toggleSpeakerphone(true);
+    });
+
+    if (mounted) {
       setState(() {
         _isConnectingCall = false;
       });
@@ -122,8 +133,18 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     if (!mounted) return;
     setState(() {
       _isCameraReady = success;
-      _isSpeakerOn = _webrtcService.isSpeakerOn;
     });
+
+    _webrtcService.remoteRenderer.onFirstFrameRendered = () {
+      if (mounted) {
+        setState(() {
+          _isConnectingCall = false;
+        });
+      }
+    };
+    _webrtcService.remoteRenderer.onResize = () {
+      if (mounted) setState(() {});
+    };
 
     _startCallStatusPolling();
 
@@ -237,7 +258,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         await CallSoundManager.stopRingtone();
         if (_isConnectingCall) {
           setState(() {
-            _isConnectingCall = false; // "Calling..." ওভারলে সাথে সাথে দূর হবে
+            _isConnectingCall = false;
           });
         }
       }
@@ -291,36 +312,38 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        bool trialJustEnded = false;
-        setState(() {
-          _callSeconds++;
-          if (_isFreeTrialActive && _freeTrialRemaining > 0) {
-            _freeTrialRemaining--;
-            if (_freeTrialRemaining <= 0) {
-              _isFreeTrialActive = false;
-              trialJustEnded = true;
-            }
+      if (!mounted) return;
+      bool trialJustEnded = false;
+      setState(() {
+        _callSeconds++;
+        if (_isFreeTrialActive && _freeTrialRemaining > 0) {
+          _freeTrialRemaining--;
+          if (_freeTrialRemaining <= 0) {
+            _isFreeTrialActive = false;
+            trialJustEnded = true;
           }
-        });
+        }
+      });
 
-        if (trialJustEnded) {
-          // Free trial completed (10 seconds)
-          if (_userGems < _ratePerMinute) {
-            // Insufficient coins after free trial -> immediately prompt recharge
-            _showRechargePopup();
-          } else if (widget.callId != null) {
-            _sendInCallPulse();
-          }
-        } else if (widget.callId != null && _callSeconds % 60 == 0 && !_isFreeTrialActive) {
+      if (trialJustEnded) {
+        // 16s Free preview expired
+        if (_userGems < _ratePerMinute) {
+          setState(() {
+            _isVideoBlurred = true;
+          });
+          _webrtcService.toggleMute(true);
+          _showInCallRechargeSheet();
+        } else if (widget.callId != null) {
           _sendInCallPulse();
         }
+      } else if (widget.callId != null && _callSeconds % 60 == 0 && !_isFreeTrialActive) {
+        _sendInCallPulse();
       }
     });
   }
 
   Future<void> _sendInCallPulse() async {
-    if (_isPulseInProgress || widget.callId == null || _isRechargeDialogVisible) return;
+    if (_isPulseInProgress || widget.callId == null || _isRechargeSheetOpen) return;
     _isPulseInProgress = true;
 
     try {
@@ -333,14 +356,20 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       if (!mounted) return;
 
       if (res['should_terminate_call'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
-        _showRechargePopup();
+        setState(() {
+          _isVideoBlurred = true;
+        });
+        _webrtcService.toggleMute(true);
+        _showInCallRechargeSheet();
       } else if (res['success'] == true) {
         if (res['current_coins'] != null) {
           setState(() {
             _userGems = (res['current_coins'] is int)
                 ? res['current_coins']
                 : int.tryParse(res['current_coins'].toString()) ?? _userGems;
+            _isVideoBlurred = false;
           });
+          _webrtcService.toggleMute(false);
         }
       }
     } catch (_) {}
@@ -353,47 +382,65 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     return '$mins:$secs';
   }
 
-  void _showGiftShower(GiftItem gift) {
-    setState(() {
-      _activeGiftShower = gift.emoji;
-      _userGems -= gift.coins;
-    });
+  void _showInCallRechargeSheet() {
+    if (_isRechargeSheetOpen) return;
+    _isRechargeSheetOpen = true;
 
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
+    InCallRechargeGemsSheet.show(
+      context,
+      model: widget.model,
+      userGems: _userGems,
+      ratePerMinute: _ratePerMinute,
+      onClose: () {
+        _isRechargeSheetOpen = false;
+      },
+      onRechargeSuccess: (addedGems) {
+        _isRechargeSheetOpen = false;
         setState(() {
-          _activeGiftShower = null;
+          _userGems += addedGems;
+          _isVideoBlurred = false;
+        });
+        _webrtcService.toggleMute(false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Gems added! Video call extended.'),
+            backgroundColor: AppColors.onlineGreen,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      },
+    ).then((_) {
+      _isRechargeSheetOpen = false;
+    });
+  }
+
+  void _sendQuickMessage(String msg) {
+    if (_freeMessageChances > 0) {
+      setState(() {
+        _freeMessageChances--;
+        _sentMessageFeedback = msg;
+      });
+    } else {
+      setState(() {
+        _sentMessageFeedback = msg;
+      });
+    }
+
+    if (widget.callId != null) {
+      CallApiService.sendQuickMessage(
+        callId: widget.callId!,
+        receiverId: widget.model.id,
+        message: msg,
+      );
+    }
+
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted && _sentMessageFeedback == msg) {
+        setState(() {
+          _sentMessageFeedback = null;
         });
       }
     });
-  }
-
-  void _showRechargePopup() {
-    CallSoundManager.stopRingtone();
-    setState(() {
-      _isRechargeDialogVisible = true;
-    });
-  }
-
-  void _hideRechargePopupAndEndCall() {
-    setState(() {
-      _isRechargeDialogVisible = false;
-    });
-    _endCall();
-  }
-
-  void _onGetCoinsSuccess() {
-    setState(() {
-      _userGems += 7560;
-      _isRechargeDialogVisible = false;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('🎉 Gems added! Video call extended.'),
-        backgroundColor: AppColors.onlineGreen,
-        duration: Duration(seconds: 2),
-      ),
-    );
   }
 
   @override
@@ -403,16 +450,22 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // ১. মূল ফুলস্ক্রিন ভিডিও ভিউ
+          // ১. মূল ফুলস্ক্রিন ভিডিও ভিউ (ঝাপসা/Blur সাপোর্টসহ)
           GestureDetector(
             onTap: () {
               setState(() {
                 _isSwappedVideo = !_isSwappedVideo;
               });
             },
-            child: _buildMainVideoView(),
+            child: _isVideoBlurred
+                ? ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                    child: _buildMainVideoView(),
+                  )
+                : _buildMainVideoView(),
           ),
 
+          // শ্যাডো গ্রেডিয়েন্ট ওভারলে
           IgnorePointer(
             child: Container(
               decoration: const BoxDecoration(
@@ -420,9 +473,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                   colors: [
                     Color(0x99000000),
                     Colors.transparent,
-                    Color(0xCC000000),
+                    Color(0xDD000000),
                   ],
-                  stops: [0.0, 0.4, 1.0],
+                  stops: [0.0, 0.35, 1.0],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -430,268 +483,60 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
             ),
           ),
 
-          // ২. Ringing / Calling ইন্ডিকেটর (কানেক্ট হলে বা রিমোট স্ট্রিম এলে স্বয়ংক্রিয়ভাবে হাইড হবে)
+          // ২. Ringing / Calling ইন্ডিকেটর
           if (_isConnectingCall && !_webrtcService.hasRemoteStream)
             Positioned(
               top: MediaQuery.of(context).size.height * 0.4,
               left: 0,
               right: 0,
               child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.8), width: 1.5),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPink),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        widget.model.isOnline ? 'Ringing...' : 'Calling...',
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          if (_activeGiftShower != null)
-            Center(
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.2, end: 1.6),
-                duration: const Duration(milliseconds: 900),
-                curve: Curves.elasticOut,
-                builder: (context, scale, child) {
-                  return Transform.scale(
-                    scale: scale,
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.black54,
-                        border: Border.all(color: AppColors.gemYellow, width: 2),
-                      ),
-                      child: Text(
-                        _activeGiftShower!,
-                        style: const TextStyle(fontSize: 64),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-          // ৩. টপ হেডার বার (টাইমার, জেমস ও মডেল ইনফো)
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.black45,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white24, width: 0.8),
+                child: GestureDetector(
+                  onTap: () {
+                    WebRTCDebugModal.show(
+                      context,
+                      webrtcService: _webrtcService,
+                      callId: widget.callId,
+                      isIncoming: widget.isIncoming,
+                      callerOrReceiverName: widget.model.name,
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.9), width: 1.8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.neonPink.withValues(alpha: 0.3),
+                          blurRadius: 16,
+                          spreadRadius: 2,
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircleAvatar(
-                              radius: 14,
-                              backgroundImage: NetworkImage(widget.model.avatarUrl),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              widget.model.name,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.6),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: AppColors.gemYellow.withValues(alpha: 0.4), width: 0.8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 14),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '$_userGems',
-                                  style: const TextStyle(
-                                    color: AppColors.gemYellow,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.6),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.white24, width: 0.8),
-                            ),
-                            child: Text(
-                              _formatDuration(_callSeconds),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  if (_isFreeTrialActive && _freeTrialRemaining > 0) ...[
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.orangeGradient,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.orange.withValues(alpha: 0.5),
-                            blurRadius: 10,
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.timer_rounded, color: Colors.white, size: 15),
-                          const SizedBox(width: 6),
-                          Text(
-                            '🎉 Free Trial Active: ${_freeTrialRemaining}s free',
-                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
+                      ],
                     ),
-                  ],
-                  const SizedBox(height: 10),
-                  GestureDetector(
-                    onTap: _showRechargePopup,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.65),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white24, width: 0.8),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'Continue Video Call',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 14),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${widget.model.pricePerMin}/min',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // ৪. কর্নার PiP উইন্ডো (নিজের সেলফি ক্যামেরা)
-          if (!_isRechargeDialogVisible)
-            Positioned(
-              top: 140,
-              right: 16,
-              child: GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _isSwappedVideo = !_isSwappedVideo;
-                  });
-                },
-                child: Container(
-                  width: 110,
-                  height: 155,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.8), width: 2.0),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black54, blurRadius: 12, offset: Offset(0, 4)),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Stack(
-                      fit: StackFit.expand,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        _buildPipVideoView(),
-                        Positioned(
-                          bottom: 6,
-                          left: 6,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.black87,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.touch_app_rounded, color: Colors.white70, size: 10),
-                                const SizedBox(width: 2),
-                                Text(
-                                  _isSwappedVideo ? widget.model.name : 'You',
-                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPink),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          widget.model.isOnline ? 'Ringing...' : 'Calling...',
+                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.neonPink.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            '🛠️ ডিবাগ লগ',
+                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ],
@@ -701,96 +546,194 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               ),
             ),
 
-          // ৫. বটম কল কন্ট্রোলস
-          if (!_isRechargeDialogVisible)
-            Positioned(
-              bottom: 30,
-              left: 0,
-              right: 0,
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildCallControlButton(
-                        icon: Icons.flip_camera_ios_rounded,
-                        isActive: true,
-                        activeColor: Colors.white24,
-                        onTap: () {
-                          _webrtcService.switchCamera();
-                        },
-                      ),
-                      _buildCallControlButton(
-                        icon: _isSpeakerOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-                        isActive: _isSpeakerOn,
-                        activeColor: _isSpeakerOn ? const Color(0xFF00E676) : Colors.white24,
-                        onTap: () {
-                          setState(() {
-                            _isSpeakerOn = !_isSpeakerOn;
-                          });
-                          _webrtcService.toggleSpeakerphone(_isSpeakerOn);
-                        },
-                      ),
-                      _buildCallControlButton(
-                        icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                        isActive: !_isMuted,
-                        activeColor: _isMuted ? const Color(0xFFFF2D55) : Colors.white24,
-                        onTap: () {
-                          setState(() {
-                            _isMuted = !_isMuted;
-                          });
-                          _webrtcService.toggleMute(_isMuted);
-                        },
-                      ),
-                      GestureDetector(
-                        onTap: _endCall,
-                        child: Container(
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(0xFFFF2D55),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFFF2D55).withValues(alpha: 0.5),
-                                blurRadius: 16,
-                                spreadRadius: 2,
+          // ৩. টপ হেডার বার: ডিবাগ আইকন ও Dev Mode ব্যাজ
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Host Info Capsule with Level Base Frame
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white24, width: 1),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AvatarWithFrame(
+                          avatarUrl: widget.model.avatarUrl,
+                          frameUrl: widget.model.avatarFrameUrl,
+                          level: widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level,
+                          badgeColor: widget.model.badgeColor,
+                          glowColor: widget.model.glowColor,
+                          size: 32,
+                          showLevelBadge: false,
+                        ),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              widget.model.name,
+                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              'Lv.${widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level}',
+                              style: TextStyle(
+                                color: HexColor.fromHex(widget.model.badgeColor, defaultColor: AppColors.gemYellow),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
                               ),
-                            ],
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Debug / Dev Mode Button
+                  GestureDetector(
+                    onTap: () {
+                      WebRTCDebugModal.show(
+                        context,
+                        webrtcService: _webrtcService,
+                        callId: widget.callId,
+                        isIncoming: widget.isIncoming,
+                        callerOrReceiverName: widget.model.name,
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.8), width: 1.2),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.bug_report_rounded, color: AppColors.neonPink, size: 14),
+                          SizedBox(width: 4),
+                          Text('Dev mode', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ৪. কর্নার PiP উইন্ডো (সেলফি ক্যামেরা + ডিউরেশন টাইমার) matching Screenshot 2 & 3
+          Positioned(
+            top: 40,
+            right: 16,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _isSwappedVideo = !_isSwappedVideo;
+                });
+              },
+              child: Container(
+                width: 100,
+                height: 140,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4)),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _buildPipVideoView(),
+                      // কল ডিউরেশন লেবেল (যেমন 00:06 / 00:11)
+                      Positioned(
+                        bottom: 6,
+                        right: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.75),
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(
-                            Icons.call_end_rounded,
-                            color: Colors.white,
-                            size: 32,
+                          child: Text(
+                            _formatDuration(_callSeconds),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                         ),
                       ),
-                      _buildCallControlButton(
-                        icon: _isCameraOff ? Icons.videocam_off_rounded : Icons.videocam_rounded,
-                        isActive: !_isCameraOff,
-                        activeColor: _isCameraOff ? const Color(0xFFFF2D55) : Colors.white24,
-                        onTap: () {
-                          setState(() {
-                            _isCameraOff = !_isCameraOff;
-                          });
-                          _webrtcService.toggleCamera(_isCameraOff);
-                        },
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ৫. সেন্টারে ১৬ সেকেন্ড ফ্রি প্রিভিউ অ্যালার্ট ব্যানার (Screenshot 2 & 3)
+          if (_isFreeTrialActive && _freeTrialRemaining > 0)
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 230,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF9800), Color(0xFFFF5722)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF5722).withValues(alpha: 0.4),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
                       ),
-                      _buildCallControlButton(
-                        icon: Icons.card_giftcard_rounded,
-                        isActive: true,
-                        activeColor: AppColors.warmOrange,
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (context) => GiftPickerModal(
-                              onGiftSelected: _showGiftShower,
-                            ),
-                          );
-                        },
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.notifications_active_rounded,
+                          color: Color(0xFFFF5722),
+                          size: 14,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'After $_freeTrialRemaining seconds,you will be charged $_ratePerMinute coins per minute.',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -798,21 +741,166 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               ),
             ),
 
-          if (_isRechargeDialogVisible)
-            Container(
-              color: Colors.black.withValues(alpha: 0.55),
-              child: Center(
-                child: ContinueCallRechargeDialog(
-                  model: widget.model,
-                  durationText: _formatDuration(_callSeconds),
-                  onClose: _hideRechargePopupAndEndCall,
-                  onGetCoins: _onGetCoinsSuccess,
+          // ৬. ফ্লোটিং মিনি জেম প্যাকেজ উইজেট (Screenshot 3-তে লাল দাগ দিয়ে মার্ক করা)
+          Positioned(
+            right: 16,
+            bottom: 150,
+            child: GestureDetector(
+              onTap: _showInCallRechargeSheet,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF281056), Color(0xFF6A1B9A)],
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFFFD54F), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFFD54F).withValues(alpha: 0.35),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.diamond_rounded, color: Color(0xFFFFD54F), size: 14),
+                        SizedBox(width: 4),
+                        Text(
+                          '7560',
+                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'BDT 150.00',
+                      style: TextStyle(color: Color(0xFFFFD54F), fontSize: 9, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ৭. সেন্ড করা কুইক মেসেজের ফ্লোটিং টোস্ট
+          if (_sentMessageFeedback != null)
+            Positioned(
+              bottom: 125,
+              left: 20,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.neonPink, width: 1),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: AppColors.onlineGreen, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Sent: "$_sentMessageFeedback"',
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ],
                 ),
               ),
             ),
 
-          if (!_isRechargeDialogVisible)
-            _buildDebugOverlay(),
+          // ৮. বটম কুইক মেসেজ চিপস ও সুইচ অফ পাওয়ার বাটন (Screenshot 2 & 3)
+          Positioned(
+            bottom: 24,
+            left: 16,
+            right: 16,
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // কুইক চ্যাট চিপস রো
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: _quickMessages.map((msg) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: GestureDetector(
+                            onTap: () => _sendQuickMessage(msg),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1),
+                              ),
+                              child: Text(
+                                msg,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // ফ্রি মেসেজ চান্স লেবেল এবং কাট/পাওয়ার সুইচ বাটন (⏻)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'You have $_freeMessageChances free message chances',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+
+                      // পাওয়ার/কাট সুইচ বাটন (⏻)
+                      GestureDetector(
+                        onTap: _endCall,
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.black.withValues(alpha: 0.65),
+                            border: Border.all(color: Colors.white70, width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.power_settings_new_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -832,14 +920,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         );
       }
     } else {
-      if (_isCameraOff) {
-        return Container(
-          color: const Color(0xFF151026),
-          child: const Center(
-            child: Icon(Icons.videocam_off_rounded, color: Colors.white54, size: 64),
-          ),
-        );
-      } else if (_isCameraReady) {
+      if (_isCameraReady) {
         return RTCVideoView(
           _webrtcService.localRenderer,
           mirror: true,
@@ -855,14 +936,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   Widget _buildPipVideoView() {
     if (!_isSwappedVideo) {
-      if (_isCameraOff) {
-        return Container(
-          color: const Color(0xFF1E1830),
-          child: const Center(
-            child: Icon(Icons.videocam_off_rounded, color: Colors.white54, size: 28),
-          ),
-        );
-      } else if (_isCameraReady) {
+      if (_isCameraReady) {
         return RTCVideoView(
           _webrtcService.localRenderer,
           mirror: true,
@@ -886,194 +960,5 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         );
       }
     }
-  }
-
-  Widget _buildCallControlButton({
-    required IconData icon,
-    required bool isActive,
-    required Color activeColor,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 46,
-        height: 46,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: activeColor,
-          border: Border.all(color: Colors.white24, width: 0.8),
-        ),
-        child: Icon(
-          icon,
-          color: Colors.white,
-          size: 22,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDebugOverlay() {
-    if (!_showDebugOverlay) {
-      return Positioned(
-        top: 140,
-        left: 16,
-        child: GestureDetector(
-          onTap: () => setState(() => _showDebugOverlay = true),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.black87,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.neonPink, width: 1.2),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.bug_report_rounded, color: AppColors.neonPink, size: 14),
-                SizedBox(width: 4),
-                Text('Debug', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    final pcConnected = _webrtcService.pcState.toLowerCase().contains('connected');
-    final iceConnected = _webrtcService.iceState.toLowerCase().contains('connected') || _webrtcService.iceState.toLowerCase().contains('completed');
-
-    return Positioned(
-      top: 140,
-      left: 12,
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.62,
-        constraints: const BoxConstraints(maxHeight: 280),
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: const Color(0xE6100B20),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.8), width: 1.2),
-          boxShadow: const [
-            BoxShadow(color: Colors.black87, blurRadius: 10, offset: Offset(0, 4)),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.bug_report_rounded, color: AppColors.neonPink, size: 14),
-                    const SizedBox(width: 4),
-                    Text(
-                      widget.isIncoming ? 'RECEIVER DEBUG' : 'CALLER DEBUG',
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    GestureDetector(
-                      onTap: () => setState(() => _isLogsExpanded = !_isLogsExpanded),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: _isLogsExpanded ? AppColors.neonPink : Colors.white24,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          _isLogsExpanded ? 'Logs ▲' : 'Logs ▼',
-                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    GestureDetector(
-                      onTap: () => setState(() => _showDebugOverlay = false),
-                      child: const Icon(Icons.close_rounded, color: Colors.white70, size: 16),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const Divider(color: Colors.white24, height: 8),
-            Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: [
-                _buildDebugChip('PC', _webrtcService.pcState, pcConnected ? Colors.green : Colors.amber),
-                _buildDebugChip('ICE', _webrtcService.iceState, iceConnected ? Colors.green : Colors.amber),
-                _buildDebugChip('Offer', _webrtcService.offerState, Colors.cyan),
-                _buildDebugChip('Answer', _webrtcService.answerState, Colors.purpleAccent),
-                _buildDebugChip('Cand', 'S:${_webrtcService.iceCandidatesSent} R:${_webrtcService.iceCandidatesReceived}', Colors.blueAccent),
-                _buildDebugChip('Remote', _webrtcService.hasRemoteStream ? 'Attached ✅' : 'Waiting ⏳', _webrtcService.hasRemoteStream ? Colors.green : Colors.orange),
-              ],
-            ),
-            if (_webrtcService.lastError != 'None') ...[
-              const SizedBox(height: 4),
-              Text(
-                'Err: ${_webrtcService.lastError}',
-                style: const TextStyle(color: Colors.redAccent, fontSize: 9),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-            if (_isLogsExpanded) ...[
-              const SizedBox(height: 6),
-              const Text('Real-Time Event Stream:', style: TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 2),
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: _webrtcService.debugLogs.length,
-                    itemBuilder: (context, index) {
-                      final log = _webrtcService.debugLogs[index];
-                      final isErr = log.contains('ERROR') || log.contains('Error');
-                      final isOk = log.contains('attached') || log.contains('SENT') || log.contains('successfully');
-                      return Text(
-                        log,
-                        style: TextStyle(
-                          color: isErr ? Colors.redAccent : (isOk ? Colors.greenAccent : Colors.white70),
-                          fontSize: 8.5,
-                          fontFamily: 'monospace',
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDebugChip(String label, String value, Color color) { 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.6), width: 0.6),
-      ),
-      child: Text(
-        '$label: $value',
-        style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold),
-      ),
-    );
   }
 }

@@ -7,7 +7,9 @@ import '../../../core/models/chat_message.dart';
 import '../../../core/models/gift_item.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
+import '../../../core/widgets/avatar_with_frame.dart';
 import '../widgets/gifts_received_card.dart';
+import 'level_progression_screen.dart';
 import '../../call/screens/video_call_screen.dart';
 import '../../call/screens/incoming_call_screen.dart';
 import '../../call/services/call_api_service.dart';
@@ -16,6 +18,7 @@ import '../../chat/screens/chat_detail_screen.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/services/gifts_api_service.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
+import '../../auth/services/auth_api_service.dart';
 
 class HostProfileScreen extends StatefulWidget {
   final ModelProfile model;
@@ -126,6 +129,22 @@ class _HostProfileScreenState extends State<HostProfileScreen>
   }
 
   Future<void> _startVideoCall() async {
+    final savedUser = await AuthApiService.getSavedUser();
+    final myId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString();
+    final myAccountId = savedUser?['account_id']?.toString();
+
+    if (!mounted) return;
+    if ((myId != null && (myId == widget.model.id || myId == widget.model.accountId)) ||
+        (myAccountId != null && (myAccountId == widget.model.accountId || myAccountId == widget.model.id))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You cannot call your own profile! Please choose another user to call.'),
+          backgroundColor: Colors.orangeAccent,
+        ),
+      );
+      return;
+    }
+
     CallSoundManager.playOutgoingRingtone();
     showDialog(
       context: context,
@@ -208,6 +227,22 @@ class _HostProfileScreenState extends State<HostProfileScreen>
   }
 
   Future<void> _startAudioCall() async {
+    final savedUser = await AuthApiService.getSavedUser();
+    final myId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString();
+    final myAccountId = savedUser?['account_id']?.toString();
+
+    if (!mounted) return;
+    if ((myId != null && (myId == widget.model.id || myId == widget.model.accountId)) ||
+        (myAccountId != null && (myAccountId == widget.model.accountId || myAccountId == widget.model.id))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You cannot call your own profile! Please choose another user to call.'),
+          backgroundColor: Colors.orangeAccent,
+        ),
+      );
+      return;
+    }
+
     CallSoundManager.playOutgoingRingtone();
     showDialog(
       context: context,
@@ -559,20 +594,15 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              // Avatar
-                              Container(
-                                width: 62,
-                                height: 62,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: const Color(0xFF6C63FF), width: 2),
-                                ),
-                                child: ClipOval(
-                                  child: CachedImageLoader(
-                                    imageUrl: model.avatarUrl,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
+                              // Host Avatar with Profile Base Frame & Badge
+                              AvatarWithFrame(
+                                avatarUrl: model.avatarUrl,
+                                frameUrl: model.avatarFrameUrl,
+                                level: model.currentLevel > 0 ? model.currentLevel : model.level,
+                                badgeColor: model.badgeColor,
+                                glowColor: model.glowColor,
+                                size: 62,
+                                showLevelBadge: true,
                               ),
                               const SizedBox(width: 12),
 
@@ -623,11 +653,12 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                                     // ID Badge with copy
                                     GestureDetector(
                                       onTap: () {
-                                        Clipboard.setData(ClipboardData(text: model.id));
+                                        final copyId = model.effectiveAccountId;
+                                        Clipboard.setData(ClipboardData(text: copyId));
                                         ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('ID copied to clipboard'),
-                                            duration: Duration(seconds: 1),
+                                          SnackBar(
+                                            content: Text('ID $copyId copied to clipboard'),
+                                            duration: const Duration(seconds: 1),
                                           ),
                                         );
                                       },
@@ -641,7 +672,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Text(
-                                              'ID ${model.id}',
+                                              'ID ${model.effectiveAccountId}',
                                               style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
                                             ),
                                             const SizedBox(width: 3),
@@ -680,14 +711,44 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                                 ),
                               ),
 
-                              // Lv4 Purple Pill
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF7C4DFF),
-                                  borderRadius: BorderRadius.circular(12),
+                              // Host Level Badge Pill (Tappable to view progression)
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => LevelProgressionScreen(
+                                        accountId: model.effectiveAccountId,
+                                        userId: model.id,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: HexColor.fromHex(model.badgeColor, defaultColor: const Color(0xFF7C4DFF)),
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: HexColor.fromHex(model.badgeColor, defaultColor: const Color(0xFF7C4DFF)).withValues(alpha: 0.4),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 1),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'Lv.${model.currentLevel > 0 ? model.currentLevel : model.level}',
+                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 8),
+                                    ],
+                                  ),
                                 ),
-                                child: Text('Lv${model.level}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                               ),
 
                               // Location Pill (e.g. Pakistan / Bangladesh)

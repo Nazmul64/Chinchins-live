@@ -53,11 +53,18 @@ class WebRTCCallService {
   bool get isInitialized => _isInitialized;
   MediaStream? get localStream => _localStream;
   MediaStream? get remoteStream => _remoteStream;
-  bool get hasRemoteStream => remoteRenderer.srcObject != null;
+  RTCPeerConnection? get peerConnection => _peerConnection;
+  int get lastSignalId => _lastSignalId;
+  bool get hasRemoteAnswer => _hasRemoteAnswer;
+  bool get hasAnsweredOffer => _hasAnsweredOffer;
+  bool get hasRemoteStream =>
+      _remoteStream != null &&
+      _remoteStream!.getVideoTracks().isNotEmpty &&
+      (_remoteStream!.getVideoTracks().any((t) => t.enabled) || remoteRenderer.srcObject != null);
 
   static String preferCodec(String sdp, String codec) {
     if (sdp.isEmpty) return sdp;
-    final lines = sdp.split('\r\n');
+    final lines = sdp.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n');
     int? mLineIndex;
     String? payload;
 
@@ -92,7 +99,7 @@ class WebRTCCallService {
     }
 
     lines[mLineIndex] = newMLine.join(' ');
-    return lines.join('\r\n');
+    return '${lines.join('\r\n')}\r\n';
   }
 
   Future<bool> initializeMedia({bool isAudioOnly = false}) async {
@@ -106,33 +113,33 @@ class WebRTCCallService {
       final Map<String, dynamic> mediaConstraints = {
         'audio': {
           'echoCancellation': true,
-          'noiseSuppression': true,
           'autoGainControl': true,
+          'noiseSuppression': false,
         },
         'video': isAudioOnly
             ? false
             : {
                 'facingMode': 'user',
-                'mandatory': {
-                  'minWidth': '640',
-                  'minHeight': '480',
-                  'maxWidth': '1280',
-                  'maxHeight': '720',
-                  'minFrameRate': '15',
-                  'maxFrameRate': '30',
-                },
-                'optional': [],
+                'width': {'ideal': 640, 'max': 1280},
+                'height': {'ideal': 480, 'max': 720},
+                'frameRate': {'ideal': 30, 'max': 30},
               },
       };
 
       try {
         _localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
       } catch (e) {
-        _log('High resolution camera failed, falling back to basic user media: $e');
+        _log('Universal camera fallback: $e');
         _localStream = await navigator.mediaDevices.getUserMedia({
           'audio': true,
           'video': isAudioOnly ? false : {'facingMode': 'user'},
         });
+      }
+
+      if (_localStream != null) {
+        for (final track in _localStream!.getTracks()) {
+          track.enabled = true;
+        }
       }
 
       localRenderer.srcObject = _localStream;
@@ -180,9 +187,11 @@ class WebRTCCallService {
             sanitized.add({'urls': cleanStun});
           }
         } else if (uri.startsWith('turn:') || uri.startsWith('turns:')) {
-          final username = server['username']?.toString().trim();
-          final credential = (server['credential'] ?? server['password'])?.toString().trim();
-          if (username != null && username.isNotEmpty && credential != null && credential.isNotEmpty) {
+          final isChinchins = uri.contains('chinchins.live') || uri.contains('2.25.131.55') || server['username'] == 'chinchins';
+          final username = server['username']?.toString().trim() ?? (isChinchins ? 'chinchins' : 'openrelay');
+          final credential = (server['credential'] ?? server['password'])?.toString().trim() ??
+              (isChinchins ? 'ChinchinsSecret2026TurnKey' : 'openrelay');
+          if (username.isNotEmpty && credential.isNotEmpty) {
             sanitized.add({
               'urls': uri,
               'username': username,
@@ -193,12 +202,64 @@ class WebRTCCallService {
       }
     }
 
+    // High-availability global STUN + multi-protocol UDP/TCP/TLS TURN relay servers
+    // Primary: Your VPS Coturn at chinchins.live (Domain & direct IP 2.25.131.55)
+    // Fallback: Global STUN & multi-protocol TURN
     sanitized.addAll([
-      {'urls': 'stun:stun.l.google.com:19302'},
-      {'urls': 'stun:stun1.l.google.com:19302'},
-      {'urls': 'stun:stun2.l.google.com:19302'},
-      {'urls': 'stun:stun3.l.google.com:19302'},
-      {'urls': 'stun:stun4.l.google.com:19302'},
+      {
+        'urls': [
+          'stun:2.25.131.55:3478',
+          'stun:chinchins.live:3478',
+          'stun:stun.l.google.com:19302',
+          'stun:stun1.l.google.com:19302',
+          'stun:stun2.l.google.com:19302',
+          'stun:stun3.l.google.com:19302',
+          'stun:stun4.l.google.com:19302',
+          'stun:stun.cloudflare.com:3478',
+          'stun:global.stun.twilio.com:3478',
+          'stun:stun.relay.metered.ca:80',
+        ],
+      },
+      {
+        'urls': [
+          'turn:2.25.131.55:3478?transport=udp',
+          'turn:2.25.131.55:3478?transport=tcp',
+          'turn:chinchins.live:3478?transport=udp',
+          'turn:chinchins.live:3478?transport=tcp',
+          'turns:2.25.131.55:5349?transport=tcp',
+          'turns:chinchins.live:5349?transport=tcp',
+        ],
+        'username': 'chinchins',
+        'credential': 'ChinchinsSecret2026TurnKey',
+      },
+      {
+        'urls': [
+          'turn:2.25.131.55:3478?transport=udp',
+          'turn:2.25.131.55:3478?transport=tcp',
+          'turn:chinchins.live:3478?transport=udp',
+          'turn:chinchins.live:3478?transport=tcp',
+        ],
+        'username': 'chinchins',
+        'credential': 'chinchins',
+      },
+      {
+        'urls': [
+          'turn:openrelay.metered.ca:80',
+          'turn:openrelay.metered.ca:80?transport=tcp',
+          'turn:openrelay.metered.ca:443',
+          'turn:openrelay.metered.ca:443?transport=tcp',
+          'turns:openrelay.metered.ca:443?transport=tcp',
+          'turns:openrelay.metered.ca:5349',
+          'turn:global.relay.metered.ca:80',
+          'turn:global.relay.metered.ca:80?transport=tcp',
+          'turn:global.relay.metered.ca:443',
+          'turn:global.relay.metered.ca:443?transport=tcp',
+          'turns:global.relay.metered.ca:443?transport=tcp',
+          'turns:global.relay.metered.ca:5349',
+        ],
+        'username': 'openrelay',
+        'credential': 'openrelay',
+      },
     ]);
 
     return sanitized;
@@ -218,6 +279,9 @@ class WebRTCCallService {
       final Map<String, dynamic> configuration = {
         'iceServers': cleanIceServers,
         'sdpSemantics': 'unified-plan',
+        'iceTransportPolicy': 'all',
+        'bundlePolicy': 'max-bundle',
+        'rtcpMuxPolicy': 'require',
       };
 
       final Map<String, dynamic> constraints = {
@@ -234,6 +298,7 @@ class WebRTCCallService {
       if (_localStream != null) {
         for (final track in _localStream!.getTracks()) {
           try {
+            track.enabled = true;
             await pc.addTrack(track, _localStream!);
             _log('LOCAL_TRACK_ADDED: ${track.kind}');
           } catch (e) {
@@ -246,6 +311,10 @@ class WebRTCCallService {
         _log('REMOTE_TRACK_RECEIVED: ${event.track.kind}');
         try {
           event.track.enabled = true;
+          if (event.track.kind == 'audio') {
+            Helper.setSpeakerphoneOn(true);
+            _isSpeakerOn = true;
+          }
         } catch (_) {}
 
         if (event.streams.isNotEmpty) {
@@ -261,8 +330,10 @@ class WebRTCCallService {
           }
         } catch (_) {}
 
+        // Reset renderer binding to guarantee native texture catches the new video stream
+        remoteRenderer.srcObject = null;
         remoteRenderer.srcObject = _remoteStream;
-        _log('REMOTE_STREAM_ATTACHED (kind: ${event.track.kind})');
+        _log('REMOTE_STREAM_ATTACHED (kind: ${event.track.kind}, videoCount: ${_remoteStream?.getVideoTracks().length ?? 0})');
         onRemoteStreamConnected?.call(_remoteStream!);
 
         try {
@@ -293,6 +364,12 @@ class WebRTCCallService {
         _log('PEER_CONNECTION_STATE: $pcState');
         if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
           _log('PEER_CONNECTED_SUCCESS');
+          Future.delayed(const Duration(milliseconds: 300), () {
+            try {
+              Helper.setSpeakerphoneOn(true);
+              _isSpeakerOn = true;
+            } catch (_) {}
+          });
         }
       };
 
@@ -303,6 +380,12 @@ class WebRTCCallService {
         if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
             state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
           _log('ICE_CONNECTED_SUCCESS');
+          Future.delayed(const Duration(milliseconds: 300), () {
+            try {
+              Helper.setSpeakerphoneOn(true);
+              _isSpeakerOn = true;
+            } catch (_) {}
+          });
         } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
           _log('ICE_CONNECTION_FAILED! Attempting ICE restart...');
           try {
@@ -360,12 +443,10 @@ class WebRTCCallService {
     if (pc == null) return;
 
     try {
-      final rawOffer = await pc.createOffer({
+      final offer = await pc.createOffer({
         'offerToReceiveAudio': 1,
         'offerToReceiveVideo': 1,
       });
-      final mungedSdp = preferCodec(rawOffer.sdp ?? '', 'VP8');
-      final offer = RTCSessionDescription(mungedSdp, rawOffer.type);
       await pc.setLocalDescription(offer);
       offerState = 'Sent';
       _log('OFFER_CREATED_AND_SENT (sdp length: ${offer.sdp?.length ?? 0})');
@@ -670,13 +751,12 @@ class WebRTCCallService {
             _log('SET_REMOTE_DESCRIPTION_OFFER_SUCCESS');
             await _drainPendingCandidates();
 
-            final rawAnswer = await _peerConnection!.createAnswer({
+            final answer = await _peerConnection!.createAnswer({
               'offerToReceiveAudio': 1,
               'offerToReceiveVideo': 1,
             });
-            final mungedSdp = preferCodec(rawAnswer.sdp ?? '', 'VP8');
-            final answer = RTCSessionDescription(mungedSdp, rawAnswer.type);
             await _peerConnection!.setLocalDescription(answer);
+            await _drainPendingCandidates();
             answerState = 'Sent';
             _log('ANSWER_CREATED_AND_SENT (sdp len: ${answer.sdp?.length ?? 0})');
 
@@ -686,7 +766,7 @@ class WebRTCCallService {
               type: 'answer',
               payload: {
                 'sdp': answer.sdp,
-                'type': 'answer',
+                'type': answer.type,
                 'sender_role': 'receiver',
                 'sender_id': _currentUserId,
               },

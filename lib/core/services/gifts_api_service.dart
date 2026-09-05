@@ -171,12 +171,13 @@ class GiftsApiService {
     return _catalogMemCache ?? [];
   }
 
-  /// 3. Send Gift to Host / User
+  /// 3. Send Gift to Host / User (Supports Live Stream Reverb Broadcast)
   static Future<Map<String, dynamic>> sendGift({
     required dynamic receiverId,
     required dynamic giftId,
     int quantity = 1,
     String context = 'profile',
+    String? streamId,
     dynamic callSessionId,
   }) async {
     try {
@@ -188,11 +189,12 @@ class GiftsApiService {
         };
       }
 
-      final payload = {
+      final payload = <String, dynamic>{
         'receiver_id': receiverId is int ? receiverId : int.tryParse('$receiverId') ?? receiverId,
         'gift_id': giftId is int ? giftId : int.tryParse('$giftId') ?? giftId,
         'quantity': quantity,
         'context': context,
+        if (streamId != null && streamId.isNotEmpty) 'stream_id': streamId,
         if (callSessionId != null) 'call_session_id': callSessionId,
       };
 
@@ -209,12 +211,16 @@ class GiftsApiService {
 
       final data = _safeJsonDecode(response.body);
       if (data != null && data is Map<String, dynamic>) {
-        if (response.statusCode == 200 && data['status'] == true) {
+        if (response.statusCode == 200 && (data['status'] == true || data['status'] == 'true')) {
           // Invalidate cache for receiver so their profile updates immediately
           _receivedGiftsMemCache.remove(receiverId.toString());
 
           // Update sender remaining coins if provided
-          if (data['data']?['sender']?['remaining_coins'] != null) {
+          if (data['remaining_balance'] != null) {
+            _userCoinBalance = data['remaining_balance'] is int
+                ? data['remaining_balance']
+                : int.tryParse('${data['remaining_balance']}');
+          } else if (data['data']?['sender']?['remaining_coins'] != null) {
             _userCoinBalance = data['data']['sender']['remaining_coins'] is int
                 ? data['data']['sender']['remaining_coins']
                 : int.tryParse('${data['data']['sender']['remaining_coins']}');

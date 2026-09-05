@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/models/group_room.dart';
+import '../../../core/models/live_gift_event.dart';
+import '../../../core/services/live_gift_reverb_service.dart';
+import '../../../core/widgets/live_gift_animation_overlay.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../widgets/room_seat_widget.dart';
@@ -20,6 +23,7 @@ class VoicePartyRoomScreen extends StatefulWidget {
 }
 
 class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
+  final GlobalKey<State<LiveGiftAnimationOverlay>> _giftOverlayKey = GlobalKey();
   late List<RoomSeat> _seats;
   final List<String> _chatMessages = [];
   final TextEditingController _chatController = TextEditingController();
@@ -27,7 +31,6 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
   bool _isMyMicMuted = false;
   bool _amIOnSeat = false;
   int? _mySeatIndex;
-  String? _activeGiftShower;
   Timer? _simulatedChatTimer;
 
   @override
@@ -40,8 +43,22 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
       '🎵 Mahi: Anyone want to request a song?',
     ]);
 
+    // 1. Subscribe to Laravel Reverb WebSocket live-stream.{streamId} channel
+    LiveGiftReverbService().subscribeToLiveRoom(
+      streamId: widget.room.id,
+      onGiftReceived: (giftEvent) {
+        if (mounted) {
+          (_giftOverlayKey.currentState as dynamic)?.playGift(giftEvent);
+          setState(() {
+            _chatMessages.add('🎁 ${giftEvent.senderName} sent ${giftEvent.giftName}! (💎 ${giftEvent.coinsSpent})');
+          });
+          _scrollChatToBottom();
+        }
+      },
+    );
+
     // Simulate active room chat and audience joining
-    _simulatedChatTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+    _simulatedChatTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (mounted) {
         final sampleMessages = [
           '🌹 Prince Alex sent 200 💎 to ${widget.room.hostName}',
@@ -61,6 +78,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
 
   @override
   void dispose() {
+    LiveGiftReverbService().unsubscribeFromLiveRoom(widget.room.id);
     _simulatedChatTimer?.cancel();
     _chatController.dispose();
     _scrollController.dispose();
@@ -276,20 +294,27 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => GiftPickerModal(
+        streamId: widget.room.id,
+        receiverId: widget.room.hostId,
         onGiftSelected: (gift) {
+          final localEvent = LiveGiftEvent(
+            streamId: widget.room.id,
+            senderId: 0,
+            senderName: 'You',
+            senderAvatar: MockData.imgLivePreview,
+            giftId: gift.giftId > 0 ? gift.giftId : (int.tryParse(gift.id) ?? 1),
+            giftName: gift.name,
+            iconUrl: gift.imageUrl,
+            fileUrl: gift.animationUrl ?? gift.imageUrl,
+            coinsSpent: gift.coins,
+            format: gift.animationType,
+            displayType: 'fullscreen',
+          );
+          (_giftOverlayKey.currentState as dynamic)?.playGift(localEvent);
           setState(() {
-            _activeGiftShower = gift.emoji;
-            _chatMessages.add('🎁 You sent ${gift.name} ${gift.emoji} to the party room!');
+            _chatMessages.add('🎁 You sent ${gift.name} (💎 ${gift.coins}) to the party room!');
           });
           _scrollChatToBottom();
-
-          Future.delayed(const Duration(seconds: 2), () {
-            if (mounted) {
-              setState(() {
-                _activeGiftShower = null;
-              });
-            }
-          });
         },
       ),
     );
@@ -311,33 +336,6 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
               ),
             ),
           ),
-
-          // Gift Shower Overlay
-          if (_activeGiftShower != null)
-            Center(
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.2, end: 1.8),
-                duration: const Duration(milliseconds: 900),
-                curve: Curves.elasticOut,
-                builder: (context, scale, child) {
-                  return Transform.scale(
-                    scale: scale,
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.black54,
-                        border: Border.all(color: AppColors.gemYellow, width: 2),
-                      ),
-                      child: Text(
-                        _activeGiftShower!,
-                        style: const TextStyle(fontSize: 70),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
 
           // Main Screen Body
           SafeArea(
@@ -674,6 +672,9 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
               ],
             ),
           ),
+
+          // Real-Time Live Gift Animation & Sender VIP Banner Overlay
+          LiveGiftAnimationOverlay(key: _giftOverlayKey),
         ],
       ),
     );

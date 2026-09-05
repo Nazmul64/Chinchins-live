@@ -31,6 +31,48 @@ class VipCardsApiService {
     return _getDefaultVipCardsData();
   }
 
+  /// Fetch Floating VIP banner configuration & image
+  static Future<Map<String, dynamic>> getFloatingBanner() async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.vipBanner);
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['status'] == true && decoded['data'] is Map) {
+          return Map<String, dynamic>.from(decoded['data']);
+        }
+      }
+    } catch (e, st) {
+      AppLogger.error('GetFloatingBannerError', e, st);
+    }
+
+    // Try extracting banner from getVipCards
+    try {
+      final vipData = await getVipCards();
+      if (vipData['banner'] is Map) {
+        return Map<String, dynamic>.from(vipData['banner']);
+      }
+      if (vipData['floating_banner'] is Map) {
+        return Map<String, dynamic>.from(vipData['floating_banner']);
+      }
+    } catch (_) {}
+
+    return {
+      'is_enabled': true,
+      'title': 'Extra Gems',
+      'tag': 'Monthly Card',
+      'image_url': 'https://chinchins.live/assets/images/vip/floating_extra_gems.png',
+      'action_type': 'OPEN_PREMIUM_VIP',
+    };
+  }
+
   /// Fetch user active subscriptions & today claim status
   static Future<Map<String, dynamic>?> getMySubscriptions() async {
     try {

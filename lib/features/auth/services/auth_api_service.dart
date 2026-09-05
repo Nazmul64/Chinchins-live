@@ -245,13 +245,9 @@ class AuthApiService {
           }
         }
         return await getSavedUser();
-      } else if (response != null && response.statusCode == 401) {
-        // Token was explicitly revoked / invalid
-        await logout();
-        return null;
       }
 
-      // If server is slow or temporary network error, use cached user to keep user logged in!
+      // If server is slow or background response warning, keep user logged in with cached session!
       return await getSavedUser();
     } catch (e) {
       // Offline fallback: Keep user logged in with cached session

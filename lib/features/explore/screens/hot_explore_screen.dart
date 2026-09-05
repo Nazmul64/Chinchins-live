@@ -6,10 +6,12 @@ import '../../auth/services/auth_api_service.dart';
 import '../widgets/explore_header.dart';
 import '../widgets/model_grid_card.dart';
 import '../widgets/match_tab_view.dart';
+import '../widgets/draggable_extra_gems_widget.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../call/screens/video_call_screen.dart';
 import '../../call/screens/random_match_screen.dart';
 import '../../call/services/call_api_service.dart';
+import '../../call/widgets/home_webrtc_test_dialog.dart';
 
 class HotExploreScreen extends StatefulWidget {
   const HotExploreScreen({super.key});
@@ -19,54 +21,45 @@ class HotExploreScreen extends StatefulWidget {
 }
 
 class _HotExploreScreenState extends State<HotExploreScreen> {
+  static List<ModelProfile> _cachedHomeFeed = [];
   int _selectedTabIndex = 0;
-  List<ModelProfile> _models = [];
+  List<ModelProfile> _models = _cachedHomeFeed;
   String _selectedCountryCode = 'BGD';
   String _selectedCountryName = 'Bangladesh';
   String _searchQuery = '';
-  bool _isLoading = false;
+  bool _isLoading = _cachedHomeFeed.isEmpty;
 
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
-  }
-
-  Future<void> _loadInitialData() async {
-    // 1. Instantly show saved local user if logged in
-    final savedUser = await AuthApiService.getSavedUser();
-    if (savedUser != null && mounted) {
-      final p = ModelProfile.fromJson(savedUser);
-      if (p.name.trim().toLowerCase() != 'admin' &&
-          !p.name.trim().toLowerCase().contains('admin') &&
-          p.name.trim().toLowerCase() != 'ayeena04') {
-        setState(() {
-          _models = [p];
-        });
-      }
-    }
-    // 2. Fetch fresh live database users
-    await _loadHomeFeed();
+    _loadHomeFeed();
   }
 
   Future<void> _loadHomeFeed() async {
-    setState(() => _isLoading = true);
+    if (_models.isEmpty) {
+      setState(() => _isLoading = true);
+    }
     try {
-      // 1. Get logged in user profile
+      // Fetch user profile and home feed in parallel for maximum speed
+      final results = await Future.wait([
+        AuthApiService.getSavedUser(),
+        ProfileApiService.getMyProfile().catchError((_) => null),
+        ProfileApiService.getHomeFeed(
+          country: _selectedCountryName != 'All' ? _selectedCountryName : null,
+        ),
+      ]);
+
+      final savedUser = results[0] as Map<String, dynamic>?;
+      final freshMyProfile = results[1] as ModelProfile?;
+      final liveFeed = results[2] as List<ModelProfile>;
+
       ModelProfile? myProfile;
-      final savedUser = await AuthApiService.getSavedUser();
       if (savedUser != null) {
         myProfile = ModelProfile.fromJson(savedUser);
       }
-      final freshMyProfile = await ProfileApiService.getMyProfile();
       if (freshMyProfile != null) {
         myProfile = freshMyProfile;
       }
-
-      // 2. Fetch live users from Laravel REST API
-      final liveFeed = await ProfileApiService.getHomeFeed(
-        country: _selectedCountryName != 'All' ? _selectedCountryName : null,
-      );
 
       bool isExcludedUser(ModelProfile profile) {
         final name = profile.name.trim().toLowerCase();
@@ -85,17 +78,25 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
       }
 
       final List<ModelProfile> combined = [];
-      // If user is logged in, show user at the top with Active status!
-      if (myProfile != null && !isExcludedUser(myProfile)) {
-        combined.add(myProfile);
-      }
 
       for (final user in liveFeed) {
         if (isExcludedUser(user)) continue;
-        if (myProfile != null && user.id == myProfile.id) {
-          continue; // avoid duplicate
+        if (myProfile != null && (user.id == myProfile.id || (user.accountId.isNotEmpty && user.accountId == myProfile.accountId))) {
+          continue; // exclude own profile from explore feed
         }
         combined.add(user);
+      }
+
+      // If search query is present, query backend search API
+      if (_searchQuery.trim().isNotEmpty) {
+        final searchedUsers = await ProfileApiService.searchUsers(query: _searchQuery.trim());
+        if (searchedUsers.isNotEmpty) {
+          for (final u in searchedUsers) {
+            if (!combined.any((m) => m.id == u.id || (m.accountId.isNotEmpty && m.accountId == u.accountId))) {
+              combined.add(u);
+            }
+          }
+        }
       }
 
       // Filter by Tab: If Match tab (index 1), only show online users!
@@ -104,16 +105,22 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
         filtered = filtered.where((m) => m.isOnline).toList();
       }
 
-      // Filter by search query if present
+      // Filter by search query if present (Name, Location, 8-digit Account ID)
       if (_searchQuery.trim().isNotEmpty) {
         final q = _searchQuery.trim().toLowerCase();
         filtered = filtered.where((m) =>
           m.name.toLowerCase().contains(q) ||
+          m.fullName.toLowerCase().contains(q) ||
           m.location.toLowerCase().contains(q) ||
-          m.accountId.contains(q)
+          m.accountId.toLowerCase().contains(q) ||
+          m.effectiveAccountId.toLowerCase().contains(q) ||
+          m.id.toLowerCase().contains(q)
         ).toList();
       }
 
+      if (filtered.isNotEmpty) {
+        _cachedHomeFeed = filtered;
+      }
       if (mounted) {
         setState(() {
           _models = filtered;
@@ -264,50 +271,100 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
   }
 
   Future<void> _startVideoCall(ModelProfile model) async {
-    final targetUserId = int.tryParse(model.id) ?? int.tryParse(model.accountId) ?? 2;
+    final savedUser = await AuthApiService.getSavedUser();
+    final myId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString();
+    final myAccountId = savedUser?['account_id']?.toString();
+
+    if (!mounted) return;
+    if ((myId != null && (myId == model.id || myId == model.accountId)) ||
+        (myAccountId != null && (myAccountId == model.accountId || myAccountId == model.id))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You cannot call your own profile! Please choose another user to call.'),
+          backgroundColor: Colors.orangeAccent,
+        ),
+      );
+      return;
+    }
+
+    // Show connecting loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          color: Color(0xFF1E1B2E),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Colors.pinkAccent),
+                SizedBox(height: 14),
+                Text(
+                  'Connecting Video Call...',
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
 
     try {
       final initiateRes = await CallApiService.initiateCall(
-        receiverId: targetUserId,
+        receiverId: model.id,
+        receiverAccountId: model.accountId,
         callType: 'video',
       );
 
-      final callData = (initiateRes['data'] is Map)
-          ? initiateRes['data']
-          : (initiateRes['call'] is Map ? initiateRes['call'] : initiateRes);
-
-      final callId = callData['call_id'] ?? callData['id'] ?? DateTime.now().millisecondsSinceEpoch;
-      final channelName = callData['channel_name'] ?? 'call_room_${callId}_$targetUserId';
-
       if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VideoCallScreen(
-            model: model,
-            callId: callId,
-            channelName: channelName,
-            isFreeTrial: callData?['is_free_trial'] == true,
-            freeDurationSeconds: callData?['free_duration_seconds'] ?? 10,
-            ratePerMinute: model.pricePerMin,
-            isIncoming: false,
+      Navigator.pop(context); // close progress dialog
+
+      if (initiateRes['success'] == true) {
+        final dynamic rawCallId = initiateRes['call_id'] ?? initiateRes['id'];
+        final int? callId = rawCallId is int
+            ? rawCallId
+            : int.tryParse(rawCallId?.toString() ?? '');
+        final channelName = initiateRes['channel_name']?.toString();
+        final isFreeTrial = initiateRes['is_free_trial'] == true;
+        final freeSecs = (initiateRes['free_duration_seconds'] is int)
+            ? initiateRes['free_duration_seconds'] as int
+            : 10;
+        final ratePerMin = (initiateRes['rate_per_minute'] is int)
+            ? initiateRes['rate_per_minute'] as int
+            : (model.pricePerMin > 0 ? model.pricePerMin : 100);
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VideoCallScreen(
+              model: model,
+              callId: callId,
+              channelName: channelName,
+              isFreeTrial: isFreeTrial,
+              freeDurationSeconds: freeSecs,
+              ratePerMinute: ratePerMin,
+              isIncoming: false,
+            ),
           ),
-        ),
-      );
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(initiateRes['message']?.toString() ?? 'Could not initiate call'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VideoCallScreen(
-            model: model,
-            callId: DateTime.now().millisecondsSinceEpoch,
-            channelName: 'call_room_fallback_$targetUserId',
-            isFreeTrial: false,
-            freeDurationSeconds: 10,
-            ratePerMinute: model.pricePerMin,
-            isIncoming: false,
-          ),
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Call connection error: $e'),
+          backgroundColor: Colors.redAccent,
         ),
       );
     }
@@ -318,90 +375,101 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            // Top App Bar with Hot, Match, Search & Country Pill
-            ExploreHeader(
-              selectedTabIndex: _selectedTabIndex,
-              onTabSelected: _onTabSelected,
-              onSearchTap: _showSearchDialog,
-              onCountryTap: _showCountrySelector,
-              selectedCountryCode: _selectedCountryCode,
-            ),
+            Column(
+              children: [
+                // Top App Bar with Hot, Match, Search & Country Pill
+                ExploreHeader(
+                  selectedTabIndex: _selectedTabIndex,
+                  onTabSelected: _onTabSelected,
+                  onSearchTap: _showSearchDialog,
+                  onCountryTap: _showCountrySelector,
+                  onDebugTap: () => HomeWebRTCTestDialog.show(context),
+                  selectedCountryCode: _selectedCountryCode,
+                ),
 
-            // User Cards 2-Column Grid OR Match Tab View
-            Expanded(
-              child: _selectedTabIndex == 1
-                  ? MatchTabView(
-                      onStartMatching: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const RandomMatchScreen(),
-                          ),
-                        );
-                      },
-                    )
-                  : (_isLoading && _models.isEmpty
-                      ? const Center(
-                          child: CircularProgressIndicator(color: AppColors.neonPink),
+                // User Cards 2-Column Grid OR Match Tab View
+                Expanded(
+                  child: _selectedTabIndex == 1
+                      ? MatchTabView(
+                          onStartMatching: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const RandomMatchScreen(),
+                              ),
+                            );
+                          },
                         )
-                      : _models.isEmpty
-                          ? RefreshIndicator(
-                              color: AppColors.neonPink,
-                              backgroundColor: AppColors.cardDark,
-                              onRefresh: _loadHomeFeed,
-                              child: ListView(
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                children: [
-                                  SizedBox(height: MediaQuery.of(context).size.height * 0.25),
-                                  const Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.wifi_tethering_off_rounded, color: AppColors.textMuted, size: 54),
-                                        SizedBox(height: 14),
-                                        Text(
-                                          'No Streamers Found',
-                                          style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                      : (_isLoading && _models.isEmpty
+                          ? const Center(
+                              child: CircularProgressIndicator(color: AppColors.neonPink),
+                            )
+                          : _models.isEmpty
+                              ? RefreshIndicator(
+                                  color: AppColors.neonPink,
+                                  backgroundColor: AppColors.cardDark,
+                                  onRefresh: _loadHomeFeed,
+                                  child: ListView(
+                                    physics: const AlwaysScrollableScrollPhysics(),
+                                    children: [
+                                      SizedBox(height: MediaQuery.of(context).size.height * 0.25),
+                                      const Center(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.wifi_tethering_off_rounded, color: AppColors.textMuted, size: 54),
+                                            SizedBox(height: 14),
+                                            Text(
+                                              'No Streamers Found',
+                                              style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                                            ),
+                                            SizedBox(height: 6),
+                                            Text(
+                                              'Pull down to refresh or check back soon',
+                                              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                                            ),
+                                          ],
                                         ),
-                                        SizedBox(height: 6),
-                                        Text(
-                                          'Pull down to refresh or check back soon',
-                                          style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                                        ),
-                                      ],
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : RefreshIndicator(
+                                  color: AppColors.neonPink,
+                                  backgroundColor: AppColors.cardDark,
+                                  onRefresh: _loadHomeFeed,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    child: GridView.builder(
+                                      itemCount: _models.length,
+                                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 2,
+                                        childAspectRatio: 0.68, // Exact portrait proportion
+                                        crossAxisSpacing: 10,
+                                        mainAxisSpacing: 10,
+                                      ),
+                                      itemBuilder: (context, index) {
+                                        final model = _models[index];
+                                        return ModelGridCard(
+                                          model: model,
+                                          onTap: () => _openHostProfile(model),
+                                          onVideoCallTap: () => _startVideoCall(model),
+                                        );
+                                      },
                                     ),
                                   ),
-                                ],
-                              ),
-                            )
-                          : RefreshIndicator(
-                              color: AppColors.neonPink,
-                              backgroundColor: AppColors.cardDark,
-                              onRefresh: _loadHomeFeed,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                child: GridView.builder(
-                                  itemCount: _models.length,
-                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    childAspectRatio: 0.68, // Exact portrait proportion
-                                    crossAxisSpacing: 10,
-                                    mainAxisSpacing: 10,
-                                  ),
-                                  itemBuilder: (context, index) {
-                                    final model = _models[index];
-                                    return ModelGridCard(
-                                      model: model,
-                                      onTap: () => _openHostProfile(model),
-                                      onVideoCallTap: () => _startVideoCall(model),
-                                    );
-                                  },
-                                ),
-                              ),
-                            )),
+                                )),
+                ),
+              ],
             ),
+
+            // Draggable Floating Extra Gems Icon (Tap to open Premium VIP)
+            if (_selectedTabIndex == 0)
+              const DraggableExtraGemsWidget(
+                initialPosition: Offset(12, 420),
+              ),
           ],
         ),
       ),

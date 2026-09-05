@@ -155,6 +155,62 @@ class ProfileApiService {
     return [];
   }
 
+  /// Search users by 8-digit Account ID or Name (GET /api/search?q={query})
+  static Future<List<ModelProfile>> searchUsers({required String query}) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) return [];
+
+    try {
+      final token = await AuthApiService.getToken();
+      final headers = {
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      // 1. Try GET /api/search?q={query}
+      Uri url = Uri.parse(ApiConstants.searchUsers(cleanQuery));
+      var response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+
+      // 2. Fallback to /api/users/search?search={query} or /api/users?search={query}
+      if (response.statusCode != 200) {
+        url = Uri.parse('${ApiConstants.usersSearch}?search=${Uri.encodeComponent(cleanQuery)}');
+        response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+      }
+      if (response.statusCode != 200) {
+        url = Uri.parse('${ApiConstants.users}?search=${Uri.encodeComponent(cleanQuery)}');
+        response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+      }
+
+      if (response.statusCode == 200) {
+        final data = _safeJsonDecode(response.body);
+        if (data != null) {
+          List? list;
+          if (data is List) {
+            list = data;
+          } else if (data is Map) {
+            if (data['data'] is List) {
+              list = data['data'] as List;
+            } else if (data['data'] is Map && data['data']['users'] is List) {
+              list = data['data']['users'] as List;
+            } else if (data['users'] is List) {
+              list = data['users'] as List;
+            } else if (data['data'] is Map && data['data']['data'] is List) {
+              list = data['data']['data'] as List;
+            }
+          }
+
+          if (list != null && list.isNotEmpty) {
+            return list
+                .whereType<Map<String, dynamic>>()
+                .map((u) => ModelProfile.fromJson(u))
+                .toList();
+          }
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
+
   /// Fetch public profile by ID or Account ID
   static Future<ModelProfile?> getProfile(String id) async {
     try {

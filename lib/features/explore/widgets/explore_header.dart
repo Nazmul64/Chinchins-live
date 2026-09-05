@@ -6,6 +6,7 @@ class ExploreHeader extends StatelessWidget {
   final ValueChanged<int> onTabSelected;
   final VoidCallback onSearchTap;
   final VoidCallback onCountryTap;
+  final VoidCallback? onDebugTap;
   final String selectedCountryCode;
 
   const ExploreHeader({
@@ -14,6 +15,7 @@ class ExploreHeader extends StatelessWidget {
     required this.onTabSelected,
     required this.onSearchTap,
     required this.onCountryTap,
+    this.onDebugTap,
     this.selectedCountryCode = 'BGD',
   });
 
@@ -36,10 +38,19 @@ class ExploreHeader extends StatelessWidget {
 
           const Spacer(),
 
-          // Right Actions: Search Icon & Country Pill (🔴 BGD ⌄)
+          // Right Actions: Debug Icon, Search Icon & Country Pill (🔴 BGD ⌄)
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // WebRTC Diagnostics Button
+              if (onDebugTap != null)
+                IconButton(
+                  tooltip: 'WebRTC লাইভ স্ট্যাটাস',
+                  icon: const Icon(Icons.network_check_rounded, color: AppColors.neonPink, size: 22),
+                  onPressed: onDebugTap,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
               // Search Icon
               IconButton(
                 icon: const Icon(Icons.search_rounded, color: Colors.white, size: 26),

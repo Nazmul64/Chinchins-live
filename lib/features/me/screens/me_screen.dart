@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
+import '../../../core/widgets/avatar_with_frame.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/profile_api_service.dart';
@@ -15,9 +15,10 @@ import '../../auth/services/auth_api_service.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../profile/screens/edit_profile_media_screen.dart';
+import '../../profile/screens/level_progression_screen.dart';
 import '../../wallet/screens/wallet_screen.dart';
 import '../../wallet/screens/withdraw_screen.dart';
-import '../../wallet/screens/monthly_card_screen.dart';
+import '../../wallet/screens/premium_vip_screen.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../../party/screens/create_room_screen.dart';
 import '../../kyc/screens/kyc_verification_screen.dart';
@@ -32,6 +33,7 @@ class MeScreen extends StatefulWidget {
 
 class _MeScreenState extends State<MeScreen> {
   int _myGems = 0;
+  int _beans = 0;
   final int _iLikeCount = 0;
   final int _likeMeCount = 0;
 
@@ -99,6 +101,7 @@ class _MeScreenState extends State<MeScreen> {
       if (walletData != null && mounted) {
         setState(() {
           _myGems = walletData['coins'] ?? _myGems;
+          _beans = walletData['beans'] ?? _beans;
         });
       }
     } catch (_) {}
@@ -138,7 +141,7 @@ class _MeScreenState extends State<MeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => MonthlyCardScreen(initialCardIndex: initialCardIndex),
+        builder: (context) => PremiumVipScreen(initialCardIndex: initialCardIndex),
       ),
     ).then((_) {
       _loadUserProfile();
@@ -351,135 +354,6 @@ class _MeScreenState extends State<MeScreen> {
     }
   }
 
-  void _showDiagnosticsDialog() {
-    bool isTesting = false;
-    List<String> diagnosticLogs = [];
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          return AlertDialog(
-            backgroundColor: AppColors.surfaceDark,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Row(
-              children: [
-                Icon(Icons.cloud_done_rounded, color: AppColors.neonPink, size: 22),
-                SizedBox(width: 8),
-                Text('Live Server & Image Diagnostics', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-              ],
-            ),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 16),
-                          SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              'Live Server: https://chinchins.live/api',
-                              style: TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Divider(color: AppColors.cardBorder, height: 20),
-                    const Text('Live User Profile:', style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text('ID: ${_myProfile?.id ?? "N/A"}', style: const TextStyle(color: Colors.white, fontSize: 12)),
-                    Text('Name: ${_myProfile?.fullName ?? "N/A"}', style: const TextStyle(color: Colors.white, fontSize: 12)),
-                    Text('Avatar: ${_myProfile?.avatarUrl ?? "None"}', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
-                    Text('Cover: ${_myProfile?.coverPhotoUrl ?? "None"}', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
-                    Text('Gallery: ${_myProfile?.galleryUrls.length ?? 0} photos', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
-                    const SizedBox(height: 12),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.cardDarkElevated, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
-                      icon: isTesting
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.network_check_rounded, size: 14, color: AppColors.neonPurple),
-                      label: const Text('Test Live Image HTTP Status', style: TextStyle(fontSize: 12, color: Colors.white)),
-                      onPressed: isTesting
-                          ? null
-                          : () async {
-                              setDialogState(() {
-                                isTesting = true;
-                                diagnosticLogs = [];
-                              });
-
-                              final urlsToTest = <String>[];
-                              if (_myProfile?.avatarUrl != null) urlsToTest.add(_myProfile!.avatarUrl);
-                              if (_myProfile?.coverPhotoUrl != null) urlsToTest.add(_myProfile!.coverPhotoUrl!);
-                              if (_myProfile?.galleryUrls != null) urlsToTest.addAll(_myProfile!.galleryUrls);
-
-                              for (final rawUrl in urlsToTest) {
-                                final norm = CachedImageLoader.normalize(rawUrl);
-                                try {
-                                  if (norm.startsWith('http')) {
-                                    final res = await http.get(Uri.parse(norm)).timeout(const Duration(seconds: 5));
-                                    diagnosticLogs.add('HTTP ${res.statusCode}: $norm');
-                                  } else {
-                                    diagnosticLogs.add('Local file: $norm');
-                                  }
-                                } catch (e) {
-                                  diagnosticLogs.add('FAIL: $norm -> $e');
-                                }
-                              }
-
-                              if (urlsToTest.isEmpty) {
-                                diagnosticLogs.add('No image URLs found to test.');
-                              }
-
-                              setDialogState(() {
-                                isTesting = false;
-                              });
-                            },
-                    ),
-                    if (diagnosticLogs.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(8)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: diagnosticLogs
-                              .map((l) => Text(l,
-                                  style: TextStyle(
-                                      color: l.startsWith('HTTP 200') ? Colors.greenAccent : Colors.redAccent,
-                                      fontSize: 10,
-                                      fontFamily: 'monospace')))
-                              .toList(),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Close', style: TextStyle(color: AppColors.textMuted)),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
   Future<void> _deletePhotoConfirm(String photoUrl) async {
     showDialog(
       context: context,
@@ -540,7 +414,7 @@ class _MeScreenState extends State<MeScreen> {
         backgroundColor: const Color(0xFF1A1829),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: AppColors.primaryPink.withOpacity(0.4)),
+          side: BorderSide(color: AppColors.primaryPink.withValues(alpha: 0.4)),
         ),
         title: const Row(
           children: [
@@ -563,7 +437,7 @@ class _MeScreenState extends State<MeScreen> {
               leading: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.15),
+                  color: Colors.green.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.chat_rounded, color: Colors.greenAccent, size: 20),
@@ -576,7 +450,7 @@ class _MeScreenState extends State<MeScreen> {
               leading: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.15),
+                  color: Colors.blue.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.email_rounded, color: Colors.lightBlueAccent, size: 20),
@@ -609,7 +483,7 @@ class _MeScreenState extends State<MeScreen> {
         ? fullName
         : (_myProfile?.name ?? 'User');
 
-    final accountId = _myProfile?.id ?? '6829104721';
+    final accountId = _myProfile?.effectiveAccountId ?? _myProfile?.accountId ?? _myProfile?.id ?? '84920183';
     final userAge = '${_myProfile?.age ?? 25}';
     final userCountry = _myProfile?.location ?? 'Bangladesh';
     final avatar = (_myProfile?.avatarUrl != null && _myProfile!.avatarUrl.isNotEmpty)
@@ -668,11 +542,6 @@ class _MeScreenState extends State<MeScreen> {
                           tooltip: 'View Profile Preview',
                           onPressed: _openMyHostProfile,
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.more_horiz_rounded, color: Colors.white70, size: 24),
-                          tooltip: 'API & Image Diagnostics',
-                          onPressed: _showDiagnosticsDialog,
-                        ),
                       ],
                     ),
                   ],
@@ -683,37 +552,32 @@ class _MeScreenState extends State<MeScreen> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Avatar with Camera Picker Badge
+                    // Avatar with Profile Base Frame & Camera Picker Badge
                     GestureDetector(
                       onTap: _pickAndUploadAvatar,
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          Container(
-                            width: 68,
-                            height: 68,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.8), width: 2.5),
-                            ),
-                            child: ClipOval(
-                              child: CachedImageLoader(
-                                imageUrl: avatar,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
+                          AvatarWithFrame(
+                            avatarUrl: avatar,
+                            frameUrl: _myProfile?.avatarFrameUrl,
+                            level: _myProfile?.currentLevel ?? 0,
+                            badgeColor: _myProfile?.badgeColor ?? '#f59e0b',
+                            glowColor: _myProfile?.glowColor,
+                            size: 68,
+                            showLevelBadge: true,
                           ),
                           Positioned(
-                            bottom: -2,
-                            right: -2,
+                            top: 0,
+                            right: 0,
                             child: Container(
-                              padding: const EdgeInsets.all(5),
+                              padding: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
                                 gradient: AppColors.primaryGradient,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: AppColors.backgroundDark, width: 2),
+                                border: Border.all(color: AppColors.backgroundDark, width: 1.5),
                               ),
-                              child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
+                              child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 11),
                             ),
                           ),
                         ],
@@ -1038,7 +902,7 @@ class _MeScreenState extends State<MeScreen> {
                       child: GestureDetector(
                         onTap: _openRechargeSheet,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFF381F4B), Color(0xFF231433)],
@@ -1056,8 +920,15 @@ class _MeScreenState extends State<MeScreen> {
                                   children: [
                                     const Row(
                                       children: [
-                                        Text('My Gems', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                                        SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            'My Gems',
+                                            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        SizedBox(width: 2),
                                         Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 14),
                                       ],
                                     ),
@@ -1071,13 +942,14 @@ class _MeScreenState extends State<MeScreen> {
                                   ],
                                 ),
                               ),
+                              const SizedBox(width: 4),
                               Container(
                                 padding: const EdgeInsets.all(6),
                                 decoration: BoxDecoration(
                                   color: AppColors.gemYellow.withValues(alpha: 0.2),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 24),
+                                child: const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 22),
                               ),
                             ],
                           ),
@@ -1091,7 +963,7 @@ class _MeScreenState extends State<MeScreen> {
                       child: GestureDetector(
                         onTap: _openWithdrawScreen,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFF1F2445), Color(0xFF141730)],
@@ -1103,32 +975,42 @@ class _MeScreenState extends State<MeScreen> {
                           ),
                           child: Row(
                             children: [
-                              const Expanded(
+                              Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
+                                    const Row(
                                       children: [
-                                        Text('Beans Center', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                                        SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            'Beans Center',
+                                            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        SizedBox(width: 2),
                                         Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 14),
                                       ],
                                     ),
-                                    SizedBox(height: 6),
+                                    const SizedBox(height: 6),
                                     Text(
-                                      '0',
-                                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                      '$_beans',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                                     ),
                                   ],
                                 ),
                               ),
+                              const SizedBox(width: 4),
                               Container(
                                 padding: const EdgeInsets.all(6),
                                 decoration: BoxDecoration(
                                   color: Colors.amber.withValues(alpha: 0.2),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.egg_rounded, color: Colors.amber, size: 24),
+                                child: const Icon(Icons.egg_rounded, color: Colors.amber, size: 22),
                               ),
                             ],
                           ),
@@ -1250,8 +1132,14 @@ class _MeScreenState extends State<MeScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           _buildGridMenuItem(Icons.military_tech_rounded, 'My Level', const Color(0xFFFF7043), onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Level 1: Newbie VIP Member')),
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => LevelProgressionScreen(
+                                  accountId: _myProfile?.effectiveAccountId,
+                                  userId: _myProfile?.id,
+                                ),
+                              ),
                             );
                           }),
                           _buildGridMenuItem(Icons.calendar_month_rounded, 'Reward', const Color(0xFF00E5FF), onTap: () => _openMonthlyCardScreen(0)),
@@ -1326,7 +1214,7 @@ class _MeScreenState extends State<MeScreen> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppColors.primaryPink.withOpacity(0.15),
+                            color: AppColors.primaryPink.withValues(alpha: 0.15),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.system_update_rounded, color: AppColors.primaryPink, size: 20),
@@ -1345,7 +1233,7 @@ class _MeScreenState extends State<MeScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.08),
+                            color: Colors.white.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Text('Check', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),

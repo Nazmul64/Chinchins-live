@@ -8,11 +8,13 @@ import '../../wallet/services/wallet_api_service.dart';
 class GiftPickerModal extends StatefulWidget {
   final ValueChanged<GiftItem> onGiftSelected;
   final dynamic receiverId;
+  final String? streamId;
 
   const GiftPickerModal({
     super.key,
     required this.onGiftSelected,
     this.receiverId,
+    this.streamId,
   });
 
   @override
@@ -385,6 +387,7 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
                                 receiverId: widget.receiverId,
                                 giftId: selectedGift.giftId > 0 ? selectedGift.giftId : int.tryParse(selectedGift.id) ?? 1,
                                 quantity: _selectedQuantity,
+                                streamId: widget.streamId,
                               );
                             }
 
