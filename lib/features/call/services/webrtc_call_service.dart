@@ -14,6 +14,7 @@ class WebRTCCallService {
   MediaStream? _remoteStream;
   RTCPeerConnection? _peerConnection;
   Timer? _signalingTimer;
+  Timer? _speakerphonePulseTimer;
   bool _isInitialized = false;
   bool _hasRemoteAnswer = false;
   bool _hasAnsweredOffer = false;
@@ -58,50 +59,40 @@ class WebRTCCallService {
   bool get hasRemoteAnswer => _hasRemoteAnswer;
   bool get hasAnsweredOffer => _hasAnsweredOffer;
   bool get hasRemoteStream =>
-      _remoteStream != null &&
-      _remoteStream!.getVideoTracks().isNotEmpty &&
-      (_remoteStream!.getVideoTracks().any((t) => t.enabled) || remoteRenderer.srcObject != null);
+      (_remoteStream != null && _remoteStream!.getVideoTracks().isNotEmpty) ||
+      (remoteRenderer.srcObject != null);
 
-  static String preferCodec(String sdp, String codec) {
-    if (sdp.isEmpty) return sdp;
-    final lines = sdp.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n');
-    int? mLineIndex;
-    String? payload;
+  /// Modify SDP to ensure HD Video (720p/1080p, 2500kbps) & High-Quality Loud Stereo Audio
+  static String optimizeSdp(String rawSdp) {
+    if (rawSdp.isEmpty) return rawSdp;
+    var sdp = rawSdp.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    final lines = sdp.split('\n');
+    final newLines = <String>[];
 
     for (int i = 0; i < lines.length; i++) {
-      if (lines[i].startsWith('m=video')) {
-        mLineIndex = i;
+      final line = lines[i];
+      newLines.add(line);
+
+      // 1. Inject HD Bitrate constraint on video section (b=AS:2500 for ~2.5 Mbps crystal clear 720p/1080p)
+      if (line.startsWith('m=video')) {
+        newLines.add('b=AS:2500');
+        newLines.add('b=TIAS:2500000');
       }
-      if (lines[i].contains('a=rtpmap:') && lines[i].toLowerCase().contains(codec.toLowerCase())) {
-        final parts = lines[i].split(' ');
+
+      // 2. Inject Opus stereo & noise parameters for loud & crisp voice
+      if (line.contains('a=rtpmap:') && line.toLowerCase().contains('opus/48000')) {
+        final parts = line.split(' ');
         if (parts.isNotEmpty && parts[0].contains(':')) {
-          payload = parts[0].split(':')[1];
-          break;
+          final payload = parts[0].split(':')[1];
+          newLines.add('a=fmtp:$payload minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=128000;cbr=1');
         }
       }
     }
 
-    if (mLineIndex == null || payload == null) return sdp;
-
-    final mLineElements = lines[mLineIndex].split(' ');
-    if (mLineElements.length < 4) return sdp;
-
-    final newMLine = <String>[];
-    newMLine.add(mLineElements[0]); // m=video
-    newMLine.add(mLineElements[1]); // port
-    newMLine.add(mLineElements[2]); // proto
-    newMLine.add(payload);          // Put Preferred Codec First
-
-    for (int i = 3; i < mLineElements.length; i++) {
-      if (mLineElements[i] != payload) {
-        newMLine.add(mLineElements[i]);
-      }
-    }
-
-    lines[mLineIndex] = newMLine.join(' ');
-    return '${lines.join('\r\n')}\r\n';
+    return '${newLines.join('\r\n')}\r\n';
   }
 
+  /// Initialize Local Media with Full HD Camera & Advanced Noise Cancellation Audio
   Future<bool> initializeMedia({bool isAudioOnly = false}) async {
     try {
       final savedUser = await AuthApiService.getSavedUser();
@@ -113,25 +104,31 @@ class WebRTCCallService {
       final Map<String, dynamic> mediaConstraints = {
         'audio': {
           'echoCancellation': true,
+          'noiseSuppression': true,
           'autoGainControl': true,
-          'noiseSuppression': false,
+          'highpassFilter': true,
+          'typingNoiseDetection': true,
         },
         'video': isAudioOnly
             ? false
             : {
                 'facingMode': 'user',
-                'width': {'ideal': 640, 'max': 1280},
-                'height': {'ideal': 480, 'max': 720},
-                'frameRate': {'ideal': 30, 'max': 30},
+                'width': {'ideal': 1280, 'max': 1920, 'min': 720},
+                'height': {'ideal': 720, 'max': 1080, 'min': 480},
+                'frameRate': {'ideal': 30, 'max': 30, 'min': 24},
               },
       };
 
       try {
         _localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
       } catch (e) {
-        _log('Universal camera fallback: $e');
+        _log('Camera HD fallback: $e');
         _localStream = await navigator.mediaDevices.getUserMedia({
-          'audio': true,
+          'audio': {
+            'echoCancellation': true,
+            'noiseSuppression': true,
+            'autoGainControl': true,
+          },
           'video': isAudioOnly ? false : {'facingMode': 'user'},
         });
       }
@@ -144,13 +141,9 @@ class WebRTCCallService {
 
       localRenderer.srcObject = _localStream;
       _isInitialized = true;
-      _log('GET_USER_MEDIA_SUCCESS');
+      _log('LOCAL_CAMERA_INITIALIZED (Audio: ${_localStream?.getAudioTracks().length}, Video: ${_localStream?.getVideoTracks().length})');
 
-      try {
-        await Helper.setSpeakerphoneOn(true);
-        _isSpeakerOn = true;
-      } catch (_) {}
-
+      enforceLoudSpeakerphone();
       return _isInitialized;
     } catch (e, st) {
       lastError = e.toString();
@@ -158,6 +151,28 @@ class WebRTCCallService {
       AppLogger.error('WebRTCInitError', e, st);
       return false;
     }
+  }
+
+  /// Force maximum loud speakerphone output
+  void enforceLoudSpeakerphone() {
+    try {
+      Helper.setSpeakerphoneOn(true);
+      _isSpeakerOn = true;
+    } catch (_) {}
+
+    // Pulse speakerphone periodically during connection setup to prevent Android audio manager fallback
+    _speakerphonePulseTimer?.cancel();
+    int pulseCount = 0;
+    _speakerphonePulseTimer = Timer.periodic(const Duration(milliseconds: 600), (timer) {
+      pulseCount++;
+      try {
+        Helper.setSpeakerphoneOn(true);
+        _isSpeakerOn = true;
+      } catch (_) {}
+      if (pulseCount >= 6) {
+        timer.cancel();
+      }
+    });
   }
 
   List<Map<String, dynamic>> _sanitizeIceServers(List<Map<String, dynamic>> rawIceServers) {
@@ -203,8 +218,6 @@ class WebRTCCallService {
     }
 
     // High-availability global STUN + multi-protocol UDP/TCP/TLS TURN relay servers
-    // Primary: Your VPS Coturn at chinchins.live (Domain & direct IP 2.25.131.55)
-    // Fallback: Global STUN & multi-protocol TURN
     sanitized.addAll([
       {
         'urls': [
@@ -295,6 +308,7 @@ class WebRTCCallService {
       _peerConnection = pc;
       pcState = 'Created';
 
+      // 1. Add All Local Audio & Video Tracks to PeerConnection with SendRecv Transceivers
       if (_localStream != null) {
         for (final track in _localStream!.getTracks()) {
           try {
@@ -307,14 +321,19 @@ class WebRTCCallService {
         }
       }
 
+      // 2. Ensure Unified-Plan Transceivers are strictly set to SendRecv direction
+      try {
+        final transceivers = await pc.getTransceivers();
+        for (final t in transceivers) {
+          await t.setDirection(TransceiverDirection.SendRecv);
+        }
+      } catch (_) {}
+
+      // 3. Remote Track Event: Bind remote stream and refresh renderer
       pc.onTrack = (RTCTrackEvent event) async {
         _log('REMOTE_TRACK_RECEIVED: ${event.track.kind}');
         try {
           event.track.enabled = true;
-          if (event.track.kind == 'audio') {
-            Helper.setSpeakerphoneOn(true);
-            _isSpeakerOn = true;
-          }
         } catch (_) {}
 
         if (event.streams.isNotEmpty) {
@@ -330,16 +349,13 @@ class WebRTCCallService {
           }
         } catch (_) {}
 
-        // Reset renderer binding to guarantee native texture catches the new video stream
+        // Reset renderer binding to guarantee native Android texture updates with the new video stream
         remoteRenderer.srcObject = null;
         remoteRenderer.srcObject = _remoteStream;
         _log('REMOTE_STREAM_ATTACHED (kind: ${event.track.kind}, videoCount: ${_remoteStream?.getVideoTracks().length ?? 0})');
         onRemoteStreamConnected?.call(_remoteStream!);
 
-        try {
-          await Helper.setSpeakerphoneOn(true);
-          _isSpeakerOn = true;
-        } catch (_) {}
+        enforceLoudSpeakerphone();
       };
 
       pc.onAddStream = (MediaStream stream) {
@@ -352,11 +368,7 @@ class WebRTCCallService {
         _remoteStream = stream;
         remoteRenderer.srcObject = _remoteStream;
         onRemoteStreamConnected?.call(_remoteStream!);
-
-        try {
-          Helper.setSpeakerphoneOn(true);
-          _isSpeakerOn = true;
-        } catch (_) {}
+        enforceLoudSpeakerphone();
       };
 
       pc.onConnectionState = (RTCPeerConnectionState state) {
@@ -364,12 +376,7 @@ class WebRTCCallService {
         _log('PEER_CONNECTION_STATE: $pcState');
         if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
           _log('PEER_CONNECTED_SUCCESS');
-          Future.delayed(const Duration(milliseconds: 300), () {
-            try {
-              Helper.setSpeakerphoneOn(true);
-              _isSpeakerOn = true;
-            } catch (_) {}
-          });
+          enforceLoudSpeakerphone();
         }
       };
 
@@ -380,12 +387,7 @@ class WebRTCCallService {
         if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
             state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
           _log('ICE_CONNECTED_SUCCESS');
-          Future.delayed(const Duration(milliseconds: 300), () {
-            try {
-              Helper.setSpeakerphoneOn(true);
-              _isSpeakerOn = true;
-            } catch (_) {}
-          });
+          enforceLoudSpeakerphone();
         } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
           _log('ICE_CONNECTION_FAILED! Attempting ICE restart...');
           try {
@@ -444,20 +446,27 @@ class WebRTCCallService {
 
     try {
       final offer = await pc.createOffer({
-        'offerToReceiveAudio': 1,
-        'offerToReceiveVideo': 1,
+        'mandatory': {
+          'OfferToReceiveAudio': true,
+          'OfferToReceiveVideo': true,
+        },
+        'optional': [],
       });
-      await pc.setLocalDescription(offer);
+
+      final optimizedSdp = optimizeSdp(offer.sdp ?? '');
+      final optimizedOffer = RTCSessionDescription(optimizedSdp, offer.type);
+
+      await pc.setLocalDescription(optimizedOffer);
       offerState = 'Sent';
-      _log('OFFER_CREATED_AND_SENT (sdp length: ${offer.sdp?.length ?? 0})');
+      _log('OFFER_CREATED_AND_SENT (sdp length: ${optimizedSdp.length})');
 
       await CallApiService.sendSignal(
         callId: callId,
         channelName: channelName,
         type: 'offer',
         payload: {
-          'sdp': offer.sdp,
-          'type': offer.type,
+          'sdp': optimizedOffer.sdp,
+          'type': optimizedOffer.type,
           'sender_role': 'caller',
           'sender_id': _currentUserId,
         },
@@ -516,10 +525,8 @@ class WebRTCCallService {
     for (final rawLine in lines) {
       final line = rawLine.trim();
       if (line.isEmpty) continue;
-      // SDP line format is strictly single lower-case letter followed by '='
       if (RegExp(r'^[a-z]=[^\r\n]*$', caseSensitive: false).hasMatch(line)) {
         var cleanLine = line;
-        // Strip trailing quotes or escape slashes from json formatting
         while (cleanLine.endsWith('"') || cleanLine.endsWith("'") || cleanLine.endsWith('\\')) {
           cleanLine = cleanLine.substring(0, cleanLine.length - 1).trim();
         }
@@ -527,7 +534,6 @@ class WebRTCCallService {
           validLines.add(cleanLine);
         }
       } else {
-        // If we hit non-SDP characters (e.g. JSON closing braces/quotes), stop parsing
         if (validLines.isNotEmpty && (line.startsWith('}') || line.startsWith('{') || line.startsWith('"') || line.startsWith(','))) {
           break;
         }
@@ -535,8 +541,6 @@ class WebRTCCallService {
     }
 
     if (validLines.isEmpty) return '';
-
-    // WebRTC RFC standard requires CRLF (\r\n) on every line including the last line
     return '${validLines.join('\r\n')}\r\n';
   }
 
@@ -552,7 +556,6 @@ class WebRTCCallService {
         payload['data'] ??
         signal['data'];
 
-    // 1. Unnest map if needed
     while (raw is Map) {
       final inner = raw['sdp'] ?? raw['description'] ?? raw['session_description'] ?? raw['payload'] ?? raw['data'];
       if (inner == null || inner == raw) break;
@@ -563,7 +566,6 @@ class WebRTCCallService {
 
     String sdp = raw.toString().trim();
 
-    // 2. Decode stringified JSON if needed (recursively handles wrapped JSON)
     for (int i = 0; i < 3; i++) {
       final trimmed = sdp.trim();
       if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
@@ -730,6 +732,7 @@ class WebRTCCallService {
             _hasRemoteAnswer = true;
             _log('SET_REMOTE_DESCRIPTION_ANSWER_SUCCESS');
             await _drainPendingCandidates();
+            enforceLoudSpeakerphone();
           } catch (e) {
             lastError = 'SetRemoteDescAnswerError: $e';
             _log('SetRemoteDescAnswerError: $e');
@@ -752,25 +755,34 @@ class WebRTCCallService {
             await _drainPendingCandidates();
 
             final answer = await _peerConnection!.createAnswer({
-              'offerToReceiveAudio': 1,
-              'offerToReceiveVideo': 1,
+              'mandatory': {
+                'OfferToReceiveAudio': true,
+                'OfferToReceiveVideo': true,
+              },
+              'optional': [],
             });
-            await _peerConnection!.setLocalDescription(answer);
+
+            final optimizedAnswerSdp = optimizeSdp(answer.sdp ?? '');
+            final optimizedAnswer = RTCSessionDescription(optimizedAnswerSdp, answer.type);
+
+            await _peerConnection!.setLocalDescription(optimizedAnswer);
             await _drainPendingCandidates();
             answerState = 'Sent';
-            _log('ANSWER_CREATED_AND_SENT (sdp len: ${answer.sdp?.length ?? 0})');
+            _log('ANSWER_CREATED_AND_SENT (sdp len: ${optimizedAnswerSdp.length})');
 
             await CallApiService.sendSignal(
               callId: callId,
               channelName: channelName,
               type: 'answer',
               payload: {
-                'sdp': answer.sdp,
-                'type': answer.type,
+                'sdp': optimizedAnswer.sdp,
+                'type': optimizedAnswer.type,
                 'sender_role': 'receiver',
                 'sender_id': _currentUserId,
               },
             );
+
+            enforceLoudSpeakerphone();
           } catch (e) {
             lastError = 'SetRemoteDescOfferError: $e';
             _log('SetRemoteDescOfferError: $e');
@@ -872,6 +884,8 @@ class WebRTCCallService {
   Future<void> dispose() async {
     _signalingTimer?.cancel();
     _signalingTimer = null;
+    _speakerphonePulseTimer?.cancel();
+    _speakerphonePulseTimer = null;
 
     _wsOfferSub?.cancel();
     _wsAnswerSub?.cancel();
@@ -917,5 +931,3 @@ class WebRTCCallService {
     _isInitialized = false;
   }
 }
-
-
