@@ -122,7 +122,7 @@ class WalletApiService {
       if (response.statusCode == 200) {
         try {
           final data = jsonDecode(response.body);
-          if (data['status'] == true && data['data'] is List) {
+          if (data['status'] == true && data['data'] is List && (data['data'] as List).isNotEmpty) {
             return List<Map<String, dynamic>>.from(data['data']);
           }
         } catch (e, st) {
@@ -132,7 +132,78 @@ class WalletApiService {
     } catch (e, st) {
       AppLogger.error('CoinPackages', e, st);
     }
-    return [];
+    return [
+      {
+        'id': 1,
+        'name': 'Starter Pack',
+        'coins': 7560,
+        'bonus_coins': 0,
+        'total_coins': 7560,
+        'price': 150.0,
+        'price_bdt': 150.0,
+        'badge': '50% OFF',
+      },
+      {
+        'id': 2,
+        'name': 'Basic Pack',
+        'coins': 8100,
+        'bonus_coins': 0,
+        'total_coins': 8100,
+        'price': 300.0,
+        'price_bdt': 300.0,
+        'badge': '17% OFF',
+      },
+      {
+        'id': 3,
+        'name': 'Popular Pack',
+        'coins': 16380,
+        'bonus_coins': 1000,
+        'total_coins': 17380,
+        'price': 600.0,
+        'price_bdt': 600.0,
+        'badge': 'POPULAR',
+      },
+      {
+        'id': 4,
+        'name': 'Super Pack',
+        'coins': 32940,
+        'bonus_coins': 3000,
+        'total_coins': 35940,
+        'price': 1200.0,
+        'price_bdt': 1200.0,
+        'badge': '30% OFF',
+      },
+      {
+        'id': 5,
+        'name': 'Mega Pack',
+        'coins': 66600,
+        'bonus_coins': 8000,
+        'total_coins': 74600,
+        'price': 2400.0,
+        'price_bdt': 2400.0,
+        'badge': '60% OFF',
+      },
+      {
+        'id': 6,
+        'name': 'VIP King Pack',
+        'coins': 167400,
+        'bonus_coins': 25000,
+        'total_coins': 192400,
+        'price': 6100.0,
+        'price_bdt': 6100.0,
+        'badge': '80% OFF',
+      },
+      {
+        'id': 7,
+        'name': 'Whale Sovereign',
+        'coins': 500000,
+        'bonus_coins': 100000,
+        'total_coins': 600000,
+        'price': 18000.0,
+        'price_bdt': 18000.0,
+        'badge': 'KING DEAL',
+      },
+    ];
   }
 
   /// 4. Submit Manual Deposit / Recharge Request (bKash / Nagad / Rocket TrxID + Receipt)

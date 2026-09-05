@@ -33,9 +33,13 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
     'all',
     'popular',
     'luxury',
+    'desi',
+    'birds',
     'romantic',
     'effects',
     'vip',
+    'emojis',
+    'stickers',
   ];
 
   @override
@@ -98,6 +102,33 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
       setState(() {
         _gifts = catalog;
       });
+    }
+  }
+
+  String _getCategoryLabel(String cat) {
+    switch (cat.toLowerCase()) {
+      case 'all':
+        return '✨ ALL';
+      case 'popular':
+        return '🔥 POPULAR';
+      case 'luxury':
+        return '🏎️ LUXURY';
+      case 'desi':
+        return '🛺 DESI';
+      case 'birds':
+        return '🕊️ BIRDS';
+      case 'romantic':
+        return '💖 ROMANTIC';
+      case 'effects':
+        return '🚀 3D EFFECTS';
+      case 'vip':
+        return '👑 VIP';
+      case 'emojis':
+        return '😍 EMOJIS';
+      case 'stickers':
+        return '🎉 STICKERS';
+      default:
+        return cat.toUpperCase();
     }
   }
 
@@ -208,7 +239,7 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
                     ),
                     child: Center(
                       child: Text(
-                        cat.toUpperCase(),
+                        _getCategoryLabel(cat),
                         style: TextStyle(
                           color: isSelected ? Colors.white : Colors.white70,
                           fontSize: 11,
