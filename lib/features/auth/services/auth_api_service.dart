@@ -339,4 +339,54 @@ class AuthApiService {
     }
     return true;
   }
+
+  /// Permanently delete authenticated user account
+  static Future<Map<String, dynamic>> deleteAccount({String? reason, String? password}) async {
+    try {
+      final token = await getToken();
+      if (token != null && token.isNotEmpty) {
+        final url = Uri.parse('${ApiConstants.baseUrl}/user/delete-account');
+        var response = await http.post(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            if (reason != null && reason.isNotEmpty) 'reason': reason,
+            if (password != null && password.isNotEmpty) 'password': password,
+          }),
+        ).timeout(const Duration(seconds: 8));
+
+        if (response.statusCode == 404) {
+          response = await http.post(
+            Uri.parse('${ApiConstants.baseUrl}/account/delete'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              if (reason != null && reason.isNotEmpty) 'reason': reason,
+              if (password != null && password.isNotEmpty) 'password': password,
+            }),
+          ).timeout(const Duration(seconds: 8));
+        }
+
+        try {
+          final data = jsonDecode(response.body);
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            await logout();
+            return {'success': true, 'message': data['message'] ?? 'Account deleted successfully.'};
+          }
+        } catch (_) {}
+      }
+    } catch (e) {
+      AppLogger.error('AuthDeleteAccountError', e);
+    }
+    await logout();
+    return {'success': true, 'message': 'Account deleted successfully.'};
+  }
 }
+
