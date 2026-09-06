@@ -8,9 +8,9 @@ import '../widgets/model_grid_card.dart';
 import '../widgets/match_tab_view.dart';
 import '../widgets/draggable_extra_gems_widget.dart';
 import '../../profile/screens/host_profile_screen.dart';
-import '../../call/screens/video_call_screen.dart';
 import '../../call/screens/random_match_screen.dart';
 import '../../call/services/call_api_service.dart';
+import '../../call/services/streaming_service.dart';
 import '../../call/widgets/home_webrtc_test_dialog.dart';
 
 class HotExploreScreen extends StatefulWidget {
@@ -320,7 +320,7 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
         final int? callId = rawCallId is int
             ? rawCallId
             : int.tryParse(rawCallId?.toString() ?? '');
-        final channelName = initiateRes['channel_name']?.toString();
+        final channelName = initiateRes['channel_name']?.toString() ?? 'explore_call_${model.id}';
         final isFreeTrial = initiateRes['is_free_trial'] == true;
         final freeSecs = (initiateRes['free_duration_seconds'] is int)
             ? initiateRes['free_duration_seconds'] as int
@@ -329,19 +329,15 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
             ? initiateRes['rate_per_minute'] as int
             : (model.pricePerMin > 0 ? model.pricePerMin : 100);
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => VideoCallScreen(
-              model: model,
-              callId: callId,
-              channelName: channelName,
-              isFreeTrial: isFreeTrial,
-              freeDurationSeconds: freeSecs,
-              ratePerMinute: ratePerMin,
-              isIncoming: false,
-            ),
-          ),
+        StreamingService.startDynamicCall(
+          context: context,
+          model: model,
+          callId: callId,
+          channelName: channelName,
+          isFreeTrial: isFreeTrial,
+          freeDurationSeconds: freeSecs,
+          ratePerMinute: ratePerMin,
+          isIncoming: false,
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

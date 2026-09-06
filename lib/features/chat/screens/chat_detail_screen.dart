@@ -18,9 +18,9 @@ import '../widgets/chat_partner_header_card.dart';
 import '../widgets/report_user_modal.dart';
 import '../services/chat_api_service.dart';
 import '../../auth/services/auth_api_service.dart';
-import '../../call/screens/video_call_screen.dart';
 import '../../call/services/call_api_service.dart';
 import '../../call/services/call_sound_manager.dart';
+import '../../call/services/streaming_service.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../../core/data/mock_data.dart';
@@ -630,25 +630,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         final int? callId = res['call_id'] is int
             ? res['call_id'] as int
             : int.tryParse(res['call_id']?.toString() ?? '');
-        final channelName = res['channel_name']?.toString();
+        final channelName = res['channel_name']?.toString() ?? 'chat_call_${model.id}';
         final isFreeTrial = res['is_free_trial'] == true;
         final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
         final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : model.pricePerMin;
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => VideoCallScreen(
-              model: model,
-              callId: callId,
-              channelName: channelName,
-              isFreeTrial: isFreeTrial,
-              freeDurationSeconds: freeSecs,
-              ratePerMinute: ratePerMin,
-              dialToneUrl: res['dial_tone_url']?.toString(),
-            ),
-          ),
-        ).then((_) => CallSoundManager.stopRingtone());
+        StreamingService.startDynamicCall(
+          context: context,
+          model: model,
+          callId: callId,
+          channelName: channelName,
+          isFreeTrial: isFreeTrial,
+          freeDurationSeconds: freeSecs,
+          ratePerMinute: ratePerMin,
+          dialToneUrl: res['dial_tone_url']?.toString(),
+        );
       } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
         CallSoundManager.stopRingtone();
         showModalBottomSheet(

@@ -6,6 +6,7 @@ import '../../../core/widgets/cached_image_loader.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
 import '../services/call_api_service.dart';
 import '../services/call_sound_manager.dart';
+import '../services/streaming_service.dart';
 import 'video_call_screen.dart';
 
 class RandomMatchScreen extends StatefulWidget {
@@ -131,22 +132,18 @@ class _RandomMatchScreenState extends State<RandomMatchScreen>
       final isFreeTrial = res['is_free_trial'] == true;
       final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
 
-      final channelName = res['channel_name']?.toString();
+      final channelName = res['channel_name']?.toString() ?? 'random_match_${_matchedProfile!.id}';
       final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (_matchedProfile!.pricePerMin > 0 ? _matchedProfile!.pricePerMin : 100);
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VideoCallScreen(
-            model: _matchedProfile!,
-            callId: callId,
-            channelName: channelName,
-            isFreeTrial: isFreeTrial,
-            freeDurationSeconds: freeSecs,
-            ratePerMinute: ratePerMin,
-            dialToneUrl: res['dial_tone_url']?.toString(),
-          ),
-        ),
+      StreamingService.startDynamicCall(
+        context: context,
+        model: _matchedProfile!,
+        callId: callId,
+        channelName: channelName,
+        isFreeTrial: isFreeTrial,
+        freeDurationSeconds: freeSecs,
+        ratePerMinute: ratePerMin,
+        dialToneUrl: res['dial_tone_url']?.toString(),
       );
     } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
       CallSoundManager.stopRingtone();

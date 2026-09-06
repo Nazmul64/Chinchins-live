@@ -48,6 +48,8 @@ dependencies:
   path_provider: ^2.1.6
   url_launcher: ^6.3.2
   flutter_svg: ^2.0.17
+  agora_rtc_engine: ^6.5.3
+  permission_handler: ^13.0.2
 
 dev_dependencies:
   flutter_test:

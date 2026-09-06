@@ -6,6 +6,7 @@ import '../../../core/utils/app_logger.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../services/call_api_service.dart';
 import '../services/call_sound_manager.dart';
+import '../services/streaming_service.dart';
 import 'video_call_screen.dart';
 
 class IncomingCallScreen extends StatefulWidget {
@@ -133,19 +134,15 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     }
 
     if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VideoCallScreen(
-            model: widget.model,
-            callId: widget.callId,
-            channelName: widget.channelName,
-            isFreeTrial: widget.isFreeTrial,
-            freeDurationSeconds: widget.freeDurationSeconds,
-            ratePerMinute: widget.ratePerMinute,
-            isIncoming: true, // রিসিভার মোড সক্রিয়
-          ),
-        ),
+      StreamingService.startDynamicCall(
+        context: context,
+        model: widget.model,
+        callId: widget.callId,
+        channelName: widget.channelName ?? 'incoming_call_${widget.callId ?? widget.model.id}',
+        isFreeTrial: widget.isFreeTrial,
+        freeDurationSeconds: widget.freeDurationSeconds,
+        ratePerMinute: widget.ratePerMinute,
+        isIncoming: true,
       );
     }
   }

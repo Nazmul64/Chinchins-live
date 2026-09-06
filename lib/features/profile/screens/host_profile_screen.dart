@@ -10,10 +10,10 @@ import '../../../core/widgets/cached_image_loader.dart';
 import '../../../core/widgets/avatar_with_frame.dart';
 import '../widgets/gifts_received_card.dart';
 import 'level_progression_screen.dart';
-import '../../call/screens/video_call_screen.dart';
 import '../../call/screens/incoming_call_screen.dart';
 import '../../call/services/call_api_service.dart';
 import '../../call/services/call_sound_manager.dart';
+import '../../call/services/streaming_service.dart';
 import '../../chat/screens/chat_detail_screen.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/services/gifts_api_service.dart';
@@ -181,24 +181,20 @@ class _HostProfileScreenState extends State<HostProfileScreen>
         final int? callId = res['call_id'] is int
             ? res['call_id'] as int
             : int.tryParse(res['call_id']?.toString() ?? '');
-        final channelName = res['channel_name']?.toString();
+        final channelName = res['channel_name']?.toString() ?? 'call_${widget.model.id}';
         final isFreeTrial = res['is_free_trial'] == true;
         final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
         final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100);
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => VideoCallScreen(
-              model: widget.model,
-              callId: callId,
-              channelName: channelName,
-              isFreeTrial: isFreeTrial,
-              freeDurationSeconds: freeSecs,
-              ratePerMinute: ratePerMin,
-              dialToneUrl: res['dial_tone_url']?.toString(),
-            ),
-          ),
+        StreamingService.startDynamicCall(
+          context: context,
+          model: widget.model,
+          callId: callId,
+          channelName: channelName,
+          isFreeTrial: isFreeTrial,
+          freeDurationSeconds: freeSecs,
+          ratePerMinute: ratePerMin,
+          dialToneUrl: res['dial_tone_url']?.toString(),
         );
       } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
         CallSoundManager.stopRingtone();
@@ -279,24 +275,21 @@ class _HostProfileScreenState extends State<HostProfileScreen>
         final int? callId = res['call_id'] is int
             ? res['call_id'] as int
             : int.tryParse(res['call_id']?.toString() ?? '');
-        final channelName = res['channel_name']?.toString();
+        final channelName = res['channel_name']?.toString() ?? 'audio_call_${widget.model.id}';
         final isFreeTrial = res['is_free_trial'] == true;
         final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
         final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100);
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => VideoCallScreen(
-              model: widget.model,
-              callId: callId,
-              channelName: channelName,
-              isFreeTrial: isFreeTrial,
-              freeDurationSeconds: freeSecs,
-              ratePerMinute: ratePerMin,
-              dialToneUrl: res['dial_tone_url']?.toString(),
-            ),
-          ),
+        StreamingService.startDynamicCall(
+          context: context,
+          model: widget.model,
+          callId: callId,
+          channelName: channelName,
+          callType: 'audio',
+          isFreeTrial: isFreeTrial,
+          freeDurationSeconds: freeSecs,
+          ratePerMinute: ratePerMin,
+          dialToneUrl: res['dial_tone_url']?.toString(),
         );
       } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
         CallSoundManager.stopRingtone();

@@ -8,7 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../../chat/screens/chat_detail_screen.dart';
-import '../../call/screens/video_call_screen.dart';
+import '../../call/services/streaming_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -353,11 +353,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             'avatar': n.viewerAvatar ?? '',
                             'video_call_rate': 100,
                           });
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => VideoCallScreen(model: model),
-                            ),
+                          StreamingService.startDynamicCall(
+                            context: context,
+                            model: model,
+                            channelName: 'notif_call_${n.viewerId}',
                           );
                         },
                       ),
