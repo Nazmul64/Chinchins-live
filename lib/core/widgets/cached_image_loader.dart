@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../theme/app_colors.dart';
 import '../constants/api_constants.dart';
 
 class CachedImageLoader extends StatelessWidget {
@@ -10,6 +9,7 @@ class CachedImageLoader extends StatelessWidget {
   final double? width;
   final double? height;
   final BorderRadius? borderRadius;
+  final Widget? placeholder;
 
   const CachedImageLoader({
     super.key,
@@ -18,6 +18,7 @@ class CachedImageLoader extends StatelessWidget {
     this.width,
     this.height,
     this.borderRadius,
+    this.placeholder,
   });
 
   /// Automatically normalizes relative paths, local files, or placeholder hosts
@@ -102,26 +103,26 @@ class CachedImageLoader extends StatelessWidget {
         imageWidget = _buildErrorWidget();
       }
     }
-    // 2. Network image with caching and direct fallback
+    // 2. Network image with instant memory/disk caching & zero-spinner placeholder
     else if (cleanUrl.isNotEmpty && (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://'))) {
+      final cacheWidth = width != null && width! > 0 ? (width! * 2).toInt() : 800;
+      final cacheHeight = height != null && height! > 0 ? (height! * 2).toInt() : 800;
+
       imageWidget = CachedNetworkImage(
         imageUrl: cleanUrl,
         width: width,
         height: height,
         fit: fit,
-        placeholder: (context, url) => Container(
+        memCacheWidth: cacheWidth > 1200 ? 1200 : cacheWidth,
+        memCacheHeight: cacheHeight > 1200 ? 1200 : cacheHeight,
+        fadeInDuration: const Duration(milliseconds: 100),
+        fadeOutDuration: const Duration(milliseconds: 100),
+        placeholder: (context, url) => placeholder ?? Container(
           width: width,
           height: height,
-          color: AppColors.cardDark,
-          child: const Center(
-            child: SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.neonPink),
-              ),
-            ),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A162B),
+            borderRadius: borderRadius,
           ),
         ),
         errorWidget: (context, url, error) {
@@ -155,8 +156,9 @@ class CachedImageLoader extends StatelessWidget {
     return Container(
       width: width,
       height: height,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+        gradient: const LinearGradient(
           colors: [Color(0xFF2E1A47), Color(0xFF1B112C)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -171,4 +173,19 @@ class CachedImageLoader extends StatelessWidget {
       ),
     );
   }
+}
+
+/// ⚡ FastAvatar: Zero-Flicker Instant Avatar Widget
+Widget fastAvatar(String? imageUrl, {double size = 50, BorderRadius? borderRadius}) {
+  final radius = borderRadius ?? BorderRadius.circular(size / 2);
+  return ClipRRect(
+    borderRadius: radius,
+    child: CachedImageLoader(
+      imageUrl: imageUrl ?? '',
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+      borderRadius: radius,
+    ),
+  );
 }

@@ -15,6 +15,7 @@ class WebRTCCallService {
   RTCPeerConnection? _peerConnection;
   Timer? _signalingTimer;
   Timer? _speakerphonePulseTimer;
+  Timer? _offerRebroadcastTimer;
   bool _isInitialized = false;
   bool _hasRemoteAnswer = false;
   bool _hasAnsweredOffer = false;
@@ -59,10 +60,11 @@ class WebRTCCallService {
   bool get hasRemoteAnswer => _hasRemoteAnswer;
   bool get hasAnsweredOffer => _hasAnsweredOffer;
   bool get hasRemoteStream =>
-      (_remoteStream != null && _remoteStream!.getVideoTracks().isNotEmpty) ||
-      (remoteRenderer.srcObject != null);
+      _remoteStream != null &&
+      _remoteStream!.getVideoTracks().isNotEmpty &&
+      _remoteStream!.getVideoTracks().any((t) => t.enabled);
 
-  /// Modify SDP to ensure HD Video (720p/1080p, 2500kbps) & High-Quality Loud Stereo Audio
+  /// Safe SDP optimization for audio and video bitrate without violating SDP syntax
   static String optimizeSdp(String rawSdp) {
     if (rawSdp.isEmpty) return rawSdp;
     var sdp = rawSdp.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
@@ -73,13 +75,7 @@ class WebRTCCallService {
       final line = lines[i];
       newLines.add(line);
 
-      // 1. Inject HD Bitrate constraint on video section (b=AS:2500 for ~2.5 Mbps crystal clear 720p/1080p)
-      if (line.startsWith('m=video')) {
-        newLines.add('b=AS:2500');
-        newLines.add('b=TIAS:2500000');
-      }
-
-      // 2. Inject Opus stereo & noise parameters for loud & crisp voice
+      // Inject Opus stereo & noise parameters for loud & crisp voice
       if (line.contains('a=rtpmap:') && line.toLowerCase().contains('opus/48000')) {
         final parts = line.split(' ');
         if (parts.isNotEmpty && parts[0].contains(':')) {
@@ -340,7 +336,9 @@ class WebRTCCallService {
           _remoteStream = event.streams[0];
         } else {
           _remoteStream ??= await createLocalMediaStream('remote_${DateTime.now().millisecondsSinceEpoch}');
-          _remoteStream!.addTrack(event.track);
+          if (!_remoteStream!.getTracks().any((t) => t.id == event.track.id)) {
+            _remoteStream!.addTrack(event.track);
+          }
         }
 
         try {
@@ -349,10 +347,10 @@ class WebRTCCallService {
           }
         } catch (_) {}
 
-        // Reset renderer binding to guarantee native Android texture updates with the new video stream
-        remoteRenderer.srcObject = null;
-        remoteRenderer.srcObject = _remoteStream;
-        _log('REMOTE_STREAM_ATTACHED (kind: ${event.track.kind}, videoCount: ${_remoteStream?.getVideoTracks().length ?? 0})');
+        if (remoteRenderer.srcObject != _remoteStream) {
+          remoteRenderer.srcObject = _remoteStream;
+        }
+        _log('REMOTE_STREAM_ATTACHED (kind: ${event.track.kind}, videoCount: ${_remoteStream?.getVideoTracks().length ?? 0}, audioCount: ${_remoteStream?.getAudioTracks().length ?? 0})');
         onRemoteStreamConnected?.call(_remoteStream!);
 
         enforceLoudSpeakerphone();
@@ -366,7 +364,9 @@ class WebRTCCallService {
           }
         } catch (_) {}
         _remoteStream = stream;
-        remoteRenderer.srcObject = _remoteStream;
+        if (remoteRenderer.srcObject != _remoteStream) {
+          remoteRenderer.srcObject = _remoteStream;
+        }
         onRemoteStreamConnected?.call(_remoteStream!);
         enforceLoudSpeakerphone();
       };
@@ -453,24 +453,46 @@ class WebRTCCallService {
         'optional': [],
       });
 
-      final optimizedSdp = optimizeSdp(offer.sdp ?? '');
-      final optimizedOffer = RTCSessionDescription(optimizedSdp, offer.type);
-
-      await pc.setLocalDescription(optimizedOffer);
+      await pc.setLocalDescription(offer);
       offerState = 'Sent';
-      _log('OFFER_CREATED_AND_SENT (sdp length: ${optimizedSdp.length})');
+      _log('OFFER_CREATED_AND_SENT (sdp length: ${offer.sdp?.length ?? 0})');
 
       await CallApiService.sendSignal(
         callId: callId,
         channelName: channelName,
         type: 'offer',
         payload: {
-          'sdp': optimizedOffer.sdp,
-          'type': optimizedOffer.type,
+          'sdp': offer.sdp,
+          'type': offer.type ?? 'offer',
           'sender_role': 'caller',
           'sender_id': _currentUserId,
         },
       );
+
+      // Periodically re-broadcast offer while waiting for answer so receiver never misses it
+      _offerRebroadcastTimer?.cancel();
+      int rebroadcastCount = 0;
+      _offerRebroadcastTimer = Timer.periodic(const Duration(milliseconds: 2000), (timer) async {
+        rebroadcastCount++;
+        if (_hasRemoteAnswer || _peerConnection == null || rebroadcastCount > 8) {
+          timer.cancel();
+          return;
+        }
+        try {
+          _log('RE_BROADCAST_OFFER (#$rebroadcastCount)');
+          await CallApiService.sendSignal(
+            callId: callId,
+            channelName: channelName,
+            type: 'offer',
+            payload: {
+              'sdp': offer.sdp,
+              'type': offer.type ?? 'offer',
+              'sender_role': 'caller',
+              'sender_id': _currentUserId,
+            },
+          );
+        } catch (_) {}
+      });
     } catch (e) {
       lastError = 'Offer Error: $e';
       _log('ERROR in startCallAsCaller (createOffer): $e');
@@ -762,21 +784,18 @@ class WebRTCCallService {
               'optional': [],
             });
 
-            final optimizedAnswerSdp = optimizeSdp(answer.sdp ?? '');
-            final optimizedAnswer = RTCSessionDescription(optimizedAnswerSdp, answer.type);
-
-            await _peerConnection!.setLocalDescription(optimizedAnswer);
+            await _peerConnection!.setLocalDescription(answer);
             await _drainPendingCandidates();
             answerState = 'Sent';
-            _log('ANSWER_CREATED_AND_SENT (sdp len: ${optimizedAnswerSdp.length})');
+            _log('ANSWER_CREATED_AND_SENT (sdp len: ${answer.sdp?.length ?? 0})');
 
             await CallApiService.sendSignal(
               callId: callId,
               channelName: channelName,
               type: 'answer',
               payload: {
-                'sdp': optimizedAnswer.sdp,
-                'type': optimizedAnswer.type,
+                'sdp': answer.sdp,
+                'type': answer.type ?? 'answer',
                 'sender_role': 'receiver',
                 'sender_id': _currentUserId,
               },
@@ -886,6 +905,8 @@ class WebRTCCallService {
     _signalingTimer = null;
     _speakerphonePulseTimer?.cancel();
     _speakerphonePulseTimer = null;
+    _offerRebroadcastTimer?.cancel();
+    _offerRebroadcastTimer = null;
 
     _wsOfferSub?.cancel();
     _wsAnswerSub?.cancel();
@@ -922,9 +943,19 @@ class WebRTCCallService {
     }
 
     try {
-      localRenderer.srcObject = null;
-      remoteRenderer.srcObject = null;
+      if (localRenderer.srcObject != null) {
+        localRenderer.srcObject = null;
+      }
+    } catch (_) {}
+    try {
+      if (remoteRenderer.srcObject != null) {
+        remoteRenderer.srcObject = null;
+      }
+    } catch (_) {}
+    try {
       await localRenderer.dispose();
+    } catch (_) {}
+    try {
       await remoteRenderer.dispose();
     } catch (_) {}
 

@@ -14,6 +14,7 @@ import '../../me/screens/me_screen.dart';
 import '../../call/screens/incoming_call_screen.dart';
 import '../../call/services/call_api_service.dart';
 import '../../chat/services/chat_api_service.dart';
+import '../widgets/app_side_drawer.dart';
 import '../../../main.dart';
 
 class MainNavigationScreen extends StatefulWidget {
@@ -24,6 +25,7 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentIndex = 0;
   Timer? _incomingCallPollTimer;
   Timer? _heartbeatTimer;
@@ -32,10 +34,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   bool _isLongPollingActive = true;
   int? _activeIncomingCallId;
 
-  final List<Widget> _screens = const [
-    HotExploreScreen(),
-    MessagesScreen(),
-    MeScreen(),
+  late final List<Widget> _screens = [
+    HotExploreScreen(
+      onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+    ),
+    const MessagesScreen(),
+    const MeScreen(),
   ];
 
   @override
@@ -181,6 +185,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: const AppSideDrawer(),
       body: IndexedStack(
         index: _currentIndex,
         children: _screens,

@@ -14,7 +14,9 @@ import '../../call/services/call_api_service.dart';
 import '../../call/widgets/home_webrtc_test_dialog.dart';
 
 class HotExploreScreen extends StatefulWidget {
-  const HotExploreScreen({super.key});
+  final VoidCallback? onMenuTap;
+
+  const HotExploreScreen({super.key, this.onMenuTap});
 
   @override
   State<HotExploreScreen> createState() => _HotExploreScreenState();
@@ -23,42 +25,38 @@ class HotExploreScreen extends StatefulWidget {
 class _HotExploreScreenState extends State<HotExploreScreen> {
   static List<ModelProfile> _cachedHomeFeed = [];
   int _selectedTabIndex = 0;
-  List<ModelProfile> _models = _cachedHomeFeed;
+  List<ModelProfile> _models = [];
   String _selectedCountryCode = 'BGD';
   String _selectedCountryName = 'Bangladesh';
   String _searchQuery = '';
-  bool _isLoading = _cachedHomeFeed.isEmpty;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    // 1. Instantly populate from memory/disk cache (0.00ms delay)
+    final initialFeed = ProfileApiService.getCachedHomeFeed();
+    if (initialFeed.isNotEmpty) {
+      _cachedHomeFeed = initialFeed;
+      _models = initialFeed;
+      _isLoading = false;
+    } else if (_cachedHomeFeed.isNotEmpty) {
+      _models = _cachedHomeFeed;
+      _isLoading = false;
+    } else {
+      _isLoading = true;
+    }
+
+    // 2. Fetch fresh updates in parallel in background
     _loadHomeFeed();
   }
 
   Future<void> _loadHomeFeed() async {
-    if (_models.isEmpty) {
-      setState(() => _isLoading = true);
-    }
     try {
-      // Fetch user profile and home feed in parallel for maximum speed
-      final results = await Future.wait([
-        AuthApiService.getSavedUser(),
-        ProfileApiService.getMyProfile().catchError((_) => null),
-        ProfileApiService.getHomeFeed(
-          country: _selectedCountryName != 'All' ? _selectedCountryName : null,
-        ),
-      ]);
-
-      final savedUser = results[0] as Map<String, dynamic>?;
-      final freshMyProfile = results[1] as ModelProfile?;
-      final liveFeed = results[2] as List<ModelProfile>;
-
+      final savedUser = await AuthApiService.getSavedUser();
       ModelProfile? myProfile;
       if (savedUser != null) {
         myProfile = ModelProfile.fromJson(savedUser);
-      }
-      if (freshMyProfile != null) {
-        myProfile = freshMyProfile;
       }
 
       bool isExcludedUser(ModelProfile profile) {
@@ -77,59 +75,54 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
             email.contains('admin@');
       }
 
-      final List<ModelProfile> combined = [];
+      // Fast SWR Fetch
+      await ProfileApiService.getHomeFeedSWR(
+        country: _selectedCountryName != 'All' ? _selectedCountryName : null,
+        onResult: (liveFeed, isFromCache) {
+          final List<ModelProfile> combined = [];
 
-      for (final user in liveFeed) {
-        if (isExcludedUser(user)) continue;
-        if (myProfile != null && (user.id == myProfile.id || (user.accountId.isNotEmpty && user.accountId == myProfile.accountId))) {
-          continue; // exclude own profile from explore feed
-        }
-        combined.add(user);
-      }
-
-      // If search query is present, query backend search API
-      if (_searchQuery.trim().isNotEmpty) {
-        final searchedUsers = await ProfileApiService.searchUsers(query: _searchQuery.trim());
-        if (searchedUsers.isNotEmpty) {
-          for (final u in searchedUsers) {
-            if (!combined.any((m) => m.id == u.id || (m.accountId.isNotEmpty && m.accountId == u.accountId))) {
-              combined.add(u);
+          for (final user in liveFeed) {
+            if (isExcludedUser(user)) continue;
+            if (myProfile != null && (user.id == myProfile.id || (user.accountId.isNotEmpty && user.accountId == myProfile.accountId))) {
+              continue; // exclude own profile from explore feed
             }
+            combined.add(user);
           }
-        }
-      }
 
-      // Filter by Tab: If Match tab (index 1), only show online users!
-      List<ModelProfile> filtered = combined;
-      if (_selectedTabIndex == 1) {
-        filtered = filtered.where((m) => m.isOnline).toList();
-      }
+          // Filter by Tab: If Match tab (index 1), only show online users!
+          List<ModelProfile> filtered = combined;
+          if (_selectedTabIndex == 1) {
+            filtered = filtered.where((m) => m.isOnline).toList();
+          }
 
-      // Filter by search query if present (Name, Location, 8-digit Account ID)
-      if (_searchQuery.trim().isNotEmpty) {
-        final q = _searchQuery.trim().toLowerCase();
-        filtered = filtered.where((m) =>
-          m.name.toLowerCase().contains(q) ||
-          m.fullName.toLowerCase().contains(q) ||
-          m.location.toLowerCase().contains(q) ||
-          m.accountId.toLowerCase().contains(q) ||
-          m.effectiveAccountId.toLowerCase().contains(q) ||
-          m.id.toLowerCase().contains(q)
-        ).toList();
-      }
+          // Filter by search query if present (Name, Location, 8-digit Account ID)
+          if (_searchQuery.trim().isNotEmpty) {
+            final q = _searchQuery.trim().toLowerCase();
+            filtered = filtered.where((m) =>
+              m.name.toLowerCase().contains(q) ||
+              m.fullName.toLowerCase().contains(q) ||
+              m.location.toLowerCase().contains(q) ||
+              m.accountId.toLowerCase().contains(q) ||
+              m.effectiveAccountId.toLowerCase().contains(q) ||
+              m.id.toLowerCase().contains(q)
+            ).toList();
+          }
 
-      if (filtered.isNotEmpty) {
-        _cachedHomeFeed = filtered;
-      }
-      if (mounted) {
-        setState(() {
-          _models = filtered;
-          _isLoading = false;
-        });
-      }
+          if (filtered.isNotEmpty) {
+            _cachedHomeFeed = filtered;
+          }
+
+          if (mounted) {
+            setState(() {
+              _models = filtered;
+              _isLoading = false;
+            });
+          }
+        },
+      );
     } catch (e) {
       debugPrint('Error loading home feed: $e');
-      if (mounted) {
+      if (mounted && _models.isEmpty) {
         setState(() => _isLoading = false);
       }
     }
@@ -386,6 +379,9 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
                   onSearchTap: _showSearchDialog,
                   onCountryTap: _showCountrySelector,
                   onDebugTap: () => HomeWebRTCTestDialog.show(context),
+                  onMenuTap: widget.onMenuTap ?? () {
+                    Scaffold.maybeOf(context)?.openDrawer();
+                  },
                   selectedCountryCode: _selectedCountryCode,
                 ),
 

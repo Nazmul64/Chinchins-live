@@ -259,4 +259,221 @@ class ChatApiService {
       return false;
     }
   }
+
+  /// Block a user (POST /api/chat/block or /api/user/block)
+  static Future<Map<String, dynamic>> blockUser(dynamic targetUserId, {String? reason}) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final currentUserId = await _getCurrentUserId();
+
+      final headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (currentUserId != null) 'X-User-Id': currentUserId,
+      };
+
+      final payload = {
+        'target_user_id': targetUserId,
+        'user_id': targetUserId,
+        if (reason != null) 'reason': reason,
+      };
+
+      var response = await http.post(
+        Uri.parse(ApiConstants.chatBlock),
+        headers: headers,
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 404) {
+        // Fallback to alias endpoint
+        response = await http.post(
+          Uri.parse(ApiConstants.userBlock),
+          headers: headers,
+          body: jsonEncode(payload),
+        ).timeout(const Duration(seconds: 8));
+      }
+
+      final res = _safeJsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {
+          'success': true,
+          'is_blocked': res?['is_blocked'] ?? true,
+          'message': res?['message'] ?? 'Successfully blocked user.',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': res?['message'] ?? 'Could not block user.',
+        };
+      }
+    } catch (e) {
+      debugPrint('[ChatApiService] blockUser error: $e');
+      return {
+        'success': false,
+        'message': 'Error blocking user: $e',
+      };
+    }
+  }
+
+  /// Unblock a user (POST /api/chat/unblock or /api/user/unblock)
+  static Future<Map<String, dynamic>> unblockUser(dynamic targetUserId) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final currentUserId = await _getCurrentUserId();
+
+      final headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (currentUserId != null) 'X-User-Id': currentUserId,
+      };
+
+      final payload = {
+        'target_user_id': targetUserId,
+        'user_id': targetUserId,
+      };
+
+      var response = await http.post(
+        Uri.parse(ApiConstants.chatUnblock),
+        headers: headers,
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 404) {
+        // Fallback to alias endpoint
+        response = await http.post(
+          Uri.parse(ApiConstants.userUnblock),
+          headers: headers,
+          body: jsonEncode(payload),
+        ).timeout(const Duration(seconds: 8));
+      }
+
+      final res = _safeJsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {
+          'success': true,
+          'is_blocked': false,
+          'message': res?['message'] ?? 'Successfully unblocked user.',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': res?['message'] ?? 'Could not unblock user.',
+        };
+      }
+    } catch (e) {
+      debugPrint('[ChatApiService] unblockUser error: $e');
+      return {
+        'success': false,
+        'message': 'Error unblocking user: $e',
+      };
+    }
+  }
+
+  /// Submit user report (POST /api/chat/report or /api/user/report)
+  static Future<Map<String, dynamic>> reportUser({
+    required dynamic reportedUserId,
+    required String reasonType,
+    String? description,
+    File? proofImage,
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final currentUserId = await _getCurrentUserId();
+
+      final headers = {
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (currentUserId != null) 'X-User-Id': currentUserId,
+      };
+
+      if (proofImage != null && proofImage.existsSync()) {
+        final request = http.MultipartRequest('POST', Uri.parse(ApiConstants.chatReport));
+        request.headers.addAll(headers);
+        request.fields['reported_user_id'] = reportedUserId.toString();
+        request.fields['user_id'] = reportedUserId.toString();
+        request.fields['reason_type'] = reasonType;
+        if (description != null && description.isNotEmpty) {
+          request.fields['description'] = description;
+        }
+        request.files.add(await http.MultipartFile.fromPath('proof_image', proofImage.path));
+        request.files.add(await http.MultipartFile.fromPath('image', proofImage.path));
+
+        final streamed = await request.send().timeout(const Duration(seconds: 15));
+        final response = await http.Response.fromStream(streamed);
+        final res = _safeJsonDecode(response.body);
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          return {
+            'success': true,
+            'message': res?['message'] ?? 'Thank you. Your report has been submitted.',
+          };
+        } else {
+          return {
+            'success': false,
+            'message': res?['message'] ?? 'Failed to submit report (${response.statusCode})',
+          };
+        }
+      } else {
+        final payload = {
+          'reported_user_id': reportedUserId,
+          'user_id': reportedUserId,
+          'reason_type': reasonType,
+          if (description != null) 'description': description,
+        };
+
+        var response = await http.post(
+          Uri.parse(ApiConstants.chatReport),
+          headers: {
+            ...headers,
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(payload),
+        ).timeout(const Duration(seconds: 10));
+
+        if (response.statusCode == 404) {
+          response = await http.post(
+            Uri.parse(ApiConstants.userReport),
+            headers: {
+              ...headers,
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(payload),
+          ).timeout(const Duration(seconds: 10));
+        }
+
+        final res = _safeJsonDecode(response.body);
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          return {
+            'success': true,
+            'message': res?['message'] ?? 'Thank you. Your report has been submitted.',
+          };
+        } else {
+          return {
+            'success': false,
+            'message': res?['message'] ?? 'Failed to submit report.',
+          };
+        }
+      }
+    } catch (e) {
+      debugPrint('[ChatApiService] reportUser error: $e');
+      return {
+        'success': false,
+        'message': 'Error submitting report: $e',
+      };
+    }
+  }
+
+  /// Get predefined report complaint categories
+  static List<Map<String, String>> getPredefinedReportReasons() {
+    return [
+      {'key': 'sexual_content', 'title': 'Adult / Sexual related content'},
+      {'key': 'harassment', 'title': 'Abuse, threat, or hate speech'},
+      {'key': 'fraud_scam', 'title': 'Fraud, financial scam, or fake profile'},
+      {'key': 'unreasonable_demands', 'title': 'Unreasonable demands / Harassment'},
+      {'key': 'child_abuse', 'title': 'Child sexual abuse and exploitation'},
+      {'key': 'other', 'title': 'Other rule violations'},
+    ];
+  }
 }

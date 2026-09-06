@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/widgets/cached_image_loader.dart';
-import '../../wallet/screens/premium_vip_screen.dart';
+import '../../wallet/screens/monthly_card_screen.dart';
 import '../../wallet/services/vip_cards_api_service.dart';
 
 class DraggableExtraGemsWidget extends StatefulWidget {
@@ -71,7 +71,7 @@ class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => const PremiumVipScreen(),
+        builder: (context) => const MonthlyCardScreen(),
       ),
     );
   }

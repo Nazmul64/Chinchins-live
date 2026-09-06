@@ -218,7 +218,10 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
 
     setState(() => _isActionInProgress = true);
 
-    final res = await VipCardsApiService.purchaseCard(cardId: cardId);
+    final res = await VipCardsApiService.purchaseCard(
+      cardId: cardId,
+      cardType: card['card_type']?.toString(),
+    );
 
     if (!mounted) return;
     setState(() => _isActionInProgress = false);
@@ -257,16 +260,21 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
   Future<void> _claimDailyBonus(Map<String, dynamic> card) async {
     if (_isActionInProgress) return;
     final int cardId = card['id'] ?? 1;
+    final sub = card['user_subscription'] ?? {};
+    final subId = sub['subscription_id'] ?? sub['id'];
 
     setState(() => _isActionInProgress = true);
 
-    final res = await VipCardsApiService.claimDailyReward(cardId: cardId);
+    final res = await VipCardsApiService.claimDailyReward(
+      subscriptionId: subId,
+      cardId: cardId,
+    );
 
     if (!mounted) return;
     setState(() => _isActionInProgress = false);
 
     if (res['success'] == true) {
-      final claimedCoins = res['data']?['claimed_coins'] ?? 300;
+      final claimedCoins = res['data']?['coins_claimed'] ?? res['data']?['claimed_coins'] ?? 300;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(

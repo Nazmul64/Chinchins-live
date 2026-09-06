@@ -12,17 +12,19 @@ import '../../../core/services/local_image_cache.dart';
 import '../../../core/services/app_update_service.dart';
 import '../../../core/services/remote_config_service.dart';
 import '../../auth/services/auth_api_service.dart';
-import '../../auth/screens/login_screen.dart';
+import '../../auth/widgets/logout_confirmation_dialog.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../profile/screens/edit_profile_media_screen.dart';
 import '../../profile/screens/level_progression_screen.dart';
 import '../../wallet/screens/wallet_screen.dart';
 import '../../wallet/screens/withdraw_screen.dart';
-import '../../wallet/screens/premium_vip_screen.dart';
+import '../../wallet/screens/monthly_card_screen.dart';
+import '../../wallet/screens/svip_privilege_screen.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../../party/screens/create_room_screen.dart';
 import '../../kyc/screens/kyc_verification_screen.dart';
 import '../../kyc/services/kyc_api_service.dart';
+import '../../bag/screens/my_bag_screen.dart';
 
 class MeScreen extends StatefulWidget {
   const MeScreen({super.key});
@@ -79,29 +81,34 @@ class _MeScreenState extends State<MeScreen> {
   }
 
   Future<void> _loadUserProfile() async {
-    // 1. Try local saved user first
+    // 1. Try local saved user first for 0.00ms instant rendering
     final savedUser = await AuthApiService.getSavedUser();
     if (savedUser != null && mounted) {
       setState(() {
         _myProfile = ModelProfile.fromJson(savedUser);
+        _myGems = savedUser['coins'] is int ? savedUser['coins'] : (_myGems);
       });
     }
 
-    // 2. Fetch fresh profile from Laravel REST API
-    final remoteProfile = await ProfileApiService.getMyProfile();
-    if (remoteProfile != null && mounted) {
-      setState(() {
-        _myProfile = remoteProfile;
-      });
-    }
-
-    // 3. Fetch fresh wallet balance
+    // 2. Fetch fresh profile & wallet balance in parallel in background
     try {
-      final walletData = await WalletApiService.getWalletBalance();
-      if (walletData != null && mounted) {
+      final results = await Future.wait([
+        ProfileApiService.getMyProfile().catchError((_) => null),
+        WalletApiService.getWalletBalance().catchError((_) => null),
+      ]);
+
+      final remoteProfile = results[0] as ModelProfile?;
+      final walletData = results[1] as Map<String, dynamic>?;
+
+      if (mounted) {
         setState(() {
-          _myGems = walletData['coins'] ?? _myGems;
-          _beans = walletData['beans'] ?? _beans;
+          if (remoteProfile != null) {
+            _myProfile = remoteProfile;
+          }
+          if (walletData != null) {
+            _myGems = walletData['coins'] ?? _myGems;
+            _beans = walletData['beans'] ?? _beans;
+          }
         });
       }
     } catch (_) {}
@@ -141,7 +148,18 @@ class _MeScreenState extends State<MeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PremiumVipScreen(initialCardIndex: initialCardIndex),
+        builder: (context) => MonthlyCardScreen(initialCardIndex: initialCardIndex),
+      ),
+    ).then((_) {
+      _loadUserProfile();
+    });
+  }
+
+  void _openSvipScreen([int initialLevel = 1]) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SvipPrivilegeScreen(initialLevelIndex: initialLevel),
       ),
     ).then((_) {
       _loadUserProfile();
@@ -1115,11 +1133,12 @@ class _MeScreenState extends State<MeScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildGridMenuItem(Icons.workspace_premium_rounded, 'SVIP', const Color(0xFFFFB300), onTap: () => _openMonthlyCardScreen(1)),
+                          _buildGridMenuItem(Icons.workspace_premium_rounded, 'SVIP', const Color(0xFFFFB300), onTap: () => _openSvipScreen(1)),
                           _buildGridMenuItem(Icons.backpack_rounded, 'My Bag', const Color(0xFFAB47BC), onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('My Bag: You have 0 items currently.')),
-                            );
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const MyBagScreen()),
+                            ).then((_) => _loadUserProfile());
                           }),
                           _buildGridMenuItem(Icons.diamond_rounded, 'Gems Center', const Color(0xFF00E676), onTap: () => _openWalletScreen(initialTabIndex: 0)),
                           _buildGridMenuItem(Icons.account_balance_wallet_rounded, 'Payment\ndetails', const Color(0xFF42A5F5), onTap: () => _openWalletScreen(initialTabIndex: 1)),
@@ -1246,7 +1265,7 @@ class _MeScreenState extends State<MeScreen> {
                 // Logout Action Tile
                 Center(
                   child: TextButton.icon(
-                    onPressed: () => _showLogoutDialog(context),
+                    onPressed: () => LogoutConfirmationDialog.show(context),
                     icon: const Icon(Icons.logout_rounded, color: AppColors.badgePink, size: 18),
                     label: const Text(
                       'Log Out',
@@ -1262,48 +1281,6 @@ class _MeScreenState extends State<MeScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  void _showLogoutDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        backgroundColor: AppColors.surfaceDark,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.cardBorder),
-        ),
-        title: const Text('Log Out', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Are you sure you want to log out of Chinchins Live?',
-          style: TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.badgePink,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () async {
-              Navigator.pop(dialogCtx);
-              await AuthApiService.logout();
-              if (context.mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false,
-                );
-              }
-            },
-            child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
     );
   }

@@ -7,6 +7,7 @@ class ExploreHeader extends StatelessWidget {
   final VoidCallback onSearchTap;
   final VoidCallback onCountryTap;
   final VoidCallback? onDebugTap;
+  final VoidCallback? onMenuTap;
   final String selectedCountryCode;
 
   const ExploreHeader({
@@ -16,6 +17,7 @@ class ExploreHeader extends StatelessWidget {
     required this.onSearchTap,
     required this.onCountryTap,
     this.onDebugTap,
+    this.onMenuTap,
     this.selectedCountryCode = 'BGD',
   });
 
@@ -26,6 +28,18 @@ class ExploreHeader extends StatelessWidget {
       color: AppColors.backgroundDark,
       child: Row(
         children: [
+          // Left Toggle Menu Hamburger Icon (Opens Drawer with Logout & Profile shortcuts)
+          if (onMenuTap != null) ...[
+            IconButton(
+              tooltip: 'Menu',
+              icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+              onPressed: onMenuTap,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+            const SizedBox(width: 10),
+          ],
+
           // Left Tabs: Hot & Match
           Row(
             mainAxisSize: MainAxisSize.min,

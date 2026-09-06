@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../core/services/fast_api_client.dart';
+import '../../../core/services/profile_api_service.dart';
+import '../../../core/services/remote_config_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../navigation/screens/main_navigation_screen.dart';
 import '../services/auth_api_service.dart';
@@ -40,19 +43,28 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   Future<void> _checkAuthentication() async {
     final startTime = DateTime.now();
 
-    // 1. Check if token exists and verify with backend / local storage
-    final user = await AuthApiService.checkAuthSession();
+    // 1. Initialize fast cache layer and check saved token in parallel
+    await FastApiClient.init();
+    final token = await AuthApiService.getToken();
+    final savedUser = await AuthApiService.getSavedUser();
 
-    // Ensure minimum smooth splash duration (at least 900ms) for pleasant UX
+    // If authenticated, kick off background session & config sync in parallel immediately
+    if (token != null && token.isNotEmpty) {
+      unawaited(AuthApiService.syncSessionInBackground());
+      unawaited(ProfileApiService.preloadHomeFeedInBackground());
+      unawaited(RemoteConfigService.instance.fetchRemoteConfig());
+    }
+
+    // Keep pleasant smooth branded entrance (350ms max)
     final elapsed = DateTime.now().difference(startTime);
-    if (elapsed.inMilliseconds < 900) {
-      await Future.delayed(Duration(milliseconds: 900 - elapsed.inMilliseconds));
+    if (elapsed.inMilliseconds < 350) {
+      await Future.delayed(Duration(milliseconds: 350 - elapsed.inMilliseconds));
     }
 
     if (!mounted) return;
 
-    if (user != null) {
-      // User is authenticated -> Go directly to Main Screen
+    if (token != null && token.isNotEmpty && savedUser != null) {
+      // User is authenticated -> Go directly to Main Screen instantly
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
@@ -60,7 +72,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },
-          transitionDuration: const Duration(milliseconds: 400),
+          transitionDuration: const Duration(milliseconds: 300),
         ),
       );
     } else {
@@ -72,7 +84,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },
-          transitionDuration: const Duration(milliseconds: 400),
+          transitionDuration: const Duration(milliseconds: 300),
         ),
       );
     }

@@ -51,13 +51,20 @@ class ApiConstants {
   static String get depositHistory => '$baseUrl/deposit/history';
   static String get walletTransactions => '$baseUrl/wallet/transactions';
   
-  // VIP Privilege Cards (Monthly & Weekly Cards)
-  static String get vipCards => '$baseUrl/vip-cards';
-  static String get monthlyCards => '$baseUrl/vip-cards';
-  static String get vipBanner => '$baseUrl/vip-cards/banner';
-  static String get vipCardsMySubscriptions => '$baseUrl/vip-cards/my-subscriptions';
-  static String get vipCardsPurchase => '$baseUrl/vip-cards/purchase';
-  static String get vipCardsClaimDaily => '$baseUrl/vip-cards/claim-daily';
+  // Spend Less, Get More Gems & VIP Privilege Cards (Monthly & Weekly Cards)
+  static String get spendLessGetMore => '$baseUrl/spend-less-get-more';
+  static String get spendLessGetMoreBanner => '$baseUrl/spend-less-get-more/banner';
+  static String get spendLessGetMoreMy => '$baseUrl/spend-less-get-more/my';
+  static String get spendLessGetMorePurchase => '$baseUrl/spend-less-get-more/purchase';
+  static String get spendLessGetMoreClaim => '$baseUrl/spend-less-get-more/claim';
+  
+  // Endpoint aliases
+  static String get vipCards => spendLessGetMore;
+  static String get monthlyCards => spendLessGetMore;
+  static String get vipBanner => spendLessGetMoreBanner;
+  static String get vipCardsMySubscriptions => spendLessGetMoreMy;
+  static String get vipCardsPurchase => spendLessGetMorePurchase;
+  static String get vipCardsClaimDaily => spendLessGetMoreClaim;
   
   // Withdrawal / Cash Out endpoints
   static String get withdrawInfo => '$baseUrl/withdraw/info';
@@ -155,6 +162,29 @@ class ApiConstants {
   static String get notifications => '$baseUrl/notifications';
   static String get userNotifications => '$baseUrl/user/notifications';
   static String get testPushNotification => '$baseUrl/notifications/test-push';
+
+  // My Bag & User Inventory Endpoints
+  static String get bag => '$baseUrl/bag';
+  static String get myBag => '$baseUrl/bag';
+  static String get bagStore => '$baseUrl/bag/store';
+  static String get bagPurchase => '$baseUrl/bag/purchase';
+  static String get bagUse => '$baseUrl/bag/use';
+  static String get bagEquip => '$baseUrl/bag/use';
+  static String get bagUnequip => '$baseUrl/bag/unequip';
+  static String get bagGift => '$baseUrl/bag/gift';
+
+  // In-Chat & In-Call Recharge Modal Endpoints
+  static String get rechargeModalData => '$baseUrl/recharge/modal-data';
+  static String get coinPackagesRechargeModal => '$baseUrl/coin-packages/recharge-modal';
+
+  // User Block & Moderation Report endpoints
+  static String get chatBlock => '$baseUrl/chat/block';
+  static String get userBlock => '$baseUrl/user/block';
+  static String get chatUnblock => '$baseUrl/chat/unblock';
+  static String get userUnblock => '$baseUrl/user/unblock';
+  static String get chatReport => '$baseUrl/chat/report';
+  static String get userReport => '$baseUrl/user/report';
+  static String get reportReasons => '$baseUrl/chat/report-reasons';
 }
 
 

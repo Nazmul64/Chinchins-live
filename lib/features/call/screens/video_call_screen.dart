@@ -69,6 +69,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     'You look so pretty! ❤️',
   ];
 
+  Map<String, dynamic>? _featuredPackage;
+
   @override
   void initState() {
     super.initState();
@@ -94,10 +96,22 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
     _initWebRTCMediaAndFlow();
     _loadUserBalance();
+    _loadFeaturedPackage();
+  }
+
+  Future<void> _loadFeaturedPackage() async {
+    try {
+      final packages = await WalletApiService.getCoinPackages();
+      if (packages.isNotEmpty && mounted) {
+        setState(() {
+          _featuredPackage = packages.first;
+        });
+      }
+    } catch (_) {}
   }
 
   void _onMediaConnected([MediaStream? stream]) {
-    if (stream != null) {
+    if (stream != null && _webrtcService.remoteRenderer.srcObject != stream) {
       _webrtcService.remoteRenderer.srcObject = stream;
     }
     CallSoundManager.stopRingtone();
@@ -546,202 +560,163 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               ),
             ),
 
-          // ৩. টপ হেডার বার: ডিবাগ আইকন ও Dev Mode ব্যাজ
+          // ৩. টপ হেডার বার: ব্যাক/ডাউন অ্যারো + হোস্ট প্রোফাইল ক্যাপসুল (টপ-লেফটে) এবং PiP উইন্ডো (টপ-রাইটে)
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Host Info Capsule with Level Base Frame
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.65),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white24, width: 1),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AvatarWithFrame(
-                          avatarUrl: widget.model.avatarUrl,
-                          frameUrl: widget.model.avatarFrameUrl,
-                          level: widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level,
-                          badgeColor: widget.model.badgeColor,
-                          glowColor: widget.model.glowColor,
-                          size: 32,
-                          showLevelBadge: false,
+                  // Left: Down Arrow (⌄) + Host Profile Capsule
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 34),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                      ),
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: Colors.white24, width: 1),
                         ),
-                        const SizedBox(width: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              widget.model.name,
-                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            AvatarWithFrame(
+                              avatarUrl: widget.model.avatarUrl,
+                              frameUrl: widget.model.avatarFrameUrl,
+                              level: widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level,
+                              badgeColor: widget.model.badgeColor,
+                              glowColor: widget.model.glowColor,
+                              size: 32,
+                              showLevelBadge: false,
                             ),
-                            Text(
-                              'Lv.${widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level}',
-                              style: TextStyle(
-                                color: HexColor.fromHex(widget.model.badgeColor, defaultColor: AppColors.gemYellow),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                              ),
+                            const SizedBox(width: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  widget.model.name,
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  'Lv.${widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level}',
+                                  style: TextStyle(
+                                    color: HexColor.fromHex(widget.model.badgeColor, defaultColor: AppColors.gemYellow),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
 
-                  // Debug / Dev Mode Button
-                  GestureDetector(
-                    onTap: () {
-                      WebRTCDebugModal.show(
-                        context,
-                        webrtcService: _webrtcService,
-                        callId: widget.callId,
-                        isIncoming: widget.isIncoming,
-                        callerOrReceiverName: widget.model.name,
-                      );
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.8), width: 1.2),
+                  // Right: PiP Window (Single Clean Instance with Timer) + Dev Mode Button
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _isSwappedVideo = !_isSwappedVideo;
+                          });
+                        },
+                        child: Container(
+                          width: 100,
+                          height: 140,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.8), width: 1.5),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4)),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                _buildPipVideoView(),
+                                // Call Duration Timer Label
+                                Positioned(
+                                  bottom: 6,
+                                  right: 6,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.75),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      _formatDuration(_callSeconds),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.bug_report_rounded, color: AppColors.neonPink, size: 14),
-                          SizedBox(width: 4),
-                          Text('Dev mode', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                        ],
+                      const SizedBox(height: 8),
+                      // Dev Mode Button
+                      GestureDetector(
+                        onTap: () {
+                          WebRTCDebugModal.show(
+                            context,
+                            webrtcService: _webrtcService,
+                            callId: widget.callId,
+                            isIncoming: widget.isIncoming,
+                            callerOrReceiverName: widget.model.name,
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.8), width: 1.2),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.bug_report_rounded, color: AppColors.neonPink, size: 13),
+                              SizedBox(width: 4),
+                              Text('Dev mode', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
 
-          // ৪. কর্নার PiP উইন্ডো (সেলফি ক্যামেরা + ডিউরেশন টাইমার) matching Screenshot 2 & 3
-          Positioned(
-            top: 40,
-            right: 16,
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _isSwappedVideo = !_isSwappedVideo;
-                });
-              },
-              child: Container(
-                width: 100,
-                height: 140,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4)),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      _buildPipVideoView(),
-                      // কল ডিউরেশন লেবেল (যেমন 00:06 / 00:11)
-                      Positioned(
-                        bottom: 6,
-                        right: 6,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.75),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            _formatDuration(_callSeconds),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // ৫. সেন্টারে ১৬ সেকেন্ড ফ্রি প্রিভিউ অ্যালার্ট ব্যানার (Screenshot 2 & 3)
-          if (_isFreeTrialActive && _freeTrialRemaining > 0)
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 230,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFFF9800), Color(0xFFFF5722)],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFFF5722).withValues(alpha: 0.4),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.notifications_active_rounded,
-                          color: Color(0xFFFF5722),
-                          size: 14,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          'After $_freeTrialRemaining seconds,you will be charged $_ratePerMinute coins per minute.',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          // ৬. ফ্লোটিং মিনি জেম প্যাকেজ উইজেট (Screenshot 3-তে লাল দাগ দিয়ে মার্ক করা)
+          // ৪. ফ্লোটিং মিনি জেম প্যাকেজ উইজেট (Dynamic Database Package from Admin Panel)
           Positioned(
             right: 16,
             bottom: 150,
@@ -763,24 +738,24 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                     ),
                   ],
                 ),
-                child: const Column(
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.diamond_rounded, color: Color(0xFFFFD54F), size: 14),
-                        SizedBox(width: 4),
+                        const Icon(Icons.diamond_rounded, color: Color(0xFFFFD54F), size: 14),
+                        const SizedBox(width: 4),
                         Text(
-                          '7560',
-                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          '${_featuredPackage?['coins'] ?? _featuredPackage?['amount'] ?? 32000}${(_featuredPackage?['bonus_coins'] is int && _featuredPackage!['bonus_coins'] > 0) ? ' + ${_featuredPackage!['bonus_coins']}' : ''}',
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
-                      'BDT 150.00',
-                      style: TextStyle(color: Color(0xFFFFD54F), fontSize: 9, fontWeight: FontWeight.bold),
+                      _featuredPackage?['price_formatted']?.toString() ?? (_featuredPackage?['price'] != null ? 'BDT ${_featuredPackage!['price']}' : 'BDT 550.00'),
+                      style: const TextStyle(color: Color(0xFFFFD54F), fontSize: 9, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),

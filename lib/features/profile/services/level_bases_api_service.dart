@@ -1,12 +1,36 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../core/constants/api_constants.dart';
+import '../../../core/services/fast_api_client.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../auth/services/auth_api_service.dart';
 
 class LevelBasesApiService {
-  /// Fetch master list of all Level Bases & Avatar Frames
+  static List<Map<String, dynamic>> _cachedBases = [];
+
+  /// Fetch master list of all Level Bases & Avatar Frames (Instant SWR)
   static Future<List<Map<String, dynamic>>> getAllProfileBases() async {
+    if (_cachedBases.isNotEmpty) {
+      _syncProfileBasesInBackground();
+      return _cachedBases;
+    }
+
+    final localCached = await FastApiClient.getCached(ApiConstants.profileBases);
+    if (localCached is Map && localCached['status'] == true && localCached['data'] is List) {
+      _cachedBases = (localCached['data'] as List).map((e) => Map<String, dynamic>.from(e)).toList();
+      _syncProfileBasesInBackground();
+      return _cachedBases;
+    }
+
+    final liveBases = await _syncProfileBasesInBackground();
+    if (liveBases.isNotEmpty) {
+      return liveBases;
+    }
+
+    return _getDefaultLevelBases();
+  }
+
+  static Future<List<Map<String, dynamic>>> _syncProfileBasesInBackground() async {
     try {
       final token = await AuthApiService.getToken();
       final url = Uri.parse(ApiConstants.profileBases);
@@ -15,22 +39,23 @@ class LevelBasesApiService {
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map && decoded['status'] == true && decoded['data'] is List) {
-          return (decoded['data'] as List).map((e) => Map<String, dynamic>.from(e)).toList();
+          await FastApiClient.putCache(ApiConstants.profileBases, decoded);
+          _cachedBases = (decoded['data'] as List).map((e) => Map<String, dynamic>.from(e)).toList();
+          return _cachedBases;
         }
       }
     } catch (e, st) {
       AppLogger.error('GetAllProfileBasesError', e, st);
     }
-
-    return _getDefaultLevelBases();
+    return _cachedBases;
   }
 
-  /// Fetch User Level status & progression stats
+  /// Fetch User Level status & progression stats (Instant SWR)
   static Future<Map<String, dynamic>?> getUserLevelStatus({
     String? userId,
     String? accountId,
@@ -44,24 +69,38 @@ class LevelBasesApiService {
         urlStr += '?account_id=$accountId';
       }
 
+      final cached = await FastApiClient.getCached(urlStr);
+      if (cached is Map && cached['status'] == true && cached['data'] is Map) {
+        // Asynchronously update in background
+        _syncUserLevelStatusInBackground(urlStr, token);
+        return Map<String, dynamic>.from(cached['data']);
+      }
+
+      return await _syncUserLevelStatusInBackground(urlStr, token);
+    } catch (e, st) {
+      AppLogger.error('GetUserLevelStatusError', e, st);
+    }
+    return null;
+  }
+
+  static Future<Map<String, dynamic>?> _syncUserLevelStatusInBackground(String urlStr, String? token) async {
+    try {
       final url = Uri.parse(urlStr);
       final headers = <String, String>{
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map && decoded['status'] == true && decoded['data'] is Map) {
+          await FastApiClient.putCache(urlStr, decoded);
           return Map<String, dynamic>.from(decoded['data']);
         }
       }
-    } catch (e, st) {
-      AppLogger.error('GetUserLevelStatusError', e, st);
-    }
-
+    } catch (_) {}
     return null;
   }
 

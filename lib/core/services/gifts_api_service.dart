@@ -98,18 +98,11 @@ class GiftsApiService {
     } catch (_) {}
   }
 
-  /// 2. Fetch In-App Gifts Store Catalog
-  static Future<List<GiftItem>> getGiftsCatalog({
+  /// 2. Fetch In-App Gifts Store Catalog (Full metadata including categories_list & user_balance)
+  static Future<Map<String, dynamic>> getGiftsCatalogFull({
     String? category,
     bool forceRefresh = false,
   }) async {
-    if (!forceRefresh && _catalogMemCache != null && _catalogMemCache!.isNotEmpty) {
-      if (category != null && category.isNotEmpty && category != 'all') {
-        return _catalogMemCache!.where((g) => g.category.toLowerCase() == category.toLowerCase()).toList();
-      }
-      return _catalogMemCache!;
-    }
-
     try {
       final token = await AuthApiService.getToken();
       final headers = {
@@ -123,7 +116,12 @@ class GiftsApiService {
       }
 
       Uri uri = Uri.parse(ApiConstants.giftsCatalog).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
-      final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 5));
+      var response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 404) {
+        uri = Uri.parse(ApiConstants.giftsStore).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+        response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 6));
+      }
 
       if (response.statusCode == 200) {
         final json = _safeJsonDecode(response.body);
@@ -131,15 +129,21 @@ class GiftsApiService {
           final data = json['data'] ?? json;
 
           // Parse user balance
-          if (data['user_balance'] != null && data['user_balance']['coins'] != null) {
-            _userCoinBalance = data['user_balance']['coins'] is int
-                ? data['user_balance']['coins']
-                : int.tryParse('${data['user_balance']['coins']}');
+          if (data['user_balance'] != null) {
+            final b = data['user_balance'];
+            if (b is Map && b['coins'] != null) {
+              _userCoinBalance = b['coins'] is int ? b['coins'] : int.tryParse('${b['coins']}');
+            } else if (b is int) {
+              _userCoinBalance = b;
+            }
           }
 
-          // Parse categories
-          if (data['categories'] is Map<String, dynamic>) {
-            _categoriesMemCache = Map<String, int>.from(data['categories']);
+          // Parse categories list if available
+          List<Map<String, dynamic>> categoriesList = [];
+          if (data['categories_list'] is List) {
+            categoriesList = List<Map<String, dynamic>>.from(data['categories_list']);
+          } else {
+            categoriesList = getPredefinedGiftCategories();
           }
 
           // Parse gifts list
@@ -150,25 +154,202 @@ class GiftsApiService {
             giftsJson = data;
           }
 
+          List<GiftItem> parsedGifts = [];
           if (giftsJson != null) {
-            final parsedGifts = giftsJson
+            parsedGifts = giftsJson
                 .whereType<Map<String, dynamic>>()
                 .map((item) => GiftItem.fromJson(item))
                 .toList();
-
             _catalogMemCache = parsedGifts;
-            if (category != null && category.isNotEmpty && category != 'all') {
-              return parsedGifts.where((g) => g.category.toLowerCase() == category.toLowerCase()).toList();
-            }
-            return parsedGifts;
           }
+
+          if (parsedGifts.isEmpty && _catalogMemCache != null && _catalogMemCache!.isNotEmpty) {
+            parsedGifts = _catalogMemCache!;
+          }
+
+          return {
+            'user_balance': {
+              'coins': _userCoinBalance ?? 50000,
+              'formatted_coins': GiftItem.formatCoinValue(_userCoinBalance ?? 50000),
+            },
+            'categories_list': categoriesList,
+            'gifts': parsedGifts,
+          };
         }
       }
     } catch (e) {
-      debugPrint('[GiftsApiService] getGiftsCatalog error: $e');
+      debugPrint('[GiftsApiService] getGiftsCatalogFull error: $e');
     }
 
-    return _catalogMemCache ?? [];
+    return {
+      'user_balance': {
+        'coins': _userCoinBalance ?? 50000,
+        'formatted_coins': GiftItem.formatCoinValue(_userCoinBalance ?? 50000),
+      },
+      'categories_list': getPredefinedGiftCategories(),
+      'gifts': _catalogMemCache ?? getFallbackGifts(),
+    };
+  }
+
+  /// Get predefined 12 categories with colors and icons
+  static List<Map<String, dynamic>> getPredefinedGiftCategories() {
+    return [
+      { 'key': 'all', 'label': 'All', 'emoji': '🎁', 'icon': 'fa-gift', 'color': 0xFF64748B, 'count': 160 },
+      { 'key': 'hot', 'label': 'Hot', 'emoji': '🔥', 'icon': 'fa-fire', 'color': 0xFFF43F5E, 'count': 71 },
+      { 'key': 'lucky', 'label': 'Lucky', 'emoji': '🍀', 'icon': 'fa-clover', 'color': 0xFF10B981, 'count': 20 },
+      { 'key': 'svip', 'label': 'SVIP', 'emoji': '👑', 'icon': 'fa-crown', 'color': 0xFFF59E0B, 'count': 12 },
+      { 'key': 'intimacy', 'label': 'Intimacy', 'emoji': '💖', 'icon': 'fa-heart', 'color': 0xFFEC4899, 'count': 10 },
+      { 'key': 'wealth', 'label': 'Wealth', 'emoji': '💰', 'icon': 'fa-coins', 'color': 0xFFEAB308, 'count': 8 },
+      { 'key': 'festival', 'label': 'Festival', 'emoji': '🎉', 'icon': 'fa-champagne-glasses', 'color': 0xFF8B5CF6, 'count': 10 },
+      { 'key': 'bag', 'label': 'Bag', 'emoji': '🎒', 'icon': 'fa-bag-shopping', 'color': 0xFF06B6D4, 'count': 5 },
+      { 'key': 'popular', 'label': 'Popular', 'emoji': '⭐', 'icon': 'fa-star', 'color': 0xFF3B82F6, 'count': 5 },
+      { 'key': 'romantic', 'label': 'Romantic', 'emoji': '💕', 'icon': 'fa-heart-circle-bolt', 'color': 0xFFFB7185, 'count': 5 },
+      { 'key': 'luxury', 'label': 'Luxury', 'emoji': '💎', 'icon': 'fa-gem', 'color': 0xFF6366F1, 'count': 5 },
+      { 'key': 'effects', 'label': 'Effects/3D', 'emoji': '⚡', 'icon': 'fa-bolt', 'color': 0xFF14B8A6, 'count': 5 },
+      { 'key': 'vip', 'label': 'VIP', 'emoji': '🌟', 'icon': 'fa-award', 'color': 0xFFA855F7, 'count': 4 },
+    ];
+  }
+
+  /// Get fallback gifts catalog for offline / immediate load
+  static List<GiftItem> getFallbackGifts() {
+    return [
+      const GiftItem(
+        id: '1',
+        giftId: 1,
+        name: 'Trophy Cup',
+        coins: 500,
+        formattedCoins: '500',
+        category: 'hot',
+        badge: 'HOT',
+        emoji: '🏆',
+      ),
+      const GiftItem(
+        id: '2',
+        giftId: 2,
+        name: 'Mystery Box',
+        coins: 888,
+        formattedCoins: '888',
+        category: 'hot',
+        badge: 'MUST WIN',
+        emoji: '📦',
+      ),
+      const GiftItem(
+        id: '3',
+        giftId: 3,
+        name: 'Lucky Chest',
+        coins: 1000,
+        formattedCoins: '1K',
+        category: 'lucky',
+        badge: 'x500 WIN',
+        emoji: '💎',
+      ),
+      const GiftItem(
+        id: '4',
+        giftId: 4,
+        name: 'Love Letter',
+        coins: 520,
+        formattedCoins: '520',
+        category: 'intimacy',
+        badge: '520',
+        emoji: '💌',
+      ),
+      const GiftItem(
+        id: '5',
+        giftId: 5,
+        name: 'Bengal Tiger',
+        coins: 28000,
+        formattedCoins: '28K',
+        category: 'svip',
+        badge: 'SVIP',
+        emoji: '🐯',
+      ),
+      const GiftItem(
+        id: '6',
+        giftId: 6,
+        name: 'Gold Ingot',
+        coins: 5000,
+        formattedCoins: '5K',
+        category: 'wealth',
+        badge: 'RICH',
+        emoji: '🪙',
+      ),
+      const GiftItem(
+        id: '7',
+        giftId: 7,
+        name: 'Sky Lanterns',
+        coins: 1200,
+        formattedCoins: '1.2K',
+        category: 'festival',
+        badge: 'FESTIVAL',
+        emoji: '🏮',
+      ),
+      const GiftItem(
+        id: '8',
+        giftId: 8,
+        name: 'Rose Bouquet',
+        coins: 99,
+        formattedCoins: '99',
+        category: 'popular',
+        badge: 'POPULAR',
+        emoji: '🌹',
+      ),
+      const GiftItem(
+        id: '9',
+        giftId: 9,
+        name: 'Supercar',
+        coins: 35000,
+        formattedCoins: '35K',
+        category: 'luxury',
+        badge: 'LUXURY',
+        emoji: '🏎️',
+      ),
+      const GiftItem(
+        id: '10',
+        giftId: 10,
+        name: 'Fire Dragon',
+        coins: 50000,
+        formattedCoins: '50K',
+        category: 'effects',
+        badge: '3D',
+        emoji: '🐉',
+      ),
+      const GiftItem(
+        id: '11',
+        giftId: 11,
+        name: 'Sovereign Crown',
+        coins: 75000,
+        formattedCoins: '75K',
+        category: 'vip',
+        badge: 'KING',
+        emoji: '👑',
+      ),
+      const GiftItem(
+        id: '12',
+        giftId: 12,
+        name: 'Lucky Tortoise',
+        coins: 200,
+        formattedCoins: '200',
+        category: 'bag',
+        badge: 'BAG',
+        emoji: '🐢',
+      ),
+    ];
+  }
+
+  /// 2. Fetch In-App Gifts Store Catalog
+  static Future<List<GiftItem>> getGiftsCatalog({
+    String? category,
+    bool forceRefresh = false,
+  }) async {
+    final full = await getGiftsCatalogFull(category: category, forceRefresh: forceRefresh);
+    if (full['gifts'] is List<GiftItem>) {
+      final list = full['gifts'] as List<GiftItem>;
+      if (category != null && category.isNotEmpty && category != 'all') {
+        return list.where((g) => g.category.toLowerCase() == category.toLowerCase()).toList();
+      }
+      return list;
+    }
+    return _catalogMemCache ?? getFallbackGifts();
   }
 
   /// 3. Send Gift to Host / User (Supports Live Stream Reverb Broadcast)

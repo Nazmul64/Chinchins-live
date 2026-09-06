@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../../core/utils/app_logger.dart';
+import '../../../core/services/signaling_service.dart';
 
 class AuthApiService {
   static const String _keyToken = 'auth_token';
@@ -214,8 +216,16 @@ class AuthApiService {
     return token != null && token.isNotEmpty;
   }
 
-  /// Verify session with backend or fallback to cached user
+  /// Instant local session retrieval (0.00ms delay)
   static Future<Map<String, dynamic>?> checkAuthSession() async {
+    final cached = await getSavedUser();
+    // Revalidate in background asynchronously
+    unawaited(syncSessionInBackground());
+    return cached;
+  }
+
+  /// Asynchronously synchronize user session from backend in background without UI blocking
+  static Future<Map<String, dynamic>?> syncSessionInBackground() async {
     try {
       final token = await getToken();
       if (token == null || token.isEmpty) return null;
@@ -225,14 +235,17 @@ class AuthApiService {
         'Authorization': 'Bearer $token',
       };
 
-      // 1. Try /api/auth/check or /api/auth/me or /api/user
       http.Response? response;
       try {
         response = await http.get(Uri.parse(ApiConstants.authCheck), headers: headers).timeout(const Duration(seconds: 6));
       } catch (_) {
         try {
-          response = await http.get(Uri.parse(ApiConstants.userProfile), headers: headers).timeout(const Duration(seconds: 6));
-        } catch (_) {}
+          response = await http.get(Uri.parse(ApiConstants.authMe), headers: headers).timeout(const Duration(seconds: 6));
+        } catch (_) {
+          try {
+            response = await http.get(Uri.parse(ApiConstants.userProfile), headers: headers).timeout(const Duration(seconds: 6));
+          } catch (_) {}
+        }
       }
 
       if (response != null && response.statusCode == 200) {
@@ -244,15 +257,9 @@ class AuthApiService {
             return userData;
           }
         }
-        return await getSavedUser();
       }
-
-      // If server is slow or background response warning, keep user logged in with cached session!
-      return await getSavedUser();
-    } catch (e) {
-      // Offline fallback: Keep user logged in with cached session
-      return await getSavedUser();
-    }
+    } catch (_) {}
+    return null;
   }
 
   /// Save user token & profile in local storage
@@ -291,25 +298,45 @@ class AuthApiService {
     return null;
   }
 
-  /// Clear session on explicit manual logout ONLY
-  static Future<void> logout() async {
+  /// Clear session on explicit manual logout (Revokes server token & wipes local state)
+  static Future<bool> logout({bool allDevices = false, bool clearFcm = true}) async {
     try {
       final token = await getToken();
-      if (token != null) {
+      if (token != null && token.isNotEmpty) {
         final url = Uri.parse(ApiConstants.logout);
-        await http.post(
-          url,
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-        ).timeout(const Duration(seconds: 4));
+        final response = await http
+            .post(
+              url,
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+              body: jsonEncode({
+                'all_devices': allDevices,
+                'clear_fcm': clearFcm,
+              }),
+            )
+            .timeout(const Duration(seconds: 6));
+        AppLogger.info('AuthLogout', 'Server response: ${response.statusCode} - ${response.body}');
       }
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.error('AuthLogoutError', e);
+    } finally {
+      // Disconnect WebSocket / Reverb signaling
+      try {
+        await SignalingService().disconnect();
+      } catch (_) {}
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_keyToken);
-    await prefs.remove(_keyUser);
+      // Clear all local preferences & cache
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyToken);
+      await prefs.remove(_keyUser);
+      await prefs.remove('user_profile');
+      await prefs.remove('user_id');
+      await prefs.remove('fcm_token');
+      await prefs.remove('kyc_verification_status');
+    }
+    return true;
   }
 }

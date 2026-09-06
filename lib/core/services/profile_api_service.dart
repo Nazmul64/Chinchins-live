@@ -5,9 +5,12 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../constants/api_constants.dart';
 import '../models/model_profile.dart';
+import 'fast_api_client.dart';
 import '../../features/auth/services/auth_api_service.dart';
 
 class ProfileApiService {
+  static List<ModelProfile> _inMemoryHomeCache = [];
+
   /// Safely parse JSON from raw HTTP body without throwing FormatException on HTML error pages
   static dynamic _safeJsonDecode(String body) {
     try {
@@ -15,6 +18,126 @@ class ProfileApiService {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Get In-Memory Home Feed immediately (0.00ms synchronous)
+  static List<ModelProfile> getCachedHomeFeed() {
+    if (_inMemoryHomeCache.isNotEmpty) {
+      return _inMemoryHomeCache;
+    }
+    final cached = FastApiClient.getCachedSync(ApiConstants.homeFeed);
+    if (cached != null) {
+      return _parseUserList(cached);
+    }
+    return [];
+  }
+
+  /// Helper to parse user list from various backend JSON formats
+  static List<ModelProfile> _parseUserList(dynamic data) {
+    if (data == null) return [];
+    List? userList;
+    if (data is List) {
+      userList = data;
+    } else if (data is Map) {
+      if (data['data'] is List) {
+        userList = data['data'] as List;
+      } else if (data['data'] is Map) {
+        if (data['data']['users'] is List) {
+          userList = data['data']['users'] as List;
+        } else if (data['data']['data'] is List) {
+          userList = data['data']['data'] as List;
+        }
+      } else if (data['users'] is List) {
+        userList = data['users'] as List;
+      }
+    }
+
+    if (userList != null && userList.isNotEmpty) {
+      final parsed = userList
+          .whereType<Map<String, dynamic>>()
+          .map((u) => ModelProfile.fromJson(u))
+          .where((profile) {
+            final name = profile.name.trim().toLowerCase();
+            final firstName = (profile.firstName ?? '').trim().toLowerCase();
+            final lastName = (profile.lastName ?? '').trim().toLowerCase();
+            final email = (profile.email ?? '').trim().toLowerCase();
+
+            if (name == 'admin' ||
+                name.contains('administrator') ||
+                name == 'ayeena04' ||
+                name == 'ayeena' ||
+                firstName == 'admin' ||
+                lastName == 'admin' ||
+                email.startsWith('admin@') ||
+                email.contains('admin@')) {
+              return false;
+            }
+            return true;
+          })
+          .toList();
+
+      if (parsed.isNotEmpty) {
+        _inMemoryHomeCache = parsed;
+      }
+      return parsed;
+    }
+    return [];
+  }
+
+  /// Preload home feed in background during startup
+  static Future<void> preloadHomeFeedInBackground() async {
+    try {
+      final token = await AuthApiService.getToken();
+      await FastApiClient.fetchWithInstantCache(
+        endpoint: ApiConstants.homeFeed,
+        token: token,
+        queryParams: {'per_page': '20'},
+        onData: (data, isFromCache) {
+          _parseUserList(data);
+        },
+      );
+    } catch (_) {}
+  }
+
+  /// Fetch streamers/users for Home Feed with SWR
+  static Future<void> getHomeFeedSWR({
+    int page = 1,
+    int perPage = 20,
+    String? country,
+    String? gender,
+    String? search,
+    bool? isActive,
+    required Function(List<ModelProfile> users, bool isFromCache) onResult,
+  }) async {
+    final token = await AuthApiService.getToken();
+    final queryParams = <String, dynamic>{
+      'page': page,
+      'per_page': perPage,
+    };
+    if (country != null && country.isNotEmpty && country != 'All') {
+      queryParams['country'] = country;
+    }
+    if (gender != null && gender.isNotEmpty && gender != 'All') {
+      queryParams['gender'] = gender.toLowerCase();
+    }
+    if (search != null && search.isNotEmpty) {
+      queryParams['search'] = search;
+    }
+    if (isActive != null) {
+      queryParams['is_active'] = isActive ? '1' : '0';
+    }
+
+    await FastApiClient.fetchWithInstantCache(
+      endpoint: ApiConstants.homeFeed,
+      token: token,
+      queryParams: queryParams,
+      onData: (data, isFromCache) {
+        final users = _parseUserList(data);
+        if (users.isNotEmpty || !isFromCache) {
+          onResult(users, isFromCache);
+        }
+      },
+    );
   }
 
   /// Fetch authenticated user profile
@@ -30,7 +153,7 @@ class ProfileApiService {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
         },
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 404) {
         url = Uri.parse(ApiConstants.userProfile);
@@ -40,7 +163,7 @@ class ProfileApiService {
             'Accept': 'application/json',
             'Authorization': 'Bearer $token',
           },
-        ).timeout(const Duration(seconds: 10));
+        ).timeout(const Duration(seconds: 8));
       }
 
       if (response.statusCode == 200) {
@@ -48,6 +171,7 @@ class ProfileApiService {
         if (data != null) {
           final userData = data['data']?['user'] ?? data['data'] ?? data['user'];
           if (userData != null && userData is Map<String, dynamic>) {
+            await AuthApiService.saveUser(userData);
             return ModelProfile.fromJson(userData);
           }
         }
@@ -91,7 +215,7 @@ class ProfileApiService {
           'Accept': 'application/json',
           if (token != null) 'Authorization': 'Bearer $token',
         },
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 404) {
         // Fallback to /api/users
@@ -102,57 +226,24 @@ class ProfileApiService {
             'Accept': 'application/json',
             if (token != null) 'Authorization': 'Bearer $token',
           },
-        ).timeout(const Duration(seconds: 10));
+        ).timeout(const Duration(seconds: 8));
       }
 
       if (response.statusCode == 200) {
         final data = _safeJsonDecode(response.body);
         if (data != null) {
-          List? userList;
-          if (data is List) {
-            userList = data;
-          } else if (data is Map) {
-            if (data['data'] is List) {
-              userList = data['data'] as List;
-            } else if (data['data'] is Map) {
-              if (data['data']['users'] is List) {
-                userList = data['data']['users'] as List;
-              } else if (data['data']['data'] is List) {
-                userList = data['data']['data'] as List;
-              }
-            } else if (data['users'] is List) {
-              userList = data['users'] as List;
-            }
-          }
-
-          if (userList != null && userList.isNotEmpty) {
-            return userList
-                .whereType<Map<String, dynamic>>()
-                .map((u) => ModelProfile.fromJson(u))
-                .where((profile) {
-                  final name = profile.name.trim().toLowerCase();
-                  final firstName = (profile.firstName ?? '').trim().toLowerCase();
-                  final lastName = (profile.lastName ?? '').trim().toLowerCase();
-                  final email = (profile.email ?? '').trim().toLowerCase();
-
-                  if (name == 'admin' ||
-                      name.contains('administrator') ||
-                      name == 'ayeena04' ||
-                      name == 'ayeena' ||
-                      firstName == 'admin' ||
-                      lastName == 'admin' ||
-                      email.startsWith('admin@') ||
-                      email.contains('admin@')) {
-                    return false;
-                  }
-                  return true;
-                })
-                .toList();
-          }
+          await FastApiClient.putCache(ApiConstants.homeFeed, data, queryParams);
+          return _parseUserList(data);
         }
       }
     } catch (_) {}
-    return [];
+
+    // Fallback to cached list
+    if (_inMemoryHomeCache.isNotEmpty) {
+      return _inMemoryHomeCache;
+    }
+    final cached = await FastApiClient.getCached(ApiConstants.homeFeed);
+    return _parseUserList(cached);
   }
 
   /// Search users by 8-digit Account ID or Name (GET /api/search?q={query})

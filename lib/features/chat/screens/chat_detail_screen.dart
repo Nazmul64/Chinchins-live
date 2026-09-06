@@ -13,6 +13,9 @@ import '../../../core/widgets/cached_image_loader.dart';
 import '../../../core/widgets/video_call_pill.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/gift_picker_modal.dart';
+import '../widgets/animated_in_chat_gift_button.dart';
+import '../widgets/chat_partner_header_card.dart';
+import '../widgets/report_user_modal.dart';
 import '../services/chat_api_service.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../../call/screens/video_call_screen.dart';
@@ -46,6 +49,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   bool _isLoadingMessages = false;
   Timer? _realtimePollTimer;
 
+  // Partner Profile & Moderation State
+  bool _isBlockedByMe = false;
+  bool _isBlockedByThem = false;
+  String _partnerCountryFlag = '🇧🇩';
+  String _partnerCountryName = 'Bangladesh';
+  int _partnerAge = 22;
+  String _partnerGender = 'Female';
+  String _partnerGenderIcon = '♀';
+  String _partnerLevel = 'Lv. 5';
+  String _partnerGreeting = 'Hey handsome! Thanks for visiting my profile ❤️';
+  String _partnerAvatar = '';
+
   // Voice recording state
   bool _isRecording = false;
   int _recordDuration = 0;
@@ -55,6 +70,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _partnerAvatar = widget.thread.avatarUrl;
     _messages = List.from(widget.thread.messages);
     _initChatUserAndMessages();
     _startRealtimePolling();
@@ -109,7 +125,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
         // Check if partner profile/avatar is returned in chat_partner
         final chatPartner = res['chat_partner'] as Map<String, dynamic>?;
-        String partnerAvatar = widget.thread.avatarUrl;
+        String partnerAvatar = _partnerAvatar.isNotEmpty ? _partnerAvatar : widget.thread.avatarUrl;
         if (chatPartner != null) {
           final pAvatar = chatPartner['avatar_url']?.toString() ??
               chatPartner['avatar']?.toString() ??
@@ -118,6 +134,41 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           if (pAvatar != null && pAvatar.isNotEmpty) {
             partnerAvatar = pAvatar;
           }
+
+          setState(() {
+            _partnerAvatar = partnerAvatar;
+            if (chatPartner['is_blocked_by_me'] is bool) {
+              _isBlockedByMe = chatPartner['is_blocked_by_me'] as bool;
+            }
+            if (chatPartner['is_blocked_by_them'] is bool) {
+              _isBlockedByThem = chatPartner['is_blocked_by_them'] as bool;
+            }
+            if (chatPartner['country_flag'] != null) {
+              _partnerCountryFlag = chatPartner['country_flag'].toString();
+            }
+            if (chatPartner['country'] != null) {
+              _partnerCountryName = chatPartner['country'].toString();
+            }
+            if (chatPartner['age'] is int) {
+              _partnerAge = chatPartner['age'] as int;
+            }
+            if (chatPartner['gender'] != null) {
+              final g = chatPartner['gender'].toString().toLowerCase();
+              _partnerGender = g.startsWith('m') ? 'Male' : 'Female';
+              _partnerGenderIcon = g.startsWith('m') ? '♂' : '♀';
+            }
+            if (chatPartner['gender_icon'] != null) {
+              _partnerGenderIcon = chatPartner['gender_icon'].toString();
+            }
+            if (chatPartner['level'] != null) {
+              _partnerLevel = chatPartner['level'].toString();
+            }
+            if (chatPartner['greeting_message'] != null && chatPartner['greeting_message'].toString().isNotEmpty) {
+              _partnerGreeting = chatPartner['greeting_message'].toString();
+            } else if (chatPartner['bio'] != null && chatPartner['bio'].toString().isNotEmpty) {
+              _partnerGreeting = chatPartner['bio'].toString();
+            }
+          });
         }
 
         if (res['messages'] is List) {
@@ -161,6 +212,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   // --- Real Voice Recording Actions ---
   Future<void> _startVoiceRecording() async {
+    if (_isBlockedByMe) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please unblock user to send voice notes.')),
+      );
+      return;
+    }
     try {
       if (await _audioRecorder.hasPermission()) {
         final tempDir = await getTemporaryDirectory();
@@ -243,6 +300,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
             builder: (context) => RechargeGemsSheet(
+              receiverId: widget.thread.modelId,
+              receiverName: widget.thread.name,
+              receiverAvatarUrl: widget.thread.avatarUrl,
               onRechargeSuccess: () {
                 _loadServerMessages();
               },
@@ -277,6 +337,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   // --- Real Image Picking & Upload ---
   Future<void> _pickAndSendImage(ImageSource source) async {
+    if (_isBlockedByMe) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please unblock user to send images.')),
+      );
+      return;
+    }
     try {
       final pickedFile = await _imagePicker.pickImage(
         source: source,
@@ -319,6 +385,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
             builder: (context) => RechargeGemsSheet(
+              receiverId: widget.thread.modelId,
+              receiverName: widget.thread.name,
+              receiverAvatarUrl: widget.thread.avatarUrl,
               onRechargeSuccess: () {
                 _loadServerMessages();
               },
@@ -409,6 +478,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Future<void> _sendMessage() async {
+    if (_isBlockedByMe) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please unblock user to send messages.')),
+      );
+      return;
+    }
     final text = _textController.text.trim();
     if (text.isEmpty) return;
 
@@ -447,6 +522,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (context) => RechargeGemsSheet(
+          receiverId: widget.thread.modelId,
+          receiverName: widget.thread.name,
+          receiverAvatarUrl: widget.thread.avatarUrl,
           onRechargeSuccess: () {
             _sendMessage();
           },
@@ -492,6 +570,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Future<void> _openVideoCall() async {
+    if (_isBlockedByMe) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please unblock user to start video call.')),
+      );
+      return;
+    }
     final model = ModelProfile(
       id: widget.thread.modelId,
       name: widget.thread.name,
@@ -573,6 +657,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           backgroundColor: Colors.transparent,
           builder: (context) => RechargeGemsSheet(
             model: model,
+            receiverId: widget.thread.modelId,
+            receiverName: widget.thread.name,
+            receiverAvatarUrl: widget.thread.avatarUrl,
             onRechargeSuccess: () {
               _openVideoCall();
             },
@@ -607,11 +694,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       orElse: () => ModelProfile(
         id: widget.thread.modelId,
         name: widget.thread.name,
-        age: 22,
-        location: 'Live Host',
-        intro: 'Hey! Chat or call me anytime.',
+        age: _partnerAge,
+        location: _partnerCountryName,
+        intro: _partnerGreeting,
         languages: const ['Bengali', 'English'],
-        avatarUrl: widget.thread.avatarUrl,
+        avatarUrl: _partnerAvatar.isNotEmpty ? _partnerAvatar : widget.thread.avatarUrl,
         galleryUrls: widget.thread.avatarUrl.isNotEmpty ? [widget.thread.avatarUrl] : [],
         pricePerMin: widget.thread.videoCallRate > 0 ? widget.thread.videoCallRate : 1800,
       ),
@@ -625,8 +712,124 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
+  void _showChatOptionsMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1B2E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            ListTile(
+              leading: Icon(
+                _isBlockedByMe ? Icons.lock_open_rounded : Icons.block_rounded,
+                color: _isBlockedByMe ? const Color(0xFF00E676) : const Color(0xFFFF5252),
+              ),
+              title: Text(
+                _isBlockedByMe ? 'Unblock ${widget.thread.name}' : 'Block ${widget.thread.name}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
+              subtitle: Text(
+                _isBlockedByMe
+                    ? 'Allow incoming calls and messages'
+                    : 'Prevent this user from messaging or calling you',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _toggleBlockUser();
+              },
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            ListTile(
+              leading: const Icon(Icons.flag_outlined, color: Colors.amber),
+              title: Text(
+                'Report ${widget.thread.name}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
+              subtitle: const Text(
+                'Report harassment, fraud, or inappropriate behavior',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                ReportUserModal.show(
+                  context,
+                  reportedUserId: widget.thread.modelId,
+                  partnerName: widget.thread.name,
+                );
+              },
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            ListTile(
+              leading: const Icon(Icons.close_rounded, color: Colors.white60),
+              title: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white70, fontSize: 15),
+              ),
+              onTap: () => Navigator.pop(ctx),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleBlockUser() async {
+    if (_isBlockedByMe) {
+      final res = await ChatApiService.unblockUser(widget.thread.modelId);
+      if (res['success'] == true) {
+        setState(() => _isBlockedByMe = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Unblocked ${widget.thread.name}.'),
+              backgroundColor: const Color(0xFF2E7D32),
+            ),
+          );
+        }
+      }
+    } else {
+      final res = await ChatApiService.blockUser(widget.thread.modelId);
+      if (res['success'] == true) {
+        setState(() => _isBlockedByMe = true);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Blocked ${widget.thread.name}.'),
+              backgroundColor: const Color(0xFFD32F2F),
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final effectiveAvatar = _partnerAvatar.isNotEmpty ? _partnerAvatar : widget.thread.avatarUrl;
+
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
       appBar: AppBar(
@@ -649,7 +852,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 decoration: const BoxDecoration(shape: BoxShape.circle),
                 child: ClipOval(
                   child: CachedImageLoader(
-                    imageUrl: widget.thread.avatarUrl,
+                    imageUrl: effectiveAvatar,
                     fit: BoxFit.cover,
                   ),
                 ),
@@ -715,12 +918,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         actions: [
           // Top Quick Video Call Action
           GestureDetector(
-            onTap: _openVideoCall,
+            onTap: _isBlockedByMe ? null : _openVideoCall,
             child: Container(
               margin: const EdgeInsets.symmetric(vertical: 10),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                gradient: AppColors.orangeGradient,
+                gradient: _isBlockedByMe ? null : AppColors.orangeGradient,
+                color: _isBlockedByMe ? Colors.white24 : null,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Row(
@@ -740,17 +944,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.more_vert_rounded),
-            onPressed: () {},
+            onPressed: _showChatOptionsMenu,
           ),
         ],
       ),
       body: Column(
         children: [
           // Free messages remaining indicator banner
-          if (_freeMessagesRemaining > 0)
+          if (_freeMessagesRemaining > 0 && !_isBlockedByMe && !_isBlockedByThem)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
@@ -779,17 +983,34 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               valueColor: AlwaysStoppedAnimation<Color>(AppColors.neonPink),
             ),
 
-          // Chat messages timeline
+          // Chat messages timeline + Top Partner Profile Header Card
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              itemCount: _messages.length,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: _messages.length + 1,
               itemBuilder: (context, index) {
-                final message = _messages[index];
+                // First item is the Chat Partner Profile Badge Card
+                if (index == 0) {
+                  return ChatPartnerHeaderCard(
+                    partnerName: widget.thread.name,
+                    avatarUrl: effectiveAvatar,
+                    countryFlag: _partnerCountryFlag,
+                    countryName: _partnerCountryName,
+                    age: _partnerAge,
+                    genderText: _partnerGender,
+                    genderIcon: _partnerGenderIcon,
+                    levelText: _partnerLevel,
+                    greetingText: _partnerGreeting,
+                    onTap: _openProfile,
+                    onCallTap: _openVideoCall,
+                  );
+                }
+
+                final message = _messages[index - 1];
                 return ChatBubble(
                   message: message,
-                  fallbackAvatar: widget.thread.avatarUrl,
+                  fallbackAvatar: effectiveAvatar,
                   partnerName: widget.thread.name,
                   onImageTap: message.imageUrl != null && message.imageUrl!.isNotEmpty
                       ? () {
@@ -828,8 +1049,62 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             ),
           ),
 
-          // Interactive Bottom Input Bar
-          Container(
+          // Blocked Notification Banner OR Interactive Bottom Input Bar
+          if (_isBlockedByMe)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: const BoxDecoration(
+                color: Color(0xFF231526),
+                border: Border(top: BorderSide(color: Color(0xFFFF5252), width: 1)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Row(
+                  children: [
+                    const Icon(Icons.block_rounded, color: Color(0xFFFF5252), size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'You have blocked ${widget.thread.name}.',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _toggleBlockUser,
+                      style: TextButton.styleFrom(
+                        backgroundColor: const Color(0xFF00E676).withValues(alpha: 0.18),
+                        foregroundColor: const Color(0xFF00E676),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: const Text('Unblock', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (_isBlockedByThem)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              color: const Color(0xFF231526),
+              child: const SafeArea(
+                top: false,
+                child: Center(
+                  child: Text(
+                    'You cannot send messages to this user.',
+                    style: TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
+            )
+          else
+            Container(
             padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 12),
             decoration: const BoxDecoration(
               color: AppColors.surfaceDark,
@@ -985,7 +1260,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
                   const SizedBox(height: 6),
 
-                  // Row 2: Video Call Action Pill & Gift Selector
+                  // Row 2: Video Call Action Pill & Animated Gift Button
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -996,49 +1271,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         onTap: _openVideoCall,
                       ),
 
-                      // Quick Gift Box Button
-                      GestureDetector(
+                      // Animated Wobbly In-Chat Gift Button
+                      AnimatedInChatGiftButton(
                         onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (context) => GiftPickerModal(
-                              onGiftSelected: _sendGift,
-                            ),
+                          GiftPickerModal.show(
+                            context,
+                            receiverId: widget.thread.modelId,
+                            receiverName: widget.thread.name,
+                            receiverAvatarUrl: effectiveAvatar,
+                            onGiftSelected: _sendGift,
                           );
                         },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFF8008), Color(0xFFFFC837)],
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.gemYellow.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.card_giftcard_rounded, color: Colors.white, size: 16),
-                              SizedBox(width: 4),
-                              Text(
-                                'Send Gift 🎁',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ),
                     ],
                   ),

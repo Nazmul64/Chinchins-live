@@ -2,12 +2,34 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../../../core/constants/api_constants.dart';
+import '../../../core/services/fast_api_client.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../auth/services/auth_api_service.dart';
 
 class WalletApiService {
-  /// 1. Get Wallet Balance, Total Deposited Coins, BDT Spent & Call Minutes
-  static Future<Map<String, dynamic>?> getWalletBalance() async {
+  static Map<String, dynamic>? _cachedBalance;
+  static List<Map<String, dynamic>> _cachedPackages = [];
+  static List<Map<String, dynamic>> _cachedPaymentMethods = [];
+
+  /// 1. Get Wallet Balance, Total Deposited Coins, BDT Spent & Call Minutes (Instant L1/L2 SWR)
+  static Future<Map<String, dynamic>?> getWalletBalance({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedBalance != null) {
+      // Revalidate in background
+      _syncWalletBalanceInBackground();
+      return _cachedBalance;
+    }
+
+    final localCached = await FastApiClient.getCached(ApiConstants.walletBalance);
+    if (localCached is Map && localCached['status'] == true && localCached['data'] != null) {
+      _cachedBalance = Map<String, dynamic>.from(localCached['data']);
+      _syncWalletBalanceInBackground();
+      return _cachedBalance;
+    }
+
+    return await _syncWalletBalanceInBackground();
+  }
+
+  static Future<Map<String, dynamic>?> _syncWalletBalanceInBackground() async {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
@@ -18,39 +40,40 @@ class WalletApiService {
       if (token != null) headers['Authorization'] = 'Bearer $token';
       if (userId != null) headers['X-User-Id'] = userId;
 
-      AppLogger.request(
-        method: 'GET',
-        url: url.toString(),
-        headers: headers,
-      );
-
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
-
-      AppLogger.response(
-        method: 'GET',
-        url: url.toString(),
-        statusCode: response.statusCode,
-        body: response.body,
-      );
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
-        try {
-          final data = jsonDecode(response.body);
-          if (data['status'] == true && data['data'] != null) {
-            return data['data'] as Map<String, dynamic>;
-          }
-        } catch (e, st) {
-          AppLogger.error('WalletBalanceParse', e, st);
+        final data = jsonDecode(response.body);
+        if (data['status'] == true && data['data'] != null) {
+          await FastApiClient.putCache(ApiConstants.walletBalance, data);
+          _cachedBalance = Map<String, dynamic>.from(data['data']);
+          return _cachedBalance;
         }
       }
     } catch (e, st) {
       AppLogger.error('WalletBalance', e, st);
     }
-    return null;
+    return _cachedBalance;
   }
 
-  /// 2. Get Active Payment Methods (bKash, Nagad, Rocket, Upay)
+  /// 2. Get Active Payment Methods (bKash, Nagad, Rocket, Upay) - Instant SWR
   static Future<List<Map<String, dynamic>>> getPaymentMethods() async {
+    if (_cachedPaymentMethods.isNotEmpty) {
+      _syncPaymentMethodsInBackground();
+      return _cachedPaymentMethods;
+    }
+
+    final cached = await FastApiClient.getCached(ApiConstants.paymentMethods);
+    if (cached is Map && cached['status'] == true && cached['data'] is List) {
+      _cachedPaymentMethods = List<Map<String, dynamic>>.from(cached['data']);
+      _syncPaymentMethodsInBackground();
+      return _cachedPaymentMethods;
+    }
+
+    return await _syncPaymentMethodsInBackground();
+  }
+
+  static Future<List<Map<String, dynamic>>> _syncPaymentMethodsInBackground() async {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
@@ -61,39 +84,45 @@ class WalletApiService {
       if (token != null) headers['Authorization'] = 'Bearer $token';
       if (userId != null) headers['X-User-Id'] = userId;
 
-      AppLogger.request(
-        method: 'GET',
-        url: url.toString(),
-        headers: headers,
-      );
-
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
-
-      AppLogger.response(
-        method: 'GET',
-        url: url.toString(),
-        statusCode: response.statusCode,
-        body: response.body,
-      );
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
-        try {
-          final data = jsonDecode(response.body);
-          if (data['status'] == true && data['data'] is List) {
-            return List<Map<String, dynamic>>.from(data['data']);
-          }
-        } catch (e, st) {
-          AppLogger.error('PaymentMethodsParse', e, st);
+        final data = jsonDecode(response.body);
+        if (data['status'] == true && data['data'] is List) {
+          await FastApiClient.putCache(ApiConstants.paymentMethods, data);
+          _cachedPaymentMethods = List<Map<String, dynamic>>.from(data['data']);
+          return _cachedPaymentMethods;
         }
       }
     } catch (e, st) {
       AppLogger.error('PaymentMethods', e, st);
     }
-    return [];
+    return _cachedPaymentMethods;
   }
 
-  /// 3. Get Coin Recharge Packages with Bonus Gems & Prices (100% Dynamic from Database)
+  /// 3. Get Coin Recharge Packages with Bonus Gems & Prices (Instant SWR + RAM Memoization)
   static Future<List<Map<String, dynamic>>> getCoinPackages() async {
+    if (_cachedPackages.isNotEmpty) {
+      _syncCoinPackagesInBackground();
+      return _cachedPackages;
+    }
+
+    final cached = await FastApiClient.getCached(ApiConstants.coinPackages);
+    if (cached is Map && cached['status'] == true && cached['data'] is List && (cached['data'] as List).isNotEmpty) {
+      _cachedPackages = List<Map<String, dynamic>>.from(cached['data']);
+      _syncCoinPackagesInBackground();
+      return _cachedPackages;
+    }
+
+    final livePackages = await _syncCoinPackagesInBackground();
+    if (livePackages.isNotEmpty) {
+      return livePackages;
+    }
+
+    return _getDefaultPackagesFallback();
+  }
+
+  static Future<List<Map<String, dynamic>>> _syncCoinPackagesInBackground() async {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
@@ -104,34 +133,91 @@ class WalletApiService {
       if (token != null) headers['Authorization'] = 'Bearer $token';
       if (userId != null) headers['X-User-Id'] = userId;
 
-      AppLogger.request(
-        method: 'GET',
-        url: url.toString(),
-        headers: headers,
-      );
-
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
-
-      AppLogger.response(
-        method: 'GET',
-        url: url.toString(),
-        statusCode: response.statusCode,
-        body: response.body,
-      );
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
-        try {
-          final data = jsonDecode(response.body);
-          if (data['status'] == true && data['data'] is List && (data['data'] as List).isNotEmpty) {
-            return List<Map<String, dynamic>>.from(data['data']);
-          }
-        } catch (e, st) {
-          AppLogger.error('CoinPackagesParse', e, st);
+        final data = jsonDecode(response.body);
+        if (data['status'] == true && data['data'] is List && (data['data'] as List).isNotEmpty) {
+          await FastApiClient.putCache(ApiConstants.coinPackages, data);
+          _cachedPackages = List<Map<String, dynamic>>.from(data['data']);
+          return _cachedPackages;
         }
       }
     } catch (e, st) {
       AppLogger.error('CoinPackages', e, st);
     }
+    return _cachedPackages;
+  }
+
+  /// 4. Get In-Chat/In-Call Recharge Modal Data with SWR (Receiver info, dynamic header, packages, balance)
+  static Future<Map<String, dynamic>?> getRechargeModalData({
+    dynamic receiverId,
+    String action = 'chat',
+    bool forceRefresh = false,
+  }) async {
+    final queryParams = <String, dynamic>{
+      if (receiverId != null) 'receiver_id': receiverId,
+      'action': action,
+    };
+
+    final localCached = await FastApiClient.getCached(ApiConstants.rechargeModalData, queryParams);
+    if (!forceRefresh && localCached is Map && localCached['status'] == true && localCached['modal'] != null) {
+      _syncRechargeModalDataInBackground(queryParams);
+      return Map<String, dynamic>.from(localCached['modal']);
+    }
+
+    final liveModal = await _syncRechargeModalDataInBackground(queryParams);
+    if (liveModal != null) {
+      return liveModal;
+    }
+
+    if (localCached is Map && localCached['modal'] != null) {
+      return Map<String, dynamic>.from(localCached['modal']);
+    }
+
+    return null;
+  }
+
+  static Future<Map<String, dynamic>?> _syncRechargeModalDataInBackground(Map<String, dynamic> queryParams) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
+      Uri uri = Uri.parse(ApiConstants.rechargeModalData).replace(
+        queryParameters: queryParams.map((k, v) => MapEntry(k, v.toString())),
+      );
+
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (userId != null) 'X-User-Id': userId,
+      };
+
+      var response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 404) {
+        // Fallback to alias endpoint
+        uri = Uri.parse(ApiConstants.coinPackagesRechargeModal).replace(
+          queryParameters: queryParams.map((k, v) => MapEntry(k, v.toString())),
+        );
+        response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 6));
+      }
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['status'] == true && decoded['modal'] != null) {
+          await FastApiClient.putCache(ApiConstants.rechargeModalData, decoded, queryParams);
+          return Map<String, dynamic>.from(decoded['modal']);
+        }
+      }
+    } catch (e, st) {
+      AppLogger.error('RechargeModalDataSyncError', e, st);
+    }
+    return null;
+  }
+
+  static List<Map<String, dynamic>> _getDefaultPackagesFallback() {
     return [
       {
         'id': 1,
