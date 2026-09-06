@@ -12,7 +12,7 @@ import flutter_webrtc
 import iris_method_channel
 import record_macos
 import shared_preferences_foundation
-import sqflite_darwin
+import sqflite
 import url_launcher_macos
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {

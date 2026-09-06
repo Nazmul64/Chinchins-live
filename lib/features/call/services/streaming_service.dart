@@ -16,6 +16,7 @@ class StreamingService {
     required String channelName,
     String callType = 'video',
     String role = 'publisher',
+    dynamic targetUserId,
   }) async {
     try {
       final token = await AuthApiService.getToken();
@@ -34,6 +35,7 @@ class StreamingService {
         'channel_name': channelName,
         'call_type': callType,
         'role': role,
+        if (targetUserId != null) 'target_user_id': targetUserId,
       };
 
       var response = await http.post(
@@ -102,15 +104,18 @@ class StreamingService {
       await [Permission.camera, Permission.microphone].request();
     } catch (_) {}
 
-    // 2. Fetch Session Token & Driver
+    // 2. Fetch Session Token & Driver with targetUserId
     final sessionData = await fetchSessionToken(
       channelName: channelName,
       callType: callType,
+      targetUserId: model.id.isNotEmpty ? model.id : model.accountId,
     );
 
     final String driver = sessionData['driver']?.toString().toLowerCase() ?? 'vps_webrtc';
     final String? agoraAppId = sessionData['agora_app_id']?.toString();
     final String? agoraToken = sessionData['agora_token']?.toString();
+    final bool isTempToken = sessionData['is_temp_token'] == true;
+    final String activeChannelName = sessionData['channel_name']?.toString() ?? channelName;
 
     if (!context.mounted) return;
 
@@ -126,10 +131,11 @@ class StreamingService {
           builder: (context) => AgoraCallScreen(
             model: model,
             callId: callId,
-            channelName: sessionData['channel_name']?.toString() ?? channelName,
+            channelName: activeChannelName,
             appId: agoraAppId,
             token: agoraToken ?? '',
             uid: agoraUid,
+            isTempToken: isTempToken,
             isFreeTrial: isFreeTrial,
             freeDurationSeconds: freeDurationSeconds,
             ratePerMinute: ratePerMinute,
