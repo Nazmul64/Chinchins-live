@@ -371,6 +371,44 @@ class ChatApiService {
     }
   }
 
+  /// Get list of blocked users
+  static Future<List<Map<String, dynamic>>> getBlockedUsers() async {
+    try {
+      final token = await AuthApiService.getToken();
+      final currentUserId = await _getCurrentUserId();
+
+      final headers = {
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (currentUserId != null) 'X-User-Id': currentUserId,
+      };
+
+      final url = Uri.parse('${ApiConstants.baseUrl}/user/blocked-list');
+      var response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 404) {
+        final fallbackUrl = Uri.parse('${ApiConstants.baseUrl}/chat/blocked-list');
+        response = await http.get(fallbackUrl, headers: headers).timeout(const Duration(seconds: 8));
+      }
+
+      if (response.statusCode == 200) {
+        final res = _safeJsonDecode(response.body);
+        if (res is Map && res['data'] is List) {
+          return List<Map<String, dynamic>>.from(
+            (res['data'] as List).map((e) => Map<String, dynamic>.from(e as Map)),
+          );
+        } else if (res is List) {
+          return List<Map<String, dynamic>>.from(
+            res.map((e) => Map<String, dynamic>.from(e as Map)),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[ChatApiService] getBlockedUsers error: $e');
+    }
+    return [];
+  }
+
   /// Submit user report (POST /api/chat/report or /api/user/report)
   static Future<Map<String, dynamic>> reportUser({
     required dynamic reportedUserId,

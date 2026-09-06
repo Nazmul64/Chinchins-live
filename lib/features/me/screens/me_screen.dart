@@ -25,6 +25,8 @@ import '../../party/screens/create_room_screen.dart';
 import '../../kyc/screens/kyc_verification_screen.dart';
 import '../../kyc/services/kyc_api_service.dart';
 import '../../bag/screens/my_bag_screen.dart';
+import 'settings_screen.dart';
+import 'feedback_screen.dart';
 
 class MeScreen extends StatefulWidget {
   const MeScreen({super.key});
@@ -1217,48 +1219,82 @@ class _MeScreenState extends State<MeScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // 7. App OTA Update & Version Card
-                GestureDetector(
-                  onTap: _checkAppUpdatesManually,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardDark,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.cardBorder),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
+                // 7. Settings, Feedback & Update Menu Block (Screenshot 1)
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: AppColors.cardDark,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.cardBorder),
+                  ),
+                  child: Column(
+                    children: [
+                      // Settings
+                      ListTile(
+                        leading: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppColors.primaryPink.withValues(alpha: 0.15),
+                            color: const Color(0xFF00E5FF).withValues(alpha: 0.15),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.system_update_rounded, color: AppColors.primaryPink, size: 20),
+                          child: const Icon(Icons.settings_rounded, color: Color(0xFF00E5FF), size: 20),
                         ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Check for App Updates', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
-                              SizedBox(height: 2),
-                              Text('Version 1.0.0 (Build 1) • OTA Live Updates', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
-                            ],
-                          ),
+                        title: const Text(
+                          'Settings',
+                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 22),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                          );
+                        },
+                      ),
+                      const Divider(color: Colors.white10, height: 1, indent: 56),
+
+                      // Feedback
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(10),
+                            color: const Color(0xFFFF9100).withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
                           ),
-                          child: const Text('Check', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                          child: const Icon(Icons.email_outlined, color: Color(0xFFFF9100), size: 20),
                         ),
-                      ],
-                    ),
+                        title: const Text(
+                          'Feedback',
+                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 22),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const FeedbackScreen()),
+                          );
+                        },
+                      ),
+                      const Divider(color: Colors.white10, height: 1, indent: 56),
+
+                      // Update
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF2A6D).withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.arrow_circle_up_rounded, color: Color(0xFFFF2A6D), size: 20),
+                        ),
+                        title: const Text(
+                          'Update',
+                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 22),
+                        onTap: _checkAppUpdatesManually,
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),
