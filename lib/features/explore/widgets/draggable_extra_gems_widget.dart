@@ -23,7 +23,6 @@ class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
   bool _isDismissed = false;
   bool _isEnabled = true;
   String _imageUrl = 'https://chinchins.live/assets/images/vip/floating_extra_gems.png';
-  String _title = 'Extra Gems';
 
   @override
   void initState() {
@@ -49,11 +48,9 @@ class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
 
       final enabled = bannerData['is_enabled'] != false;
       final rawImg = bannerData['image_url'] ?? bannerData['image'] ?? bannerData['custom_image'];
-      final title = bannerData['title']?.toString() ?? 'Extra Gems';
 
       setState(() {
         _isEnabled = enabled;
-        _title = title;
         if (rawImg != null && rawImg.toString().trim().isNotEmpty) {
           _imageUrl = CachedImageLoader.normalize(rawImg.toString().trim());
         }
@@ -141,39 +138,7 @@ class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
                       ),
                     ),
 
-                    // "Extra Gems" Pill Badge at the bottom
-                    Positioned(
-                      bottom: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFFFF8E1), Color(0xFFFFECB3)],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(0xFFFFC107),
-                            width: 1.0,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.5),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          _title,
-                          style: const TextStyle(
-                            color: Color(0xFF4E2600),
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ),
-                    ),
+
 
                     // Dismiss (X) Close button on top-left
                     Positioned(

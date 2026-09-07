@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../constants/api_constants.dart';
 
 class CachedImageLoader extends StatelessWidget {
@@ -90,20 +91,40 @@ class CachedImageLoader extends StatelessWidget {
         (File(cleanUrl).existsSync() || (cleanUrl.startsWith('/') && !cleanUrl.startsWith('http')))) {
       final file = File(cleanUrl);
       if (file.existsSync()) {
-        imageWidget = Image.file(
-          file,
-          width: width,
-          height: height,
-          fit: fit,
-          errorBuilder: (context, error, stackTrace) {
-            return _buildErrorWidget();
-          },
-        );
+        if (cleanUrl.toLowerCase().endsWith('.svg')) {
+          imageWidget = SvgPicture.file(
+            file,
+            width: width,
+            height: height,
+            fit: fit,
+            placeholderBuilder: (_) => placeholder ?? _buildPlaceholder(),
+          );
+        } else {
+          imageWidget = Image.file(
+            file,
+            width: width,
+            height: height,
+            fit: fit,
+            errorBuilder: (context, error, stackTrace) {
+              return _buildErrorWidget();
+            },
+          );
+        }
       } else {
         imageWidget = _buildErrorWidget();
       }
     }
-    // 2. Network image with instant memory/disk caching & zero-spinner placeholder
+    // 2. SVG Network Image
+    else if (cleanUrl.isNotEmpty && cleanUrl.toLowerCase().contains('.svg')) {
+      imageWidget = SvgPicture.network(
+        cleanUrl,
+        width: width,
+        height: height,
+        fit: fit,
+        placeholderBuilder: (_) => placeholder ?? _buildPlaceholder(),
+      );
+    }
+    // 3. Network image with instant memory/disk caching & zero-spinner placeholder
     else if (cleanUrl.isNotEmpty && (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://'))) {
       final cacheWidth = width != null && width! > 0 ? (width! * 2).toInt() : 800;
       final cacheHeight = height != null && height! > 0 ? (height! * 2).toInt() : 800;
@@ -117,15 +138,18 @@ class CachedImageLoader extends StatelessWidget {
         memCacheHeight: cacheHeight > 1200 ? 1200 : cacheHeight,
         fadeInDuration: const Duration(milliseconds: 100),
         fadeOutDuration: const Duration(milliseconds: 100),
-        placeholder: (context, url) => placeholder ?? Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A162B),
-            borderRadius: borderRadius,
-          ),
-        ),
+        placeholder: (context, url) => placeholder ?? _buildPlaceholder(),
         errorWidget: (context, url, error) {
+          // If cached network image fails, attempt SVG fallback or simple image
+          if (cleanUrl.toLowerCase().endsWith('.svg') || cleanUrl.toLowerCase().contains('.svg')) {
+            return SvgPicture.network(
+              cleanUrl,
+              width: width,
+              height: height,
+              fit: fit,
+              placeholderBuilder: (_) => placeholder ?? _buildPlaceholder(),
+            );
+          }
           return Image.network(
             cleanUrl,
             width: width,
@@ -149,6 +173,17 @@ class CachedImageLoader extends StatelessWidget {
     }
 
     return imageWidget;
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A162B),
+        borderRadius: borderRadius,
+      ),
+    );
   }
 
   Widget _buildErrorWidget() {

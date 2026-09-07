@@ -173,6 +173,9 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
         channelProfile: ChannelProfileType.channelProfileCommunication,
       ));
 
+      // Enable verbose debug logging for live troubleshooting
+      await _engine!.setLogLevel(LogLevel.logLevelDebug);
+
       _engine!.registerEventHandler(
         RtcEngineEventHandler(
           onJoinChannelSuccess: (RtcConnection connection, int elapsed) {

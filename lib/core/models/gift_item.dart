@@ -7,6 +7,8 @@ class GiftItem {
   final String category;
   final String emoji;
   final String imageUrl;
+  final String? pngUrl;
+  final String? svgUrl;
   final String? animationUrl;
   final String animationType;
   final String? soundUrl;
@@ -28,6 +30,8 @@ class GiftItem {
     this.category = 'popular',
     this.emoji = '🎁',
     this.imageUrl = '',
+    this.pngUrl,
+    this.svgUrl,
     this.animationUrl,
     this.animationType = 'image',
     this.soundUrl,
@@ -86,8 +90,15 @@ class GiftItem {
         ? json['total_coins']
         : (int.tryParse('${json['total_coins']}') ?? (coinsVal * (qty > 0 ? qty : 1)));
 
-    final String rawImage = json['image_url'] ?? json['image'] ?? json['photo'] ?? '';
+    final String rawPng = json['png_url']?.toString() ?? json['png']?.toString() ?? '';
+    final String rawSvg = json['svg_url']?.toString() ?? json['svg']?.toString() ?? '';
+    final String rawImage = rawPng.isNotEmpty
+        ? rawPng
+        : (json['image_url']?.toString() ?? json['image']?.toString() ?? json['photo']?.toString() ?? rawSvg);
+
     final String normalizedImg = CachedImageLoader.normalize(rawImage);
+    final String? normalizedPng = rawPng.isNotEmpty ? CachedImageLoader.normalize(rawPng) : null;
+    final String? normalizedSvg = rawSvg.isNotEmpty ? CachedImageLoader.normalize(rawSvg) : null;
 
     final String? rawAnim = json['animation_url']?.toString() ?? json['animation_full_url']?.toString() ?? json['animation']?.toString();
     final String? normalizedAnim = (rawAnim != null && rawAnim.isNotEmpty) ? CachedImageLoader.normalize(rawAnim) : null;
@@ -133,6 +144,8 @@ class GiftItem {
       category: json['category']?.toString() ?? 'popular',
       emoji: giftEmoji,
       imageUrl: normalizedImg,
+      pngUrl: normalizedPng,
+      svgUrl: normalizedSvg,
       animationUrl: normalizedAnim,
       animationType: json['animation_type']?.toString() ?? 'image',
       soundUrl: json['sound_url']?.toString(),
@@ -157,6 +170,8 @@ class GiftItem {
       'category': category,
       'emoji': emoji,
       'image_url': imageUrl,
+      'png_url': pngUrl,
+      'svg_url': svgUrl,
       'animation_url': animationUrl,
       'animation_type': animationType,
       'sound_url': soundUrl,
