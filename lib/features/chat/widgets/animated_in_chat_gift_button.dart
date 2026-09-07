@@ -55,46 +55,33 @@ class _AnimatedInChatGiftButtonState extends State<AnimatedInChatGiftButton>
             child: Transform.rotate(
               angle: _wobbleAnimation.value,
               child: Container(
-                padding: widget.compact
-                    ? const EdgeInsets.symmetric(horizontal: 10, vertical: 6)
-                    : const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
+                  shape: BoxShape.circle,
                   gradient: const LinearGradient(
                     colors: [
-                      Color(0xFFF43F5E),
-                      Color(0xFFFB7185),
                       Color(0xFFFF2D75),
+                      Color(0xFFF43F5E),
+                      Color(0xFFFF7597),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFF43F5E).withValues(alpha: 0.45),
-                      blurRadius: 8,
-                      spreadRadius: 1,
+                      color: const Color(0xFFFF2D75).withValues(alpha: 0.55),
+                      blurRadius: 10,
+                      spreadRadius: 2,
                       offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.card_giftcard_rounded, color: Colors.white, size: 16),
-                    if (!widget.compact) ...[
-                      const SizedBox(width: 4),
-                      const Text(
-                        'Gift 🎁',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                    ],
-                  ],
+                child: const Center(
+                  child: Text(
+                    '🎁',
+                    style: TextStyle(fontSize: 24),
+                  ),
                 ),
               ),
             ),

@@ -60,6 +60,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   String _partnerLevel = 'Lv. 5';
   String _partnerGreeting = 'Hey handsome! Thanks for visiting my profile ❤️';
   String _partnerAvatar = '';
+  bool _showEmojiStrip = false;
+  int _videoCallRate = 100;
 
   // Voice recording state
   bool _isRecording = false;
@@ -72,9 +74,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     super.initState();
     _partnerAvatar = widget.thread.avatarUrl;
     _messages = List.from(widget.thread.messages);
+    _videoCallRate = widget.thread.videoCallRate > 0 ? widget.thread.videoCallRate : 100;
     _initChatUserAndMessages();
+    _loadCallConfig();
     _startRealtimePolling();
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  }
+
+  Future<void> _loadCallConfig() async {
+    try {
+      final cfg = await CallApiService.getCallConfig();
+      if (cfg != null && mounted) {
+        final dynamic rpm = cfg['video_call_rate'] ?? cfg['rate_per_minute'];
+        if (rpm != null) {
+          final parsedRpm = int.tryParse(rpm.toString());
+          if (parsedRpm != null && parsedRpm > 0) {
+            setState(() {
+              _videoCallRate = parsedRpm;
+            });
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -133,6 +154,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               chatPartner['cover_photo_url']?.toString();
           if (pAvatar != null && pAvatar.isNotEmpty) {
             partnerAvatar = pAvatar;
+          }
+
+          final dynamic rawRate = chatPartner['video_call_rate'] ?? chatPartner['price_per_min'] ?? chatPartner['call_rate'];
+          if (rawRate != null) {
+            final parsedR = int.tryParse(rawRate.toString());
+            if (parsedR != null && parsedR > 0) {
+              _videoCallRate = parsedR;
+            }
           }
 
           setState(() {
@@ -765,7 +794,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               ),
               subtitle: const Text(
                 'Report harassment, fraud, or inappropriate behavior',
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: Colors.white54, fontSize: 12),
               ),
               onTap: () {
                 Navigator.pop(ctx);
@@ -880,6 +909,24 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           Icons.star_rounded,
                           color: AppColors.gemYellow,
                           size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFFA000), Color(0xFFFF6F00)],
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            _partnerLevel,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -1113,11 +1160,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Quick Emoji Action Strip
-                  if (!_isRecording)
+                  // Quick Emoji Action Strip (Toggleable via Heart Icon)
+                  if (!_isRecording && _showEmojiStrip)
                     Container(
-                      height: 32,
-                      margin: const EdgeInsets.only(bottom: 6),
+                      height: 34,
+                      margin: const EdgeInsets.only(bottom: 8),
                       child: ListView(
                         scrollDirection: Axis.horizontal,
                         physics: const BouncingScrollPhysics(),
@@ -1132,14 +1179,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                               },
                               child: Container(
                                 margin: const EdgeInsets.symmetric(horizontal: 4),
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
+                                  color: Colors.white.withValues(alpha: 0.10),
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
                                 ),
                                 child: Center(
-                                  child: Text(emoji, style: const TextStyle(fontSize: 16)),
+                                  child: Text(emoji, style: const TextStyle(fontSize: 17)),
                                 ),
                               ),
                             );
@@ -1182,6 +1229,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   else
                     Row(
                       children: [
+                        // Quick Emoji / Heart Reaction Toggle Button
+                        IconButton(
+                          icon: Icon(
+                            _showEmojiStrip ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                            color: _showEmojiStrip ? const Color(0xFFFF2D75) : const Color(0xFFFF6994),
+                            size: 24,
+                          ),
+                          onPressed: () {
+                            setState(() => _showEmojiStrip = !_showEmojiStrip);
+                          },
+                          tooltip: 'Quick Reactions',
+                        ),
+
                         // Image / Camera Attachment Button
                         IconButton(
                           icon: const Icon(
@@ -1260,14 +1320,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Video Call Pill Button
+                      // Video Call Pill Button with Dynamic Rate from Admin / Backend
                       VideoCallPill(
-                        pricePerMin: widget.thread.videoCallRate > 0 ? widget.thread.videoCallRate : 1800,
+                        pricePerMin: _videoCallRate,
                         label: '',
                         onTap: _openVideoCall,
                       ),
 
-                      // Animated Wobbly In-Chat Gift Button
+                      // Animated Glowing In-Chat Gift Button
                       AnimatedInChatGiftButton(
                         onTap: () {
                           GiftPickerModal.show(
