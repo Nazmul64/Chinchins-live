@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
+import '../../../core/services/signaling_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/widgets/cached_image_loader.dart';
@@ -42,6 +43,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   late Animation<double> _pulseAnimation;
   Timer? _statusPollTimer;
   Timer? _timeoutTimer;
+  StreamSubscription? _wsCancelledSub;
+  StreamSubscription? _wsEndedSub;
   bool _isProcessingAction = false;
 
   @override
@@ -65,7 +68,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       CallApiService.confirmRinging(callId: widget.callId!);
     }
 
-    // ৩. কলার কল কেটে দিলে সাথে সাথে রিসিভার স্ক্রিন ক্লোজ করার জন্য স্ট্যাটাস সিঙ্ক
+    // ৩. রিয়েলটাইম ওয়েব-সকেট ও স্ট্যাটাস পোলিং
+    _subscribeSignalingEvents();
     _startStatusPolling();
 
     // ৪. ৪৫ সেকেন্ড উত্তর না দিলে অটো মিসড কল
@@ -74,9 +78,18 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     });
   }
 
+  void _subscribeSignalingEvents() {
+    _wsCancelledSub = SignalingService().onCallCancelled.listen((_) {
+      _stopRingtoneAndDismiss('Call cancelled by caller');
+    });
+    _wsEndedSub = SignalingService().onCallEnded.listen((_) {
+      _stopRingtoneAndDismiss('Call ended by caller');
+    });
+  }
+
   void _startStatusPolling() {
     if (widget.callId == null) return;
-    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 1200), (timer) async {
+    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
       final statusData = await CallApiService.getCallStatus(widget.callId!);
       if (!mounted) return;
       if (statusData != null) {
@@ -94,6 +107,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   void _stopRingtoneAndDismiss(String reason) {
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
+    _wsCancelledSub?.cancel();
+    _wsEndedSub?.cancel();
     CallSoundManager.stopRingtone();
     if (mounted) {
       Navigator.pop(context);
@@ -111,6 +126,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   void dispose() {
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
+    _wsCancelledSub?.cancel();
+    _wsEndedSub?.cancel();
     CallSoundManager.stopRingtone();
     _pulseController.dispose();
     super.dispose();

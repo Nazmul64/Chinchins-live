@@ -4,6 +4,7 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../core/models/model_profile.dart';
+import '../../../core/services/signaling_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/avatar_with_frame.dart';
 import '../../../core/widgets/cached_image_loader.dart';
@@ -71,6 +72,9 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   int _callSeconds = 0;
   Timer? _timer;
   Timer? _pollingTimer;
+  StreamSubscription? _wsEndedSub;
+  StreamSubscription? _wsRejectedSub;
+  StreamSubscription? _wsCancelledSub;
   int _userGems = 0;
   bool _isRechargeSheetOpen = false;
   bool _isFreeTrialActive = true;
@@ -112,6 +116,40 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     _loadUserBalance();
     _loadFeaturedPackage();
     _loadCallConfig();
+    _startCallStatusPolling();
+    _subscribeSignalingEvents();
+  }
+
+  void _subscribeSignalingEvents() {
+    _wsEndedSub = SignalingService().onCallEnded.listen((data) {
+      debugPrint('[AgoraCallScreen] Received onCallEnded via WebSocket: $data');
+      CallSoundManager.stopRingtone();
+      if (mounted && !_isEndingCall) {
+        _endCall();
+      }
+    });
+    _wsRejectedSub = SignalingService().onCallRejected.listen((data) {
+      debugPrint('[AgoraCallScreen] Received onCallRejected via WebSocket: $data');
+      CallSoundManager.stopRingtone();
+      if (mounted && !_isEndingCall) {
+        _endCall();
+      }
+    });
+    _wsCancelledSub = SignalingService().onCallCancelled.listen((data) {
+      debugPrint('[AgoraCallScreen] Received onCallCancelled via WebSocket: $data');
+      CallSoundManager.stopRingtone();
+      if (mounted && !_isEndingCall) {
+        _endCall();
+      }
+    });
+  }
+
+  void _startCallStatusPolling() {
+    if (widget.callId == null) return;
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) {
+      _pollCallStatus();
+    });
   }
 
   Future<void> _loadCallConfig() async {
@@ -353,19 +391,22 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       }
     });
 
-    _pollingTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
-      _pollCallStatus();
-    });
-  }
-
   Future<void> _pollCallStatus() async {
     if (widget.callId == null || _isEndingCall) return;
     try {
       final statusData = await CallApiService.getCallStatus(widget.callId!);
-      if (!mounted || statusData == null) return;
+      if (!mounted || statusData == null || _isEndingCall) return;
       final status = (statusData['status'] ?? statusData['data']?['status'])?.toString().toLowerCase();
-      final isTerminated = statusData['is_terminated'] == true || statusData['data']?['is_terminated'] == true;
-      if (status == 'ended' || status == 'rejected' || status == 'cancelled' || isTerminated) {
+      final isTerminated = statusData['is_terminated'] == true ||
+          statusData['data']?['is_terminated'] == true ||
+          status == 'ended' ||
+          status == 'rejected' ||
+          status == 'cancelled' ||
+          status == 'declined' ||
+          status == 'missed' ||
+          status == 'timeout';
+      if (isTerminated) {
+        CallSoundManager.stopRingtone();
         _endCall();
       }
     } catch (_) {}
@@ -490,6 +531,9 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     CallSoundManager.stopRingtone();
     _timer?.cancel();
     _pollingTimer?.cancel();
+    _wsEndedSub?.cancel();
+    _wsRejectedSub?.cancel();
+    _wsCancelledSub?.cancel();
 
     if (widget.callId != null) {
       if (_isConnecting || _callSeconds <= 0) {
@@ -517,12 +561,17 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
 
   @override
   void dispose() {
+    _isEndingCall = true;
     CallSoundManager.stopRingtone();
     _timer?.cancel();
     _pollingTimer?.cancel();
+    _wsEndedSub?.cancel();
+    _wsRejectedSub?.cancel();
+    _wsCancelledSub?.cancel();
     if (_engine != null) {
       _engine!.leaveChannel();
       _engine!.release();
+      _engine = null;
     }
     super.dispose();
   }
