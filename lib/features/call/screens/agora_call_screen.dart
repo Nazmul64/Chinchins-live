@@ -390,6 +390,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
         _sendInCallPulse();
       }
     });
+  }
 
   Future<void> _pollCallStatus() async {
     if (widget.callId == null || _isEndingCall) return;
