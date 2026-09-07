@@ -128,14 +128,11 @@ class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
                     ),
 
                     // Real Dynamic Image from Backend / Database (Admin Panel uploaded)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: CachedImageLoader(
-                        imageUrl: _imageUrl,
-                        width: 78,
-                        height: 70,
-                        fit: BoxFit.contain,
-                      ),
+                    CachedImageLoader(
+                      imageUrl: _imageUrl,
+                      width: 86,
+                      height: 86,
+                      fit: BoxFit.contain,
                     ),
 
 

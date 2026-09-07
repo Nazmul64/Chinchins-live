@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/services/remote_config_service.dart';
+import '../../../core/widgets/cached_image_loader.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../navigation/screens/main_navigation_screen.dart';
 import '../services/auth_api_service.dart';
@@ -120,27 +122,62 @@ class _LoginScreenState extends State<LoginScreen> {
                 Center(
                   child: Column(
                     children: [
-                      Container(
-                        width: 84,
-                        height: 84,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: AppColors.primaryGradient,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.neonPink.withValues(alpha: 0.45),
-                              blurRadius: 24,
-                              spreadRadius: 4,
+                      Builder(
+                        builder: (context) {
+                          final config = RemoteConfigService.instance.config;
+                          final logoUrl = config.appLogoUrl;
+                          if (logoUrl.isNotEmpty && !logoUrl.contains('branding/logo.png')) {
+                            return ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: CachedImageLoader(
+                                imageUrl: logoUrl,
+                                width: 84,
+                                height: 84,
+                                fit: BoxFit.contain,
+                                placeholder: Container(
+                                  width: 84,
+                                  height: 84,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: AppColors.primaryGradient,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.neonPink.withValues(alpha: 0.45),
+                                        blurRadius: 24,
+                                        spreadRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Center(
+                                    child: Icon(Icons.mic_external_on_rounded, color: Colors.white, size: 44),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                          return Container(
+                            width: 84,
+                            height: 84,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: AppColors.primaryGradient,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.neonPink.withValues(alpha: 0.45),
+                                  blurRadius: 24,
+                                  spreadRadius: 4,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.mic_external_on_rounded,
-                            color: Colors.white,
-                            size: 44,
-                          ),
-                        ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.mic_external_on_rounded,
+                                color: Colors.white,
+                                size: 44,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 16),
                       const Text(
