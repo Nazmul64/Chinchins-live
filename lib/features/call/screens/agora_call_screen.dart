@@ -11,6 +11,7 @@ import '../../wallet/services/wallet_api_service.dart';
 import '../../wallet/widgets/in_call_recharge_gems_sheet.dart';
 import '../services/call_api_service.dart';
 import '../services/call_sound_manager.dart';
+import '../services/streaming_service.dart';
 
 class AgoraCallScreen extends StatefulWidget {
   final ModelProfile model;
@@ -26,6 +27,8 @@ class AgoraCallScreen extends StatefulWidget {
   final String? dialToneUrl;
   final bool isTempToken;
   final bool isVideo;
+  final bool debugMode;
+  final String logLevel;
 
   const AgoraCallScreen({
     super.key,
@@ -42,6 +45,8 @@ class AgoraCallScreen extends StatefulWidget {
     this.isIncoming = false,
     this.dialToneUrl,
     this.isVideo = true,
+    this.debugMode = true,
+    this.logLevel = 'info',
   });
 
   @override
@@ -172,8 +177,14 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
         channelProfile: ChannelProfileType.channelProfileCommunication,
       ));
 
-      // Enable verbose debug logging for live troubleshooting
-      await _engine!.setLogLevel(LogLevel.logLevelDebug);
+      // Set dynamic logging level
+      LogLevel level = LogLevel.logLevelInfo;
+      if (widget.logLevel == 'error') level = LogLevel.logLevelError;
+      if (widget.logLevel == 'warning') level = LogLevel.logLevelWarn;
+      if (widget.logLevel == 'verbose' || widget.logLevel == 'debug' || widget.debugMode) {
+        level = LogLevel.logLevelDebug;
+      }
+      await _engine!.setLogLevel(level);
 
       _engine!.registerEventHandler(
         RtcEngineEventHandler(
@@ -222,8 +233,20 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
               });
             }
           },
-          onTokenPrivilegeWillExpire: (RtcConnection connection, String token) {
-            debugPrint('[AgoraCallScreen] Token privilege will expire');
+          onTokenPrivilegeWillExpire: (RtcConnection connection, String token) async {
+            debugPrint('[AgoraCallScreen] Token expiring soon. Auto-renewing from Laravel backend...');
+            try {
+              final newToken = await StreamingService.refreshAgoraToken(
+                channelName: widget.channelName,
+                uid: widget.isTempToken ? 0 : widget.uid,
+              );
+              if (newToken.isNotEmpty && _engine != null) {
+                await _engine!.renewToken(newToken);
+                debugPrint('[AgoraCallScreen] Agora Token successfully renewed!');
+              }
+            } catch (e) {
+              debugPrint('[AgoraCallScreen] Token renew error: $e');
+            }
           },
           onError: (ErrorCodeType err, String msg) {
             debugPrint('[AgoraCallScreen] Error $err: $msg');

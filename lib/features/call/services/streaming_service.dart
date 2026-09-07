@@ -10,8 +10,8 @@ import '../screens/agora_call_screen.dart';
 import '../screens/video_call_screen.dart';
 
 class StreamingService {
-  /// Fetch the active streaming engine & credentials from Admin Settings
-  /// Returns driver ('agora' or 'vps_webrtc') along with Agora credentials or VPS WebRTC config
+  /// Fetch the active streaming engine & credentials from Laravel API Engine
+  /// Supports POST /api/calls, POST /api/stream/session-token, and POST /api/calls/initiate
   static Future<Map<String, dynamic>> fetchSessionToken({
     required String channelName,
     String callType = 'video',
@@ -23,7 +23,6 @@ class StreamingService {
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse('${ApiConstants.baseUrl}/stream/session-token');
       final headers = {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
@@ -38,19 +37,29 @@ class StreamingService {
         if (targetUserId != null) 'target_user_id': targetUserId,
       };
 
+      // 1. Try primary RESTful calling endpoint: /api/calls
       var response = await http.post(
-        url,
+        Uri.parse('${ApiConstants.baseUrl}/calls'),
         headers: headers,
         body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 8));
+      ).timeout(const Duration(seconds: 6));
 
+      // 2. Fallback to /api/stream/session-token if 404
       if (response.statusCode == 404) {
-        // Fallback to alias endpoint
         response = await http.post(
-          Uri.parse('${ApiConstants.baseUrl}/v1/stream/initialize'),
+          Uri.parse('${ApiConstants.baseUrl}/stream/session-token'),
           headers: headers,
           body: jsonEncode(payload),
-        ).timeout(const Duration(seconds: 8));
+        ).timeout(const Duration(seconds: 6));
+      }
+
+      // 3. Fallback to /api/calls/initiate if still 404
+      if (response.statusCode == 404) {
+        response = await http.post(
+          Uri.parse('${ApiConstants.baseUrl}/calls/initiate'),
+          headers: headers,
+          body: jsonEncode(payload),
+        ).timeout(const Duration(seconds: 6));
       }
 
       if (response.statusCode == 200) {
@@ -71,6 +80,57 @@ class StreamingService {
     };
   }
 
+  /// Refresh Agora RTC token automatically before expiry
+  static Future<String> refreshAgoraToken({
+    required String channelName,
+    required int uid,
+    String role = 'publisher',
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final payload = {
+        'channel_name': channelName,
+        'uid': uid,
+        'role': role,
+      };
+
+      var response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/agora/token/refresh'),
+        headers: headers,
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 404) {
+        response = await http.post(
+          Uri.parse('${ApiConstants.baseUrl}/stream/token/refresh'),
+          headers: headers,
+          body: jsonEncode(payload),
+        ).timeout(const Duration(seconds: 6));
+      }
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map) {
+          final String? newToken = decoded['token']?.toString() ??
+              decoded['rtc_token']?.toString() ??
+              decoded['data']?['token']?.toString();
+          if (newToken != null && newToken.isNotEmpty) {
+            return newToken;
+          }
+        }
+      }
+    } catch (e) {
+      AppLogger.error('StreamingService.refreshAgoraToken error', e);
+    }
+    return '';
+  }
+
   /// Check active driver from public endpoint
   static Future<String> getActiveDriver() async {
     try {
@@ -78,8 +138,10 @@ class StreamingService {
       final response = await http.get(url, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 6));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['driver'] != null) {
-          return decoded['driver'].toString();
+        if (decoded is Map) {
+          final data = decoded['data'] ?? decoded;
+          if (data['active_driver'] != null) return data['active_driver'].toString();
+          if (data['driver'] != null) return data['driver'].toString();
         }
       }
     } catch (_) {}
@@ -112,10 +174,14 @@ class StreamingService {
     );
 
     final String driver = sessionData['driver']?.toString().toLowerCase() ?? 'vps_webrtc';
-    final String? agoraAppId = sessionData['agora_app_id']?.toString();
-    final String? agoraToken = sessionData['agora_token']?.toString();
+    final String? agoraAppId = sessionData['app_id']?.toString() ?? sessionData['agora_app_id']?.toString();
+    final String? agoraToken = sessionData['token']?.toString() ??
+        sessionData['rtc_token']?.toString() ??
+        sessionData['agora_token']?.toString();
     final bool isTempToken = sessionData['is_temp_token'] == true;
     final String activeChannelName = sessionData['channel_name']?.toString() ?? channelName;
+    final bool debugMode = sessionData['debug_mode'] == true || sessionData['sdk_logging'] == true;
+    final String logLevel = sessionData['log_level']?.toString() ?? 'info';
 
     if (!context.mounted) return;
 
@@ -142,11 +208,13 @@ class StreamingService {
             isIncoming: isIncoming,
             dialToneUrl: dialToneUrl,
             isVideo: callType == 'video',
+            debugMode: debugMode,
+            logLevel: logLevel,
           ),
         ),
       );
     } else {
-      // Launch Hostinger VPS WebRTC + Reverb WebSocket Call Screen
+      // Launch Hostinger VPS WebRTC + Reverb WebSocket Call Screen (Unchanged)
       Navigator.push(
         context,
         MaterialPageRoute(
