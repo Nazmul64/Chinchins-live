@@ -66,7 +66,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
   void initState() {
     super.initState();
     _headerTitle = widget.customHeaderTitle ??
-        '✨ Chat all you want & connect face-to-face — upgrade for more fun!';
+        'I want to talk more with you. Recharge and call me back~';
     _avatarUrl = widget.receiverAvatarUrl ?? widget.model?.avatarUrl;
     _loadInitialData();
   }
@@ -311,7 +311,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
                 // Title Text
                 Expanded(
                   child: Text(
-                    _headerTitle ?? '✨ Chat all you want & connect face-to-face — upgrade for more fun!',
+                    _headerTitle ?? 'I want to talk more with you. Recharge and call me back~',
                     style: const TextStyle(
                       color: Color(0xFF2E2437),
                       fontSize: 12.5,

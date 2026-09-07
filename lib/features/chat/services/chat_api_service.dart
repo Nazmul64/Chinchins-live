@@ -159,19 +159,31 @@ class ChatApiService {
             'data': res?['data'],
             'message': res?['message'] ?? 'Message sent successfully.',
           };
-        } else if (response.statusCode == 402) {
-          return {
-            'success': false,
-            'code': res?['code'] ?? 'MESSAGE_LIMIT_REACHED',
-            'is_limit_reached': true,
-            'message': res?['message'] ?? 'Free limit reached. Coins required.',
-            'data': res,
-          };
         } else {
-          return {
-            'success': false,
-            'message': res?['message'] ?? 'Failed to send message (${response.statusCode})',
-          };
+          final String msg = (res?['message'] ?? '').toString().toLowerCase();
+          final bool isLimit = response.statusCode == 402 ||
+              res?['code'] == 'MESSAGE_LIMIT_REACHED' ||
+              res?['is_limit_reached'] == true ||
+              msg.contains('limit') ||
+              msg.contains('recharge') ||
+              msg.contains('insufficient') ||
+              msg.contains('low balance') ||
+              (msg.contains('coin') && (msg.contains('need') || msg.contains('not enough') || msg.contains('zero')));
+
+          if (isLimit) {
+            return {
+              'success': false,
+              'code': 'MESSAGE_LIMIT_REACHED',
+              'is_limit_reached': true,
+              'message': res?['message'] ?? 'Free limit reached. Coins required.',
+              'data': res,
+            };
+          } else {
+            return {
+              'success': false,
+              'message': res?['message'] ?? 'Failed to send message (${response.statusCode})',
+            };
+          }
         }
       } else {
         final Map<String, dynamic> payload = {
@@ -205,19 +217,31 @@ class ChatApiService {
             'data': res?['data'],
             'message': res?['message'] ?? 'Message sent successfully.',
           };
-        } else if (response.statusCode == 402) {
-          return {
-            'success': false,
-            'code': res?['code'] ?? 'MESSAGE_LIMIT_REACHED',
-            'is_limit_reached': true,
-            'message': res?['message'] ?? 'Free limit reached. Coins required.',
-            'data': res,
-          };
         } else {
-          return {
-            'success': false,
-            'message': res?['message'] ?? 'Failed to send message (${response.statusCode})',
-          };
+          final String msg = (res?['message'] ?? '').toString().toLowerCase();
+          final bool isLimit = response.statusCode == 402 ||
+              res?['code'] == 'MESSAGE_LIMIT_REACHED' ||
+              res?['is_limit_reached'] == true ||
+              msg.contains('limit') ||
+              msg.contains('recharge') ||
+              msg.contains('insufficient') ||
+              msg.contains('low balance') ||
+              (msg.contains('coin') && (msg.contains('need') || msg.contains('not enough') || msg.contains('zero')));
+
+          if (isLimit) {
+            return {
+              'success': false,
+              'code': 'MESSAGE_LIMIT_REACHED',
+              'is_limit_reached': true,
+              'message': res?['message'] ?? 'Free limit reached. Coins required.',
+              'data': res,
+            };
+          } else {
+            return {
+              'success': false,
+              'message': res?['message'] ?? 'Failed to send message (${response.statusCode})',
+            };
+          }
         }
       }
     } catch (e) {

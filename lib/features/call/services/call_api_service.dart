@@ -142,20 +142,31 @@ class CallApiService {
           'data': dataMap,
           'message': decoded['message'] ?? 'Call initiated successfully.',
         };
-      } else if (response.statusCode == 402 || decoded['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
-        return {
-          'success': false,
-          'is_low_balance': true,
-          'code': 'LOW_BALANCE_DEPOSIT_REQUIRED',
-          'message': decoded['message'] ?? 'Insufficient coins balance. Please recharge now.',
-          'current_coins': decoded['current_coins'] ?? 0,
-          'required_coins': decoded['required_coins'] ?? 100,
-        };
       } else {
-        return {
-          'success': false,
-          'message': decoded['message'] ?? 'Failed to initiate call (${response.statusCode})',
-        };
+        final String msg = (decoded['message'] ?? '').toString().toLowerCase();
+        final bool isLowBalance = response.statusCode == 402 ||
+            decoded['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
+            decoded['is_low_balance'] == true ||
+            msg.contains('insufficient') ||
+            msg.contains('recharge') ||
+            msg.contains('low balance') ||
+            (msg.contains('coin') && (msg.contains('need') || msg.contains('not enough') || msg.contains('low')));
+
+        if (isLowBalance) {
+          return {
+            'success': false,
+            'is_low_balance': true,
+            'code': 'LOW_BALANCE_DEPOSIT_REQUIRED',
+            'message': decoded['message'] ?? 'Insufficient coins balance. Please recharge now.',
+            'current_coins': decoded['current_coins'] ?? 0,
+            'required_coins': decoded['required_coins'] ?? 100,
+          };
+        } else {
+          return {
+            'success': false,
+            'message': decoded['message'] ?? 'Failed to initiate call (${response.statusCode})',
+          };
+        }
       }
     } catch (e, st) {
       AppLogger.error('InitiateCallError', e, st);

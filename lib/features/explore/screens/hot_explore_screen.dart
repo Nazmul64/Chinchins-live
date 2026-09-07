@@ -8,6 +8,7 @@ import '../widgets/model_grid_card.dart';
 import '../widgets/match_tab_view.dart';
 import '../widgets/draggable_extra_gems_widget.dart';
 import '../../profile/screens/host_profile_screen.dart';
+import '../../wallet/widgets/recharge_gems_sheet.dart';
 import '../../call/screens/random_match_screen.dart';
 import '../../call/services/call_api_service.dart';
 import '../../call/services/streaming_service.dart';
@@ -338,6 +339,23 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
           freeDurationSeconds: freeSecs,
           ratePerMinute: ratePerMin,
           isIncoming: false,
+          dialToneUrl: initiateRes['dial_tone_url']?.toString(),
+        );
+      } else if (initiateRes['is_low_balance'] == true ||
+                 initiateRes['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
+                 (initiateRes['message']?.toString().toLowerCase().contains('insufficient') ?? false) ||
+                 (initiateRes['message']?.toString().toLowerCase().contains('recharge') ?? false) ||
+                 (initiateRes['message']?.toString().toLowerCase().contains('coin') ?? false) ||
+                 (initiateRes['message']?.toString().toLowerCase().contains('balance') ?? false)) {
+        RechargeGemsSheet.show(
+          context,
+          model: model,
+          receiverId: model.id,
+          receiverName: model.name,
+          receiverAvatarUrl: model.avatarUrl,
+          onRechargeSuccess: () {
+            _startVideoCall(model);
+          },
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
