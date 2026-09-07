@@ -9,6 +9,23 @@ class CallSoundManager {
     if (_isPlaying) return;
     try {
       _player ??= AudioPlayer();
+      await _player!.setAudioContext(
+        AudioContext(
+          android: const AudioContextAndroid(
+            isSpeakerphoneOn: true,
+            stayAwake: true,
+            contentType: AndroidContentType.sonification,
+            usageType: AndroidUsageType.voiceCommunication,
+            audioMode: AndroidAudioMode.inCommunication,
+          ),
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playAndRecord,
+            options: {
+              AVAudioSessionOptions.defaultToSpeaker,
+            },
+          ),
+        ),
+      );
       await _player!.setReleaseMode(ReleaseMode.loop);
       await _player!.setVolume(1.0);
       if (customUrl != null && customUrl.startsWith('http')) {
@@ -27,6 +44,23 @@ class CallSoundManager {
     if (_isPlaying) return;
     try {
       _player ??= AudioPlayer();
+      await _player!.setAudioContext(
+        AudioContext(
+          android: const AudioContextAndroid(
+            isSpeakerphoneOn: true,
+            stayAwake: true,
+            contentType: AndroidContentType.music,
+            usageType: AndroidUsageType.notificationRingtone,
+            audioMode: AndroidAudioMode.ringtone,
+          ),
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: {
+              AVAudioSessionOptions.defaultToSpeaker,
+            },
+          ),
+        ),
+      );
       await _player!.setReleaseMode(ReleaseMode.loop);
       await _player!.setVolume(1.0);
       if (customUrl != null && customUrl.startsWith('http')) {
@@ -35,7 +69,7 @@ class CallSoundManager {
         await _player!.play(AssetSource('sounds/calling_ringtone.wav'));
       }
       _isPlaying = true;
-      AppLogger.info('CallSound', 'Playing incoming phone ringing sound...');
+      AppLogger.info('CallSound', 'Playing incoming phone ringing sound (Loud Speakerphone)...');
     } catch (e, st) {
       AppLogger.error('IncomingCallSoundError', e, st);
     }
