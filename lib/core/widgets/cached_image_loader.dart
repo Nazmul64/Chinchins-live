@@ -140,7 +140,6 @@ class CachedImageLoader extends StatelessWidget {
         fadeOutDuration: const Duration(milliseconds: 100),
         placeholder: (context, url) => placeholder ?? _buildPlaceholder(),
         errorWidget: (context, url, error) {
-          // If cached network image fails, attempt SVG fallback or simple image
           if (cleanUrl.toLowerCase().endsWith('.svg') || cleanUrl.toLowerCase().contains('.svg')) {
             return SvgPicture.network(
               cleanUrl,
@@ -150,15 +149,7 @@ class CachedImageLoader extends StatelessWidget {
               placeholderBuilder: (_) => placeholder ?? _buildPlaceholder(),
             );
           }
-          return Image.network(
-            cleanUrl,
-            width: width,
-            height: height,
-            fit: fit,
-            errorBuilder: (context, err, stack) {
-              return _buildErrorWidget();
-            },
-          );
+          return _buildErrorWidget();
         },
       );
     } else {

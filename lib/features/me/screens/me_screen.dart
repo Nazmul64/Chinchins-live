@@ -1220,12 +1220,13 @@ class _MeScreenState extends State<MeScreen> {
                 const SizedBox(height: 14),
 
                 // 7. Settings, Feedback & Update Menu Block (Screenshot 1)
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: AppColors.cardDark,
+                Material(
+                  color: AppColors.cardDark,
+                  borderRadius: BorderRadius.circular(18),
+                  clipBehavior: Clip.antiAlias,
+                  shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.cardBorder),
+                    side: const BorderSide(color: AppColors.cardBorder),
                   ),
                   child: Column(
                     children: [

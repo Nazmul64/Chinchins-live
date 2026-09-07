@@ -24,7 +24,7 @@ class ExploreHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       color: AppColors.backgroundDark,
       child: Row(
         children: [
@@ -32,12 +32,12 @@ class ExploreHeader extends StatelessWidget {
           if (onMenuTap != null) ...[
             IconButton(
               tooltip: 'Menu',
-              icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+              icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 24),
               onPressed: onMenuTap,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
           ],
 
           // Left Tabs: Hot & Match
@@ -45,7 +45,7 @@ class ExploreHeader extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildTabItem(title: 'Hot', index: 0),
-              const SizedBox(width: 18),
+              const SizedBox(width: 14),
               _buildTabItem(title: 'Match', index: 1),
             ],
           ),
@@ -60,54 +60,54 @@ class ExploreHeader extends StatelessWidget {
               if (onDebugTap != null)
                 IconButton(
                   tooltip: 'WebRTC লাইভ স্ট্যাটাস',
-                  icon: const Icon(Icons.network_check_rounded, color: AppColors.neonPink, size: 22),
+                  icon: const Icon(Icons.network_check_rounded, color: AppColors.neonPink, size: 20),
                   onPressed: onDebugTap,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 ),
               // Search Icon
               IconButton(
-                icon: const Icon(Icons.search_rounded, color: Colors.white, size: 26),
+                icon: const Icon(Icons.search_rounded, color: Colors.white, size: 24),
                 onPressed: onSearchTap,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
               ),
               // Country Pill (🔴 BGD ⌄) matching Screenshot (Shown on Hot tab)
               if (selectedTabIndex == 0) ...[
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 GestureDetector(
                   onTap: onCountryTap,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: const Color(0xFF5B1066),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          width: 9,
-                          height: 9,
+                          width: 8,
+                          height: 8,
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
                             color: Color(0xFFFF2A6D),
                           ),
                         ),
-                        const SizedBox(width: 5),
+                        const SizedBox(width: 4),
                         Text(
                           selectedCountryCode,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 12.5,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(width: 3),
+                        const SizedBox(width: 2),
                         const Icon(
                           Icons.keyboard_arrow_down_rounded,
                           color: Colors.white,
-                          size: 16,
+                          size: 15,
                         ),
                       ],
                     ),
