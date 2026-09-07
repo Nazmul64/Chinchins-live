@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/cached_image_loader.dart';
 import '../services/wallet_api_service.dart';
 import 'withdraw_screen.dart';
 
@@ -467,14 +468,35 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                   // Top Diamond Icon & Base Coins Count (e.g. 32000)
                   Column(
                     children: [
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: AppColors.gemYellow.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 24),
+                      const SizedBox(height: 8),
+                      Builder(
+                        builder: (context) {
+                          final String? pkgImg = pkg['png_url'] ?? pkg['svg_url'] ?? pkg['icon_full_url'] ?? pkg['image_url'] ?? pkg['icon_url'];
+                          if (pkgImg != null && pkgImg.toString().trim().isNotEmpty) {
+                            return CachedImageLoader(
+                              imageUrl: pkgImg.toString(),
+                              width: 38,
+                              height: 38,
+                              fit: BoxFit.contain,
+                              placeholder: Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: AppColors.gemYellow.withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 24),
+                              ),
+                            );
+                          }
+                          return Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: AppColors.gemYellow.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 24),
+                          );
+                        },
                       ),
                       const SizedBox(height: 6),
                       Text(

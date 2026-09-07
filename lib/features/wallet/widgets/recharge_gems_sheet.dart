@@ -577,8 +577,22 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   const SizedBox(height: 12),
-                  // Gem Tier Artwork
-                  _buildGemArtwork(index, useOrangeTheme),
+                  // Gem Tier Artwork (Dynamic backend URL if present, or custom geometric jewel)
+                  Builder(
+                    builder: (context) {
+                      final String? pkgImg = pkg['png_url'] ?? pkg['svg_url'] ?? pkg['icon_full_url'] ?? pkg['image_url'] ?? pkg['icon_url'];
+                      if (pkgImg != null && pkgImg.toString().trim().isNotEmpty) {
+                        return CachedImageLoader(
+                          imageUrl: pkgImg.toString(),
+                          width: 38,
+                          height: 38,
+                          fit: BoxFit.contain,
+                          placeholder: _buildGemArtwork(index, useOrangeTheme),
+                        );
+                      }
+                      return _buildGemArtwork(index, useOrangeTheme);
+                    },
+                  ),
                   const SizedBox(height: 6),
 
                   // Coin Count Text
