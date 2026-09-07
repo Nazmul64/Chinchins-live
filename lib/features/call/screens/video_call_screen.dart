@@ -345,7 +345,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           setState(() {
             _isVideoBlurred = true;
           });
-          _webrtcService.toggleMute(true);
+          _webrtcService.setCallMuted(true);
           _showInCallRechargeSheet();
         } else if (widget.callId != null) {
           _sendInCallPulse();
@@ -373,7 +373,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         setState(() {
           _isVideoBlurred = true;
         });
-        _webrtcService.toggleMute(true);
+        _webrtcService.setCallMuted(true);
         _showInCallRechargeSheet();
       } else if (res['success'] == true) {
         if (res['current_coins'] != null) {
@@ -383,7 +383,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 : int.tryParse(res['current_coins'].toString()) ?? _userGems;
             _isVideoBlurred = false;
           });
-          _webrtcService.toggleMute(false);
+          _webrtcService.setCallMuted(false);
         }
       }
     } catch (_) {}
@@ -407,6 +407,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       ratePerMinute: _ratePerMinute,
       onClose: () {
         _isRechargeSheetOpen = false;
+        if (_userGems < _ratePerMinute && mounted) {
+          setState(() {
+            _isVideoBlurred = true;
+          });
+          _webrtcService.setCallMuted(true);
+        }
       },
       onRechargeSuccess: (addedGems) {
         _isRechargeSheetOpen = false;
@@ -414,7 +420,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           _userGems += addedGems;
           _isVideoBlurred = false;
         });
-        _webrtcService.toggleMute(false);
+        _webrtcService.setCallMuted(false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('🎉 Gems added! Video call extended.'),
@@ -425,6 +431,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       },
     ).then((_) {
       _isRechargeSheetOpen = false;
+      if (_userGems < _ratePerMinute && mounted) {
+        setState(() {
+          _isVideoBlurred = true;
+        });
+        _webrtcService.setCallMuted(true);
+      }
     });
   }
 
@@ -653,7 +665,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
-                                _buildPipVideoView(),
+                                _isVideoBlurred
+                                    ? ImageFiltered(
+                                        imageFilter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                                        child: _buildPipVideoView(),
+                                      )
+                                    : _buildPipVideoView(),
                                 // Call Duration Timer Label
                                 Positioned(
                                   bottom: 6,

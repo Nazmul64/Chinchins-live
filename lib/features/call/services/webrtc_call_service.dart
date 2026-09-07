@@ -64,7 +64,9 @@ class WebRTCCallService {
       _remoteStream!.getVideoTracks().isNotEmpty &&
       _remoteStream!.getVideoTracks().any((t) => t.enabled);
 
-  /// Safe SDP optimization for audio and video bitrate without violating SDP syntax
+  static List<Map<String, dynamic>>? _cachedIceServers;
+
+  /// Safe SDP optimization for Opus 128kbps crystal-clear voice and 720p/1080p HD video bitrate
   static String optimizeSdp(String rawSdp) {
     if (rawSdp.isEmpty) return rawSdp;
     var sdp = rawSdp.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
@@ -82,6 +84,12 @@ class WebRTCCallService {
           final payload = parts[0].split(':')[1];
           newLines.add('a=fmtp:$payload minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=128000;cbr=1');
         }
+      }
+
+      // Add high bitrate bandwidth line for crystal clear HD video
+      if (line.startsWith('m=video')) {
+        newLines.add('b=AS:2500');
+        newLines.add('b=TIAS:2500000');
       }
     }
 
@@ -109,9 +117,9 @@ class WebRTCCallService {
             ? false
             : {
                 'facingMode': 'user',
-                'width': {'ideal': 1280, 'max': 1920, 'min': 720},
-                'height': {'ideal': 720, 'max': 1080, 'min': 480},
-                'frameRate': {'ideal': 30, 'max': 30, 'min': 24},
+                'width': 1280,
+                'height': 720,
+                'frameRate': 30,
               },
       };
 
@@ -149,26 +157,12 @@ class WebRTCCallService {
     }
   }
 
-  /// Force maximum loud speakerphone output
+  /// Force maximum loud speakerphone output safely without disrupting audio stream
   void enforceLoudSpeakerphone() {
     try {
       Helper.setSpeakerphoneOn(true);
       _isSpeakerOn = true;
     } catch (_) {}
-
-    // Pulse speakerphone periodically during connection setup to prevent Android audio manager fallback
-    _speakerphonePulseTimer?.cancel();
-    int pulseCount = 0;
-    _speakerphonePulseTimer = Timer.periodic(const Duration(milliseconds: 600), (timer) {
-      pulseCount++;
-      try {
-        Helper.setSpeakerphoneOn(true);
-        _isSpeakerOn = true;
-      } catch (_) {}
-      if (pulseCount >= 6) {
-        timer.cancel();
-      }
-    });
   }
 
   List<Map<String, dynamic>> _sanitizeIceServers(List<Map<String, dynamic>> rawIceServers) {
@@ -281,8 +275,14 @@ class WebRTCCallService {
     required bool isCaller,
   }) async {
     try {
-      final rawIceServers = await CallApiService.getIceServers();
-      final cleanIceServers = _sanitizeIceServers(rawIceServers);
+      List<Map<String, dynamic>> cleanIceServers;
+      if (_cachedIceServers != null && _cachedIceServers!.isNotEmpty) {
+        cleanIceServers = _cachedIceServers!;
+      } else {
+        final rawIceServers = await CallApiService.getIceServers();
+        cleanIceServers = _sanitizeIceServers(rawIceServers);
+        _cachedIceServers = cleanIceServers;
+      }
       _log('ICE_SERVERS_LOADED: ${cleanIceServers.length}');
 
       final Map<String, dynamic> configuration = {
@@ -445,13 +445,16 @@ class WebRTCCallService {
     if (pc == null) return;
 
     try {
-      final offer = await pc.createOffer({
+      final rawOffer = await pc.createOffer({
         'mandatory': {
           'OfferToReceiveAudio': true,
           'OfferToReceiveVideo': true,
         },
         'optional': [],
       });
+
+      final optimizedSdp = optimizeSdp(rawOffer.sdp ?? '');
+      final offer = RTCSessionDescription(optimizedSdp, rawOffer.type ?? 'offer');
 
       await pc.setLocalDescription(offer);
       offerState = 'Sent';
@@ -469,12 +472,12 @@ class WebRTCCallService {
         },
       );
 
-      // Periodically re-broadcast offer while waiting for answer so receiver never misses it
+      // Fast re-broadcast offer every 1000ms until answer is received
       _offerRebroadcastTimer?.cancel();
       int rebroadcastCount = 0;
-      _offerRebroadcastTimer = Timer.periodic(const Duration(milliseconds: 2000), (timer) async {
+      _offerRebroadcastTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
         rebroadcastCount++;
-        if (_hasRemoteAnswer || _peerConnection == null || rebroadcastCount > 8) {
+        if (_hasRemoteAnswer || _peerConnection == null || rebroadcastCount > 10) {
           timer.cancel();
           return;
         }
@@ -658,7 +661,7 @@ class WebRTCCallService {
     _signalingTimer?.cancel();
     bool isFetching = false;
 
-    _signalingTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) async {
+    _signalingTimer = Timer.periodic(const Duration(milliseconds: 150), (timer) async {
       if (isFetching || _peerConnection == null) return;
       isFetching = true;
 
@@ -776,13 +779,16 @@ class WebRTCCallService {
             _log('SET_REMOTE_DESCRIPTION_OFFER_SUCCESS');
             await _drainPendingCandidates();
 
-            final answer = await _peerConnection!.createAnswer({
+            final rawAnswer = await _peerConnection!.createAnswer({
               'mandatory': {
                 'OfferToReceiveAudio': true,
                 'OfferToReceiveVideo': true,
               },
               'optional': [],
             });
+
+            final optimizedSdp = optimizeSdp(rawAnswer.sdp ?? '');
+            final answer = RTCSessionDescription(optimizedSdp, rawAnswer.type ?? 'answer');
 
             await _peerConnection!.setLocalDescription(answer);
             await _drainPendingCandidates();
@@ -877,12 +883,32 @@ class WebRTCCallService {
     }
   }
 
-  void toggleMute(bool isMuted) {
+  /// Mute or unmute local microphone track
+  void setAudioMuted(bool isMuted) {
     if (_localStream != null) {
       for (final track in _localStream!.getAudioTracks()) {
         track.enabled = !isMuted;
       }
     }
+  }
+
+  /// Mute or unmute incoming remote audio stream (silencing other party)
+  void setRemoteAudioMuted(bool isMuted) {
+    if (_remoteStream != null) {
+      for (final track in _remoteStream!.getAudioTracks()) {
+        track.enabled = !isMuted;
+      }
+    }
+  }
+
+  /// Mute or unmute all call audio (both mic and incoming speaker sound)
+  void setCallMuted(bool isMuted) {
+    setAudioMuted(isMuted);
+    setRemoteAudioMuted(isMuted);
+  }
+
+  void toggleMute(bool isMuted) {
+    setCallMuted(isMuted);
   }
 
   void toggleCamera(bool isOff) {

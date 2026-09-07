@@ -7,7 +7,6 @@ import '../../../core/widgets/cached_image_loader.dart';
 import '../services/call_api_service.dart';
 import '../services/call_sound_manager.dart';
 import '../services/streaming_service.dart';
-import 'video_call_screen.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final ModelProfile model;

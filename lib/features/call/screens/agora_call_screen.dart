@@ -320,6 +320,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
           _isVideoBlurred = true;
         });
         _engine?.muteLocalAudioStream(true);
+        _engine?.muteAllRemoteAudioStreams(true);
         _showInCallRechargeSheet();
       } else if (res['success'] == true) {
         if (res['current_coins'] != null) {
@@ -330,6 +331,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
             _isVideoBlurred = false;
           });
           _engine?.muteLocalAudioStream(false);
+          _engine?.muteAllRemoteAudioStreams(false);
         }
       }
     } catch (_) {}
@@ -347,6 +349,13 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       ratePerMinute: _ratePerMinute,
       onClose: () {
         _isRechargeSheetOpen = false;
+        if (_userGems < _ratePerMinute && mounted) {
+          setState(() {
+            _isVideoBlurred = true;
+          });
+          _engine?.muteLocalAudioStream(true);
+          _engine?.muteAllRemoteAudioStreams(true);
+        }
       },
       onRechargeSuccess: (addedGems) {
         _isRechargeSheetOpen = false;
@@ -355,6 +364,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
           _isVideoBlurred = false;
         });
         _engine?.muteLocalAudioStream(false);
+        _engine?.muteAllRemoteAudioStreams(false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('🎉 Gems added! Video call extended.'),
@@ -365,6 +375,13 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       },
     ).then((_) {
       _isRechargeSheetOpen = false;
+      if (_userGems < _ratePerMinute && mounted) {
+        setState(() {
+          _isVideoBlurred = true;
+        });
+        _engine?.muteLocalAudioStream(true);
+        _engine?.muteAllRemoteAudioStreams(true);
+      }
     });
   }
 
