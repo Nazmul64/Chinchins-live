@@ -1040,9 +1040,12 @@ class _SvipPrivilegeScreenState extends State<SvipPrivilegeScreen> {
               children: [
                 Row(
                   children: [
-                    const Text(
-                      '1v1 Dedicated Customer Service',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    const Flexible(
+                      child: Text(
+                        '1v1 Dedicated Customer Service',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     const SizedBox(width: 6),
                     if (!isUnlocked)

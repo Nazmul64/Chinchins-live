@@ -353,6 +353,7 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
           receiverId: model.id,
           receiverName: model.name,
           receiverAvatarUrl: model.avatarUrl,
+          modalData: initiateRes['recharge_modal_data'] as Map<String, dynamic>?,
           onRechargeSuccess: () {
             _startVideoCall(model);
           },

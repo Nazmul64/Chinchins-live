@@ -324,18 +324,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         if (!mounted) return;
 
         if (res['is_limit_reached'] == true || res['code'] == 'MESSAGE_LIMIT_REACHED') {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (context) => RechargeGemsSheet(
-              receiverId: widget.thread.modelId,
-              receiverName: widget.thread.name,
-              receiverAvatarUrl: widget.thread.avatarUrl,
-              onRechargeSuccess: () {
-                _loadServerMessages();
-              },
-            ),
+          RechargeGemsSheet.show(
+            context,
+            receiverId: widget.thread.modelId,
+            receiverName: widget.thread.name,
+            receiverAvatarUrl: widget.thread.avatarUrl,
+            modalData: res['recharge_modal_data'] as Map<String, dynamic>?,
+            onRechargeSuccess: () {
+              _loadServerMessages();
+            },
           );
         }
       }
@@ -409,18 +406,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         if (!mounted) return;
 
         if (res['is_limit_reached'] == true || res['code'] == 'MESSAGE_LIMIT_REACHED') {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (context) => RechargeGemsSheet(
-              receiverId: widget.thread.modelId,
-              receiverName: widget.thread.name,
-              receiverAvatarUrl: widget.thread.avatarUrl,
-              onRechargeSuccess: () {
-                _loadServerMessages();
-              },
-            ),
+          RechargeGemsSheet.show(
+            context,
+            receiverId: widget.thread.modelId,
+            receiverName: widget.thread.name,
+            receiverAvatarUrl: widget.thread.avatarUrl,
+            modalData: res['recharge_modal_data'] as Map<String, dynamic>?,
+            onRechargeSuccess: () {
+              _loadServerMessages();
+            },
           );
         }
       }
@@ -546,18 +540,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     if (res['is_limit_reached'] == true || res['code'] == 'MESSAGE_LIMIT_REACHED') {
       // Free message limit reached! Prompt coin recharge modal
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => RechargeGemsSheet(
-          receiverId: widget.thread.modelId,
-          receiverName: widget.thread.name,
-          receiverAvatarUrl: widget.thread.avatarUrl,
-          onRechargeSuccess: () {
-            _sendMessage();
-          },
-        ),
+      RechargeGemsSheet.show(
+        context,
+        receiverId: widget.thread.modelId,
+        receiverName: widget.thread.name,
+        receiverAvatarUrl: widget.thread.avatarUrl,
+        modalData: res['recharge_modal_data'] as Map<String, dynamic>?,
+        onRechargeSuccess: () {
+          _sendMessage();
+        },
       );
     } else if (res['success'] == true) {
       if (res['data']?['sender']?['free_messages_remaining'] is int) {
@@ -676,19 +667,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         );
       } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
         CallSoundManager.stopRingtone();
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (context) => RechargeGemsSheet(
-            model: model,
-            receiverId: widget.thread.modelId,
-            receiverName: widget.thread.name,
-            receiverAvatarUrl: widget.thread.avatarUrl,
-            onRechargeSuccess: () {
-              _openVideoCall();
-            },
-          ),
+        RechargeGemsSheet.show(
+          context,
+          model: model,
+          receiverId: widget.thread.modelId,
+          receiverName: widget.thread.name,
+          receiverAvatarUrl: widget.thread.avatarUrl,
+          modalData: res['recharge_modal_data'] as Map<String, dynamic>?,
+          onRechargeSuccess: () {
+            _openVideoCall();
+          },
         );
       } else {
         CallSoundManager.stopRingtone();

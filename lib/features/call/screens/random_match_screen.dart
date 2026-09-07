@@ -147,15 +147,16 @@ class _RandomMatchScreenState extends State<RandomMatchScreen>
     } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
       CallSoundManager.stopRingtone();
       setState(() => _isConnecting = false);
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => RechargeGemsSheet(
-          onRechargeSuccess: () {
-            _connectCall();
-          },
-        ),
+      RechargeGemsSheet.show(
+        context,
+        model: _matchedProfile,
+        receiverId: _matchedProfile?.id,
+        receiverName: _matchedProfile?.name,
+        receiverAvatarUrl: _matchedProfile?.avatarUrl,
+        modalData: res['recharge_modal_data'] as Map<String, dynamic>?,
+        onRechargeSuccess: () {
+          _connectCall();
+        },
       );
     } else {
       CallSoundManager.stopRingtone();

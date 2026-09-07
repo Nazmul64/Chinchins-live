@@ -12,6 +12,7 @@ class RechargeGemsSheet extends StatefulWidget {
   final String? receiverName;
   final String? receiverAvatarUrl;
   final String? customHeaderTitle;
+  final Map<String, dynamic>? modalData;
   final VoidCallback? onRechargeSuccess;
 
   const RechargeGemsSheet({
@@ -21,6 +22,7 @@ class RechargeGemsSheet extends StatefulWidget {
     this.receiverName,
     this.receiverAvatarUrl,
     this.customHeaderTitle,
+    this.modalData,
     this.onRechargeSuccess,
   });
 
@@ -32,6 +34,7 @@ class RechargeGemsSheet extends StatefulWidget {
     String? receiverName,
     String? receiverAvatarUrl,
     String? customHeaderTitle,
+    Map<String, dynamic>? modalData,
     VoidCallback? onRechargeSuccess,
   }) {
     return showModalBottomSheet(
@@ -45,6 +48,7 @@ class RechargeGemsSheet extends StatefulWidget {
         receiverName: receiverName,
         receiverAvatarUrl: receiverAvatarUrl,
         customHeaderTitle: customHeaderTitle,
+        modalData: modalData,
         onRechargeSuccess: onRechargeSuccess,
       ),
     );
@@ -58,7 +62,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
   int _selectedPackageIndex = 0;
   bool _isLoading = true;
   List<Map<String, dynamic>> _packages = [];
-  int _userGems = 60;
+  int _userGems = 0;
   String? _headerTitle;
   String? _avatarUrl;
 
@@ -68,19 +72,43 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
     _headerTitle = widget.customHeaderTitle ??
         'I want to talk more with you. Recharge and call me back~';
     _avatarUrl = widget.receiverAvatarUrl ?? widget.model?.avatarUrl;
+
+    // If modalData was passed directly from check-permission or pre-call API
+    final initialModal = widget.modalData;
+    if (initialModal != null) {
+      if (initialModal['title'] != null || initialModal['header_title'] != null || initialModal['teaser_text'] != null) {
+        _headerTitle = (initialModal['title'] ?? initialModal['header_title'] ?? initialModal['teaser_text']).toString();
+      }
+      if (initialModal['user_gems'] != null || initialModal['user_balance'] != null) {
+        _userGems = _parseInt(initialModal['user_gems'] ?? initialModal['user_balance'], 0);
+      }
+      if (initialModal['target_user'] is Map) {
+        final tu = initialModal['target_user'] as Map;
+        if (tu['avatar_url'] != null) {
+          _avatarUrl = tu['avatar_url'].toString();
+        }
+      }
+      if (initialModal['packages'] is List && (initialModal['packages'] as List).isNotEmpty) {
+        _packages = List<Map<String, dynamic>>.from(initialModal['packages']);
+        _isLoading = false;
+      }
+    }
+
     _loadInitialData();
   }
 
   Future<void> _loadInitialData() async {
     // 1. Fetch user gems in real-time
-    _fetchUserGems();
+    if (_userGems == 0) {
+      _fetchUserGems();
+    }
 
     // 2. Fetch modal data & coin packages from backend
     final effectiveReceiverId = widget.receiverId ?? widget.model?.id;
     try {
       final modalData = await WalletApiService.getRechargeModalData(
         receiverId: effectiveReceiverId,
-        action: 'chat',
+        action: 'call',
       );
 
       if (modalData != null && mounted) {
@@ -89,7 +117,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
             _headerTitle = modalData['header_title'].toString();
           }
           if (modalData['user_gems'] != null) {
-            _userGems = _parseInt(modalData['user_gems'], 60);
+            _userGems = _parseInt(modalData['user_gems'], _userGems);
           }
           if (modalData['receiver'] != null && modalData['receiver'] is Map) {
             final rec = modalData['receiver'] as Map;

@@ -177,6 +177,7 @@ class ChatApiService {
               'is_limit_reached': true,
               'message': res?['message'] ?? 'Free limit reached. Coins required.',
               'data': res,
+              'recharge_modal_data': res?['recharge_modal_data'] ?? (res?['data'] is Map ? (res?['data'] as Map)['recharge_modal_data'] : null),
             };
           } else {
             return {
@@ -235,6 +236,7 @@ class ChatApiService {
               'is_limit_reached': true,
               'message': res?['message'] ?? 'Free limit reached. Coins required.',
               'data': res,
+              'recharge_modal_data': res?['recharge_modal_data'] ?? (res?['data'] is Map ? (res?['data'] as Map)['recharge_modal_data'] : null),
             };
           } else {
             return {

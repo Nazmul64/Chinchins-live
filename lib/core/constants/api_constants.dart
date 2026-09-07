@@ -88,6 +88,8 @@ class ApiConstants {
   static String get callConfig => '$baseUrl/call/config';
   static String get callRandomMatch => '$baseUrl/call/random-match';
   static String get callInitiate => '$baseUrl/call/initiate';
+  static String get checkCallPermission => '$baseUrl/call/check-permission';
+  static String get canCall => '$baseUrl/call/can-call';
   static String get callIncoming => '$baseUrl/call/incoming';
   static String callStatus(dynamic id) => '$baseUrl/call/status/$id';
   static String get callRinging => '$baseUrl/call/ringing';

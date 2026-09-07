@@ -198,7 +198,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
         );
       } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
         CallSoundManager.stopRingtone();
-        _showRechargeSheet();
+        _showRechargeSheet(modalData: res['recharge_modal_data'] as Map<String, dynamic>?);
       } else {
         CallSoundManager.stopRingtone();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -293,7 +293,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
         );
       } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
         CallSoundManager.stopRingtone();
-        _showRechargeSheet();
+        _showRechargeSheet(modalData: res['recharge_modal_data'] as Map<String, dynamic>?);
       } else {
         CallSoundManager.stopRingtone();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -317,17 +317,17 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     }
   }
 
-  void _showRechargeSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => RechargeGemsSheet(
-        model: widget.model,
-        onRechargeSuccess: () {
-          _startVideoCall();
-        },
-      ),
+  void _showRechargeSheet({Map<String, dynamic>? modalData}) {
+    RechargeGemsSheet.show(
+      context,
+      model: widget.model,
+      receiverId: widget.model.id,
+      receiverName: widget.model.name,
+      receiverAvatarUrl: widget.model.avatarUrl,
+      modalData: modalData,
+      onRechargeSuccess: () {
+        _startVideoCall();
+      },
     );
   }
 

@@ -73,6 +73,47 @@ class CallApiService {
     return null;
   }
 
+  /// Check call permission & user coin balance before opening call screen
+  static Future<Map<String, dynamic>> checkCallPermission({
+    required dynamic receiverId,
+    String callType = 'video',
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString() ?? savedUser?['account_id']?.toString();
+
+      final url = Uri.parse(ApiConstants.checkCallPermission);
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (userId != null) 'X-User-Id': userId,
+      };
+
+      final dynamic parsedReceiverId = int.tryParse(receiverId.toString()) ?? receiverId;
+      final payload = {
+        'receiver_id': parsedReceiverId,
+        'call_type': callType,
+      };
+
+      final response = await http
+          .post(url, headers: headers, body: jsonEncode(payload))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200 || response.statusCode == 402) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+      }
+    } catch (e, st) {
+      AppLogger.error('CheckCallPermissionError', e, st);
+    }
+    // Fallback if endpoint is unavailable: allow initiateCall to perform server-side check
+    return {'status': true, 'can_call': true};
+  }
+
   static Future<Map<String, dynamic>> initiateCall({
     required dynamic receiverId,
     dynamic receiverAccountId,
@@ -158,8 +199,9 @@ class CallApiService {
             'is_low_balance': true,
             'code': 'LOW_BALANCE_DEPOSIT_REQUIRED',
             'message': decoded['message'] ?? 'Insufficient coins balance. Please recharge now.',
-            'current_coins': decoded['current_coins'] ?? 0,
-            'required_coins': decoded['required_coins'] ?? 100,
+            'current_coins': decoded['current_coins'] ?? decoded['user_balance'] ?? decoded['user_gems'] ?? 0,
+            'required_coins': decoded['required_coins'] ?? decoded['rate_per_minute'] ?? 100,
+            'recharge_modal_data': decoded['recharge_modal_data'] ?? (decoded['data'] is Map ? (decoded['data'] as Map)['recharge_modal_data'] : null),
           };
         } else {
           return {
