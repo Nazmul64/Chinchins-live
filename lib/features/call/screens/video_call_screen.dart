@@ -97,6 +97,33 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _initWebRTCMediaAndFlow();
     _loadUserBalance();
     _loadFeaturedPackage();
+    _loadCallConfig();
+  }
+
+  Future<void> _loadCallConfig() async {
+    try {
+      final cfg = await CallApiService.getCallConfig();
+      if (cfg != null && mounted) {
+        final dynamic freeSecs = cfg['free_trial_duration_seconds'] ?? cfg['free_duration_seconds'] ?? cfg['free_trial_seconds'];
+        if (freeSecs != null) {
+          final parsed = int.tryParse(freeSecs.toString());
+          if (parsed != null && parsed > 0 && _callSeconds == 0) {
+            setState(() {
+              _freeTrialRemaining = parsed;
+            });
+          }
+        }
+        final dynamic rpm = cfg['video_call_rate'] ?? cfg['rate_per_minute'];
+        if (rpm != null) {
+          final parsedRpm = int.tryParse(rpm.toString());
+          if (parsedRpm != null && parsedRpm > 0) {
+            setState(() {
+              _ratePerMinute = parsedRpm;
+            });
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadFeaturedPackage() async {
@@ -485,8 +512,14 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
             },
             child: _isVideoBlurred
                 ? ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-                    child: _buildMainVideoView(),
+                    imageFilter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _buildMainVideoView(),
+                        Container(color: Colors.black.withValues(alpha: 0.65)),
+                      ],
+                    ),
                   )
                 : _buildMainVideoView(),
           ),
@@ -665,12 +698,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
-                                _isVideoBlurred
-                                    ? ImageFiltered(
-                                        imageFilter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                                        child: _buildPipVideoView(),
-                                      )
-                                    : _buildPipVideoView(),
+                                _buildPipVideoView(),
                                 // Call Duration Timer Label
                                 Positioned(
                                   bottom: 6,

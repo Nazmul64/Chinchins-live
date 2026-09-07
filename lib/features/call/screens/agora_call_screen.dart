@@ -103,6 +103,33 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     _initAgoraEngine();
     _loadUserBalance();
     _loadFeaturedPackage();
+    _loadCallConfig();
+  }
+
+  Future<void> _loadCallConfig() async {
+    try {
+      final cfg = await CallApiService.getCallConfig();
+      if (cfg != null && mounted) {
+        final dynamic freeSecs = cfg['free_trial_duration_seconds'] ?? cfg['free_duration_seconds'] ?? cfg['free_trial_seconds'];
+        if (freeSecs != null) {
+          final parsed = int.tryParse(freeSecs.toString());
+          if (parsed != null && parsed > 0 && _callSeconds == 0) {
+            setState(() {
+              _freeTrialRemaining = parsed;
+            });
+          }
+        }
+        final dynamic rpm = cfg['video_call_rate'] ?? cfg['rate_per_minute'];
+        if (rpm != null) {
+          final parsedRpm = int.tryParse(rpm.toString());
+          if (parsedRpm != null && parsedRpm > 0) {
+            setState(() {
+              _ratePerMinute = parsedRpm;
+            });
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadFeaturedPackage() async {
@@ -210,9 +237,9 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
         await _engine!.enableVideo();
         await _engine!.setVideoEncoderConfiguration(
           const VideoEncoderConfiguration(
-            dimensions: VideoDimensions(width: 720, height: 1280),
+            dimensions: VideoDimensions(width: 1280, height: 720),
             frameRate: 30,
-            bitrate: 1500,
+            bitrate: 2200,
             orientationMode: OrientationMode.orientationModeAdaptive,
           ),
         );
@@ -573,32 +600,59 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
               ),
             ),
 
-            // 3. Local / Remote Camera PiP Preview (Top Right)
+            // 3. Local / Remote Camera PiP Preview & Dev Mode (Top Right)
             if (widget.isVideo && _engine != null && !_isVideoOff && (_localUserJoined || _remoteUid != null))
               Positioned(
                 top: MediaQuery.of(context).padding.top + 60,
                 right: 16,
-                width: 105,
-                height: 150,
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _isSwappedVideo = !_isSwappedVideo;
-                    });
-                  },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.white38, width: 1.5),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isSwappedVideo = !_isSwappedVideo;
+                        });
+                      },
+                      child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
-                        ],
+                        child: Container(
+                          width: 105,
+                          height: 150,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.white38, width: 1.5),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
+                            ],
+                          ),
+                          child: _buildVideoView(isMain: false),
+                        ),
                       ),
-                      child: _buildVideoView(isMain: false),
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    // Dev Mode Button for Agora
+                    GestureDetector(
+                      onTap: _showAgoraDevModeModal,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.8), width: 1.2),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.bug_report_rounded, color: AppColors.neonPink, size: 13),
+                            SizedBox(width: 4),
+                            Text('Dev mode', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
@@ -784,12 +838,89 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
 
       if (isMain && _isVideoBlurred) {
         return ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-          child: remoteView,
+          imageFilter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              remoteView,
+              Container(color: Colors.black.withValues(alpha: 0.65)),
+            ],
+          ),
         );
       }
       return remoteView;
     }
+  }
+
+  void _showAgoraDevModeModal() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF161224),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.bug_report_rounded, color: AppColors.neonPink, size: 22),
+                        SizedBox(width: 8),
+                        Text(
+                          'Agora লাইভ ডায়াগনস্টিক প্যানেল',
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const Divider(color: Colors.white24),
+                const SizedBox(height: 8),
+                _buildDebugRow('ইঞ্জিন ড্রাইভার', 'Agora Cloud RTC Engine'),
+                _buildDebugRow('চ্যানেল নেম', widget.channelName),
+                _buildDebugRow('কল আইডি', '#${widget.callId ?? "N/A"}'),
+                _buildDebugRow('লোকাল UID', '${widget.isTempToken ? 0 : widget.uid}'),
+                _buildDebugRow('রিমোট UID', _remoteUid != null ? '$_remoteUid' : 'অপেক্ষমান (Waiting)'),
+                _buildDebugRow('মিডিয়া স্ট্যাটাস', _localUserJoined ? 'কানেক্টেড (Joined)' : 'কানেক্টিং...'),
+                _buildDebugRow('কল সময়', _formatDuration(_callSeconds)),
+                _buildDebugRow('ফ্রি ট্রায়াল বাকি', '$_freeTrialRemaining সেকেন্ড'),
+                _buildDebugRow('ইউজার জেম ব্যালেন্স', '$_userGems Gems'),
+                _buildDebugRow('কল রেট', '$_ratePerMinute Gems/min'),
+                _buildDebugRow('ঝাপসা/ব্লার মোড', _isVideoBlurred ? 'সক্রিয় (Active)' : 'নিষ্ক্রিয় (Off)'),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDebugRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
   }
 
   Widget _buildConnectingState() {

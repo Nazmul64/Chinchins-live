@@ -445,7 +445,7 @@ class WebRTCCallService {
     if (pc == null) return;
 
     try {
-      final rawOffer = await pc.createOffer({
+      final offer = await pc.createOffer({
         'mandatory': {
           'OfferToReceiveAudio': true,
           'OfferToReceiveVideo': true,
@@ -453,19 +453,17 @@ class WebRTCCallService {
         'optional': [],
       });
 
-      final optimizedSdp = optimizeSdp(rawOffer.sdp ?? '');
-      final offer = RTCSessionDescription(optimizedSdp, rawOffer.type ?? 'offer');
-
       await pc.setLocalDescription(offer);
       offerState = 'Sent';
       _log('OFFER_CREATED_AND_SENT (sdp length: ${offer.sdp?.length ?? 0})');
 
+      final sendSdp = optimizeSdp(offer.sdp ?? '');
       await CallApiService.sendSignal(
         callId: callId,
         channelName: channelName,
         type: 'offer',
         payload: {
-          'sdp': offer.sdp,
+          'sdp': sendSdp,
           'type': offer.type ?? 'offer',
           'sender_role': 'caller',
           'sender_id': _currentUserId,
@@ -488,7 +486,7 @@ class WebRTCCallService {
             channelName: channelName,
             type: 'offer',
             payload: {
-              'sdp': offer.sdp,
+              'sdp': sendSdp,
               'type': offer.type ?? 'offer',
               'sender_role': 'caller',
               'sender_id': _currentUserId,
@@ -779,7 +777,7 @@ class WebRTCCallService {
             _log('SET_REMOTE_DESCRIPTION_OFFER_SUCCESS');
             await _drainPendingCandidates();
 
-            final rawAnswer = await _peerConnection!.createAnswer({
+            final answer = await _peerConnection!.createAnswer({
               'mandatory': {
                 'OfferToReceiveAudio': true,
                 'OfferToReceiveVideo': true,
@@ -787,20 +785,18 @@ class WebRTCCallService {
               'optional': [],
             });
 
-            final optimizedSdp = optimizeSdp(rawAnswer.sdp ?? '');
-            final answer = RTCSessionDescription(optimizedSdp, rawAnswer.type ?? 'answer');
-
             await _peerConnection!.setLocalDescription(answer);
             await _drainPendingCandidates();
             answerState = 'Sent';
             _log('ANSWER_CREATED_AND_SENT (sdp len: ${answer.sdp?.length ?? 0})');
 
+            final sendSdp = optimizeSdp(answer.sdp ?? '');
             await CallApiService.sendSignal(
               callId: callId,
               channelName: channelName,
               type: 'answer',
               payload: {
-                'sdp': answer.sdp,
+                'sdp': sendSdp,
                 'type': answer.type ?? 'answer',
                 'sender_role': 'receiver',
                 'sender_id': _currentUserId,
