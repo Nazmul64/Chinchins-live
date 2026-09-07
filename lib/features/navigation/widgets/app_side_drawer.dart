@@ -298,7 +298,6 @@ class _AppSideDrawerState extends State<AppSideDrawer> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(14),
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),

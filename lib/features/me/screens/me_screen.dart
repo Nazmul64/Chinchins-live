@@ -1222,7 +1222,6 @@ class _MeScreenState extends State<MeScreen> {
                 // 7. Settings, Feedback & Update Menu Block (Screenshot 1)
                 Material(
                   color: AppColors.cardDark,
-                  borderRadius: BorderRadius.circular(18),
                   clipBehavior: Clip.antiAlias,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
