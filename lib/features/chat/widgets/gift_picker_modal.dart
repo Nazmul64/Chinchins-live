@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/models/gift_item.dart';
 import '../../../core/services/gifts_api_service.dart';
 import '../../../core/widgets/cached_image_loader.dart';
@@ -55,15 +56,19 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
   List<Map<String, dynamic>> _categories = [];
   List<GiftItem> _allGifts = [];
   List<GiftItem> _filteredGifts = [];
-  int _userCoins = 45000;
-  String _formattedBalance = '45K';
+  int _userCoins = 0;
+  String _formattedBalance = '0';
   bool _isLoading = true;
   bool _isSending = false;
   int _selectedQuantity = 1;
+  List<int> _multipliers = [1, 10, 66, 99, 520, 1314];
 
   @override
   void initState() {
     super.initState();
+    final cached = WalletApiService.getCachedCoins();
+    _userCoins = cached;
+    _formattedBalance = GiftItem.formatCoinValue(cached);
     _categories = GiftsApiService.getPredefinedGiftCategories();
     _loadCatalogAndBalance();
   }
@@ -75,7 +80,7 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
       if (balanceData != null && mounted) {
         final coins = balanceData['coins'] ?? balanceData['total_coins'] ?? balanceData['balance'];
         if (coins != null) {
-          final int parsedCoins = coins is int ? coins : int.tryParse('$coins') ?? 45000;
+          final int parsedCoins = coins is int ? coins : int.tryParse('$coins') ?? WalletApiService.getCachedCoins();
           setState(() {
             _userCoins = parsedCoins;
             _formattedBalance = GiftItem.formatCoinValue(parsedCoins);
@@ -92,10 +97,18 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
     if (mounted) {
       final list = fullData['gifts'] as List<GiftItem>? ?? [];
       final cats = fullData['categories_list'] as List<Map<String, dynamic>>? ?? [];
+      final mults = fullData['multipliers'] as List<int>?;
+      final defMult = fullData['default_multiplier'] as int?;
 
       setState(() {
         if (cats.isNotEmpty) {
           _categories = cats;
+        }
+        if (mults != null && mults.isNotEmpty) {
+          _multipliers = mults;
+        }
+        if (defMult != null && _multipliers.contains(defMult)) {
+          _selectedQuantity = defMult;
         }
         _allGifts = list;
         _filterGiftsByCategory(_selectedCategory);
@@ -212,6 +225,50 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
       ),
+    );
+  }
+
+  /// Render SVG gift artwork or beautiful emoji fallback (never purple person placeholder!)
+  Widget _buildGiftIcon(GiftItem gift) {
+    final String? rawUrl = (gift.svgUrl != null && gift.svgUrl!.isNotEmpty)
+        ? gift.svgUrl
+        : (gift.imageUrl.isNotEmpty ? gift.imageUrl : gift.pngUrl);
+
+    if (rawUrl != null && rawUrl.trim().isNotEmpty) {
+      String cleanUrl = CachedImageLoader.normalize(rawUrl.trim());
+
+      if (cleanUrl.contains('localhost') || cleanUrl.contains('127.0.0.1')) {
+        cleanUrl = cleanUrl.replaceAll(
+          RegExp(r'https?://(localhost|127\.0\.0\.1)(:\d+)?/'),
+          'https://chinchins.live/',
+        );
+      }
+
+      if (cleanUrl.toLowerCase().endsWith('.svg') || cleanUrl.toLowerCase().contains('.svg?')) {
+        return SvgPicture.network(
+          cleanUrl,
+          width: 44,
+          height: 44,
+          fit: BoxFit.contain,
+          placeholderBuilder: (_) => Center(
+            child: Text(gift.emoji, style: const TextStyle(fontSize: 28)),
+          ),
+        );
+      }
+
+      return CachedImageLoader(
+        imageUrl: cleanUrl,
+        width: 44,
+        height: 44,
+        fit: BoxFit.contain,
+        placeholder: Center(
+          child: Text(gift.emoji, style: const TextStyle(fontSize: 28)),
+        ),
+      );
+    }
+
+    return Center(
+      child: Text(gift.emoji, style: const TextStyle(fontSize: 28)),
     );
   }
 
@@ -419,15 +476,7 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
                                       const SizedBox(height: 6),
                                       Expanded(
                                         child: Center(
-                                          child: gift.imageUrl.isNotEmpty
-                                              ? CachedImageLoader(
-                                                  imageUrl: gift.imageUrl,
-                                                  fit: BoxFit.contain,
-                                                )
-                                              : Text(
-                                                  gift.emoji,
-                                                  style: const TextStyle(fontSize: 32),
-                                                ),
+                                          child: _buildGiftIcon(gift),
                                         ),
                                       ),
                                       const SizedBox(height: 4),
@@ -468,78 +517,86 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
                     ),
             ),
 
-            // 4. Quantity Multiplier Chips & Gradient Send Action
+            // 4. Dynamic Quantity Multipliers & Gradient Send Action
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
               child: Row(
                 children: [
-                  // Multiplier Chips: x1, x5, x10, x99, x520, x1314
-                  Row(
-                    children: [1, 5, 10, 99].map((q) {
-                      final isQSelected = _selectedQuantity == q;
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedQuantity = q;
-                          });
+                  // Dynamic Multipliers
+                  Expanded(
+                    child: SizedBox(
+                      height: 40,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: _multipliers.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 6),
+                        itemBuilder: (context, i) {
+                          final q = _multipliers[i];
+                          final isQSelected = _selectedQuantity == q;
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _selectedQuantity = q;
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isQSelected ? const Color(0xFFF43F5E) : const Color(0xFF1E2139),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isQSelected ? const Color(0xFFF43F5E) : Colors.white12,
+                                  width: isQSelected ? 1.5 : 1.0,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'x$q',
+                                  style: TextStyle(
+                                    color: isQSelected ? Colors.white : Colors.white70,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
                         },
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 6),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: isQSelected ? const Color(0xFFF43F5E) : const Color(0xFF1E2139),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isQSelected ? Colors.transparent : Colors.white12,
-                            ),
-                          ),
-                          child: Text(
-                            'x$q',
-                            style: TextStyle(
-                              color: isQSelected ? Colors.white : Colors.white70,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 8),
 
-                  // Big Send Button
-                  Expanded(
-                    child: SizedBox(
-                      height: 44,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF43F5E),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(22),
-                          ),
-                          elevation: 4,
-                        ),
-                        onPressed: selectedGift == null || _isSending ? null : _handleSendGift,
-                        child: _isSending
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                              )
-                            : Text(
-                                selectedGift != null
-                                    ? 'Send Gift ($totalCost 💎)'
-                                    : 'Send Gift 🎁',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                  // Send Button
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF43F5E),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22),
                       ),
+                      elevation: 4,
                     ),
+                    onPressed: selectedGift == null || _isSending ? null : _handleSendGift,
+                    child: _isSending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : Text(
+                            selectedGift != null
+                                ? 'Send Gift ($totalCost 💎)'
+                                : 'Send Gift 🎁',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                   ),
                 ],
               ),

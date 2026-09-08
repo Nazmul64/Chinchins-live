@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../constants/api_constants.dart';
 import '../models/gift_item.dart';
 import '../../features/auth/services/auth_api_service.dart';
+import '../../features/wallet/services/wallet_api_service.dart';
 
 class GiftsApiService {
   // In-Memory Fast Caches for Zero-Lag Instant Rendering
@@ -163,17 +164,36 @@ class GiftsApiService {
             _catalogMemCache = parsedGifts;
           }
 
-          if (parsedGifts.isEmpty && _catalogMemCache != null && _catalogMemCache!.isNotEmpty) {
-            parsedGifts = _catalogMemCache!;
+          // Parse dynamic multipliers from API: [1, 10, 66, 99, 520, 1314]
+          List<int> multipliers = [1, 10, 66, 99, 520, 1314];
+          if (data['multipliers'] is List) {
+            final parsedM = (data['multipliers'] as List)
+                .map((m) => m is int ? m : int.tryParse('$m') ?? 0)
+                .where((m) => m > 0)
+                .toList();
+            if (parsedM.isNotEmpty) {
+              multipliers = parsedM;
+            }
           }
+
+          int defaultMultiplier = 1;
+          if (data['default_multiplier'] != null) {
+            defaultMultiplier = data['default_multiplier'] is int
+                ? data['default_multiplier']
+                : int.tryParse('${data['default_multiplier']}') ?? 1;
+          }
+
+          final effectiveCoins = _userCoinBalance ?? WalletApiService.getCachedCoins();
 
           return {
             'user_balance': {
-              'coins': _userCoinBalance ?? 50000,
-              'formatted_coins': GiftItem.formatCoinValue(_userCoinBalance ?? 50000),
+              'coins': effectiveCoins,
+              'formatted_coins': GiftItem.formatCoinValue(effectiveCoins),
             },
             'categories_list': categoriesList,
             'gifts': parsedGifts,
+            'multipliers': multipliers,
+            'default_multiplier': defaultMultiplier,
           };
         }
       }
@@ -181,13 +201,16 @@ class GiftsApiService {
       debugPrint('[GiftsApiService] getGiftsCatalogFull error: $e');
     }
 
+    final effectiveCoins = _userCoinBalance ?? WalletApiService.getCachedCoins();
     return {
       'user_balance': {
-        'coins': _userCoinBalance ?? 50000,
-        'formatted_coins': GiftItem.formatCoinValue(_userCoinBalance ?? 50000),
+        'coins': effectiveCoins,
+        'formatted_coins': GiftItem.formatCoinValue(effectiveCoins),
       },
       'categories_list': getPredefinedGiftCategories(),
       'gifts': _catalogMemCache ?? getFallbackGifts(),
+      'multipliers': [1, 10, 66, 99, 520, 1314],
+      'default_multiplier': 1,
     };
   }
 

@@ -90,11 +90,25 @@ class GiftItem {
         ? json['total_coins']
         : (int.tryParse('${json['total_coins']}') ?? (coinsVal * (qty > 0 ? qty : 1)));
 
-    final String rawPng = json['png_url']?.toString() ?? json['png']?.toString() ?? '';
     final String rawSvg = json['svg_url']?.toString() ?? json['svg']?.toString() ?? '';
-    final String rawImage = rawPng.isNotEmpty
-        ? rawPng
-        : (json['image_url']?.toString() ?? json['image']?.toString() ?? json['photo']?.toString() ?? rawSvg);
+    final String rawPng = json['png_url']?.toString() ?? json['png']?.toString() ?? '';
+    final String rawImg = json['image_url']?.toString() ?? json['image']?.toString() ?? json['photo']?.toString() ?? '';
+
+    // Prefer live 100% compliant SVG artwork on server, then explicit image_url, then png fallback
+    String rawImage = '';
+    if (rawSvg.isNotEmpty && (rawSvg.toLowerCase().contains('.svg') || rawSvg.startsWith('http'))) {
+      rawImage = rawSvg;
+    } else if (rawImg.isNotEmpty && rawImg.toLowerCase().contains('.svg')) {
+      rawImage = rawImg;
+    } else if (rawImg.isNotEmpty && !rawImg.toLowerCase().endsWith('.png')) {
+      rawImage = rawImg;
+    } else if (rawSvg.isNotEmpty) {
+      rawImage = rawSvg;
+    } else if (rawImg.isNotEmpty) {
+      rawImage = rawImg;
+    } else {
+      rawImage = rawPng;
+    }
 
     final String normalizedImg = CachedImageLoader.normalize(rawImage);
     final String? normalizedPng = rawPng.isNotEmpty ? CachedImageLoader.normalize(rawPng) : null;
