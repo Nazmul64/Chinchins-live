@@ -168,6 +168,20 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     );
 
     try {
+      // 1. Check call permission & user balance via POST /api/call/check-permission
+      final permRes = await CallApiService.checkCallPermission(
+        receiverId: widget.model.id,
+        callType: 'video',
+      );
+
+      if (permRes['can_call'] == false || permRes['show_recharge_modal'] == true || permRes['status'] == false) {
+        CallSoundManager.stopRingtone();
+        if (!mounted) return;
+        Navigator.pop(context); // Close progress dialog
+        _showRechargeSheet(modalData: permRes['recharge_modal_data'] as Map<String, dynamic>?);
+        return;
+      }
+
       final res = await CallApiService.initiateCall(
         receiverId: widget.model.id,
         receiverAccountId: widget.model.accountId,
@@ -196,7 +210,10 @@ class _HostProfileScreenState extends State<HostProfileScreen>
           ratePerMinute: ratePerMin,
           dialToneUrl: res['dial_tone_url']?.toString(),
         );
-      } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
+      } else if (res['is_low_balance'] == true ||
+                 res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
+                 res['code'] == 'INSUFFICIENT_BALANCE' ||
+                 res['show_recharge_modal'] == true) {
         CallSoundManager.stopRingtone();
         _showRechargeSheet(modalData: res['recharge_modal_data'] as Map<String, dynamic>?);
       } else {
@@ -249,7 +266,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(color: AppColors.neonPink),
+              CircularProgressIndicator(color: Colors.purpleAccent),
               SizedBox(height: 14),
               Text(
                 'Connecting Audio Call...',
@@ -262,6 +279,20 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     );
 
     try {
+      // 1. Check call permission & user balance via POST /api/call/check-permission
+      final permRes = await CallApiService.checkCallPermission(
+        receiverId: widget.model.id,
+        callType: 'audio',
+      );
+
+      if (permRes['can_call'] == false || permRes['show_recharge_modal'] == true || permRes['status'] == false) {
+        CallSoundManager.stopRingtone();
+        if (!mounted) return;
+        Navigator.pop(context); // Close progress dialog
+        _showRechargeSheet(modalData: permRes['recharge_modal_data'] as Map<String, dynamic>?);
+        return;
+      }
+
       final res = await CallApiService.initiateCall(
         receiverId: widget.model.id,
         receiverAccountId: widget.model.accountId,
@@ -291,7 +322,10 @@ class _HostProfileScreenState extends State<HostProfileScreen>
           ratePerMinute: ratePerMin,
           dialToneUrl: res['dial_tone_url']?.toString(),
         );
-      } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
+      } else if (res['is_low_balance'] == true ||
+                 res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
+                 res['code'] == 'INSUFFICIENT_BALANCE' ||
+                 res['show_recharge_modal'] == true) {
         CallSoundManager.stopRingtone();
         _showRechargeSheet(modalData: res['recharge_modal_data'] as Map<String, dynamic>?);
       } else {

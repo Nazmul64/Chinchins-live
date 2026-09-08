@@ -458,35 +458,21 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
   }
 
   Widget _buildPackagesGrid() {
-    final displayList = _packages.take(6).toList();
-    while (displayList.length < 6) {
-      displayList.addAll(_getChinchinsDefaultPackages().skip(displayList.length));
-    }
+    final displayList = _packages.isNotEmpty ? _packages : _getChinchinsDefaultPackages();
 
-    return Column(
-      children: [
-        // Row 1 (Items 0, 1, 2)
-        Row(
-          children: [
-            Expanded(child: _buildPackageCard(displayList[0], 0)),
-            const SizedBox(width: 10),
-            Expanded(child: _buildPackageCard(displayList[1], 1)),
-            const SizedBox(width: 10),
-            Expanded(child: _buildPackageCard(displayList[2], 2)),
-          ],
-        ),
-        const SizedBox(height: 10),
-        // Row 2 (Items 3, 4, 5)
-        Row(
-          children: [
-            Expanded(child: _buildPackageCard(displayList[3], 3)),
-            const SizedBox(width: 10),
-            Expanded(child: _buildPackageCard(displayList[4], 4)),
-            const SizedBox(width: 10),
-            Expanded(child: _buildPackageCard(displayList[5], 5)),
-          ],
-        ),
-      ],
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: displayList.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 0.72,
+      ),
+      itemBuilder: (context, index) {
+        return _buildPackageCard(displayList[index], index);
+      },
     );
   }
 
@@ -494,7 +480,9 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
     final bool isSelected = _selectedPackageIndex == index;
     final int coins = _parseInt(pkg['coins'] ?? pkg['gems'] ?? pkg['total_coins']);
     final String badge = (pkg['badge'] ?? '').toString();
-    final bool isOnce = pkg['is_once_offer'] == true || index == 0;
+    final bool isOnce = pkg['is_once_offer'] == true ||
+        pkg['badge_tag'] == 'ONCE' ||
+        badge.toUpperCase().contains('ONCE');
     final String priceStr = pkg['formatted_price'] ??
         (pkg['price_bdt'] != null ? 'BDT ${pkg['price_bdt']}.00' : 'BDT ${pkg['price'] ?? 150}.00');
 
@@ -509,7 +497,6 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        height: 148,
         decoration: BoxDecoration(
           gradient: useOrangeTheme
               ? const LinearGradient(

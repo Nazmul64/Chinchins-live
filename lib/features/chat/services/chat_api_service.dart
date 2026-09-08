@@ -154,16 +154,12 @@ class ChatApiService {
         final res = _safeJsonDecode(response.body);
 
         if (response.statusCode == 200 || response.statusCode == 201) {
-          return {
-            'success': true,
-            'data': res?['data'],
-            'message': res?['message'] ?? 'Message sent successfully.',
-          };
-        } else {
           final String msg = (res?['message'] ?? '').toString().toLowerCase();
-          final bool isLimit = response.statusCode == 402 ||
+          final bool isLimit = res?['can_message'] == false ||
+              res?['show_recharge_modal'] == true ||
               res?['code'] == 'MESSAGE_LIMIT_REACHED' ||
               res?['is_limit_reached'] == true ||
+              (res?['status'] == false && res?['success'] != true) ||
               msg.contains('limit') ||
               msg.contains('recharge') ||
               msg.contains('insufficient') ||
@@ -175,9 +171,41 @@ class ChatApiService {
               'success': false,
               'code': 'MESSAGE_LIMIT_REACHED',
               'is_limit_reached': true,
+              'show_recharge_modal': true,
               'message': res?['message'] ?? 'Free limit reached. Coins required.',
               'data': res,
-              'recharge_modal_data': res?['recharge_modal_data'] ?? (res?['data'] is Map ? (res?['data'] as Map)['recharge_modal_data'] : null),
+              'recharge_modal_data': res?['recharge_modal_data'] ??
+                  (res?['data'] is Map ? (res?['data'] as Map)['recharge_modal_data'] : null) ??
+                  res,
+            };
+          }
+
+          return {
+            'success': true,
+            'data': res?['data'],
+            'message': res?['message'] ?? 'Message sent successfully.',
+          };
+        } else {
+          final String msg = (res?['message'] ?? '').toString().toLowerCase();
+          final bool isLimit = response.statusCode == 402 ||
+              res?['code'] == 'MESSAGE_LIMIT_REACHED' ||
+              res?['is_limit_reached'] == true ||
+              res?['show_recharge_modal'] == true ||
+              msg.contains('limit') ||
+              msg.contains('recharge') ||
+              msg.contains('insufficient') ||
+              msg.contains('low balance') ||
+              (msg.contains('coin') && (msg.contains('need') || msg.contains('not enough') || msg.contains('zero')));
+
+          if (isLimit) {
+            return {
+              'success': false,
+              'code': 'MESSAGE_LIMIT_REACHED',
+              'is_limit_reached': true,
+              'show_recharge_modal': true,
+              'message': res?['message'] ?? 'Free limit reached. Coins required.',
+              'data': res,
+              'recharge_modal_data': res?['recharge_modal_data'] ?? (res?['data'] is Map ? (res?['data'] as Map)['recharge_modal_data'] : null) ?? res,
             };
           } else {
             return {
@@ -213,16 +241,12 @@ class ChatApiService {
         final res = _safeJsonDecode(response.body);
 
         if (response.statusCode == 200 || response.statusCode == 201) {
-          return {
-            'success': true,
-            'data': res?['data'],
-            'message': res?['message'] ?? 'Message sent successfully.',
-          };
-        } else {
           final String msg = (res?['message'] ?? '').toString().toLowerCase();
-          final bool isLimit = response.statusCode == 402 ||
+          final bool isLimit = res?['can_message'] == false ||
+              res?['show_recharge_modal'] == true ||
               res?['code'] == 'MESSAGE_LIMIT_REACHED' ||
               res?['is_limit_reached'] == true ||
+              (res?['status'] == false && res?['success'] != true) ||
               msg.contains('limit') ||
               msg.contains('recharge') ||
               msg.contains('insufficient') ||
@@ -234,9 +258,41 @@ class ChatApiService {
               'success': false,
               'code': 'MESSAGE_LIMIT_REACHED',
               'is_limit_reached': true,
+              'show_recharge_modal': true,
               'message': res?['message'] ?? 'Free limit reached. Coins required.',
               'data': res,
-              'recharge_modal_data': res?['recharge_modal_data'] ?? (res?['data'] is Map ? (res?['data'] as Map)['recharge_modal_data'] : null),
+              'recharge_modal_data': res?['recharge_modal_data'] ??
+                  (res?['data'] is Map ? (res?['data'] as Map)['recharge_modal_data'] : null) ??
+                  res,
+            };
+          }
+
+          return {
+            'success': true,
+            'data': res?['data'],
+            'message': res?['message'] ?? 'Message sent successfully.',
+          };
+        } else {
+          final String msg = (res?['message'] ?? '').toString().toLowerCase();
+          final bool isLimit = response.statusCode == 402 ||
+              res?['code'] == 'MESSAGE_LIMIT_REACHED' ||
+              res?['is_limit_reached'] == true ||
+              res?['show_recharge_modal'] == true ||
+              msg.contains('limit') ||
+              msg.contains('recharge') ||
+              msg.contains('insufficient') ||
+              msg.contains('low balance') ||
+              (msg.contains('coin') && (msg.contains('need') || msg.contains('not enough') || msg.contains('zero')));
+
+          if (isLimit) {
+            return {
+              'success': false,
+              'code': 'MESSAGE_LIMIT_REACHED',
+              'is_limit_reached': true,
+              'show_recharge_modal': true,
+              'message': res?['message'] ?? 'Free limit reached. Coins required.',
+              'data': res,
+              'recharge_modal_data': res?['recharge_modal_data'] ?? (res?['data'] is Map ? (res?['data'] as Map)['recharge_modal_data'] : null) ?? res,
             };
           } else {
             return {
@@ -253,6 +309,60 @@ class ChatApiService {
         'message': 'Connection error: $e',
       };
     }
+  }
+
+  /// Check chat permission & free message limits before typing or sending (POST /api/chat/check-permission)
+  static Future<Map<String, dynamic>> checkChatPermission({
+    required dynamic receiverId,
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final currentUserId = await _getCurrentUserId();
+
+      final url = Uri.parse(ApiConstants.checkChatPermission);
+      final headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (currentUserId != null) 'X-User-Id': currentUserId,
+      };
+
+      final payload = {
+        'receiver_id': int.tryParse(receiverId.toString()) ?? receiverId,
+        if (currentUserId != null) 'user_id': currentUserId,
+      };
+
+      final response = await http
+          .post(url, headers: headers, body: jsonEncode(payload))
+          .timeout(const Duration(seconds: 8));
+
+      final res = _safeJsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 402) {
+        if (res is Map<String, dynamic>) {
+          final bool canMsg = res['can_message'] == true;
+          final bool showModal = res['show_recharge_modal'] == true ||
+              res['code'] == 'MESSAGE_LIMIT_REACHED' ||
+              res['status'] == false ||
+              !canMsg;
+
+          return {
+            'status': res['status'] ?? canMsg,
+            'can_message': canMsg,
+            'show_recharge_modal': showModal,
+            'code': res['code'],
+            'message': res['message'],
+            'user_gems': res['user_gems'] ?? 0,
+            'free_messages_remaining': res['free_messages_remaining'] ?? 0,
+            'recharge_modal_data': res['recharge_modal_data'] ??
+                (res['data'] is Map ? (res['data'] as Map)['recharge_modal_data'] : null) ??
+                res,
+          };
+        }
+      }
+    } catch (e) {
+      debugPrint('[ChatApiService] checkChatPermission error: $e');
+    }
+    return {'status': true, 'can_message': true};
   }
 
   /// Mark messages as read

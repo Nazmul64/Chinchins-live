@@ -18,7 +18,7 @@ class ExploreHeader extends StatelessWidget {
     required this.onCountryTap,
     this.onDebugTap,
     this.onMenuTap,
-    this.selectedCountryCode = 'BGD',
+    this.selectedCountryCode = 'ALL',
   });
 
   @override

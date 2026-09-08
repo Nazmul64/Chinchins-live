@@ -161,9 +161,12 @@ class WalletApiService {
     };
 
     final localCached = await FastApiClient.getCached(ApiConstants.rechargeModalData, queryParams);
-    if (!forceRefresh && localCached is Map && localCached['status'] == true && localCached['modal'] != null) {
-      _syncRechargeModalDataInBackground(queryParams);
-      return Map<String, dynamic>.from(localCached['modal']);
+    if (!forceRefresh && localCached is Map) {
+      final cachedModal = localCached['recharge_modal_data'] ?? localCached['data'] ?? localCached['modal'];
+      if (cachedModal is Map) {
+        _syncRechargeModalDataInBackground(queryParams);
+        return Map<String, dynamic>.from(cachedModal);
+      }
     }
 
     final liveModal = await _syncRechargeModalDataInBackground(queryParams);
@@ -171,8 +174,11 @@ class WalletApiService {
       return liveModal;
     }
 
-    if (localCached is Map && localCached['modal'] != null) {
-      return Map<String, dynamic>.from(localCached['modal']);
+    if (localCached is Map) {
+      final cachedModal = localCached['recharge_modal_data'] ?? localCached['data'] ?? localCached['modal'];
+      if (cachedModal is Map) {
+        return Map<String, dynamic>.from(cachedModal);
+      }
     }
 
     return null;
@@ -206,9 +212,12 @@ class WalletApiService {
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['status'] == true && decoded['modal'] != null) {
-          await FastApiClient.putCache(ApiConstants.rechargeModalData, decoded, queryParams);
-          return Map<String, dynamic>.from(decoded['modal']);
+        if (decoded is Map) {
+          final modalMap = decoded['recharge_modal_data'] ?? decoded['data'] ?? decoded['modal'] ?? decoded;
+          if (modalMap is Map) {
+            await FastApiClient.putCache(ApiConstants.rechargeModalData, decoded, queryParams);
+            return Map<String, dynamic>.from(modalMap);
+          }
         }
       }
     } catch (e, st) {

@@ -104,7 +104,26 @@ class CallApiService {
       if (response.statusCode == 200 || response.statusCode == 402) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map<String, dynamic>) {
-          return decoded;
+          final bool canCall = decoded['can_call'] == true;
+          final bool showModal = decoded['show_recharge_modal'] == true ||
+              decoded['code'] == 'INSUFFICIENT_BALANCE' ||
+              decoded['status'] == false ||
+              !canCall;
+
+          return {
+            'status': decoded['status'] ?? canCall,
+            'can_call': canCall,
+            'code': decoded['code'],
+            'message': decoded['message'],
+            'show_recharge_modal': showModal,
+            'user_gems': decoded['user_gems'] ?? decoded['current_coins'] ?? 0,
+            'required_coins': decoded['required_coins'] ?? 100,
+            'is_free_trial': decoded['is_free_trial'] == true,
+            'free_duration_seconds': decoded['free_duration_seconds'] ?? 16,
+            'recharge_modal_data': decoded['recharge_modal_data'] ??
+                (decoded['data'] is Map ? (decoded['data'] as Map)['recharge_modal_data'] : null) ??
+                decoded,
+          };
         }
       }
     } catch (e, st) {
@@ -166,6 +185,32 @@ class CallApiService {
       }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        final String msg = (decoded['message'] ?? '').toString().toLowerCase();
+        final bool isLowBalance = decoded['can_call'] == false ||
+            decoded['show_recharge_modal'] == true ||
+            decoded['code'] == 'INSUFFICIENT_BALANCE' ||
+            decoded['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
+            decoded['is_low_balance'] == true ||
+            (decoded['status'] == false && decoded['success'] != true) ||
+            msg.contains('insufficient') ||
+            msg.contains('recharge and call') ||
+            msg.contains('low balance') ||
+            (msg.contains('coin') && (msg.contains('need') || msg.contains('not enough') || msg.contains('low')));
+
+        if (isLowBalance) {
+          return {
+            'success': false,
+            'is_low_balance': true,
+            'code': decoded['code'] ?? 'INSUFFICIENT_BALANCE',
+            'message': decoded['message'] ?? 'Insufficient coin balance. Please recharge now.',
+            'current_coins': decoded['current_coins'] ?? decoded['user_balance'] ?? decoded['user_gems'] ?? 0,
+            'required_coins': decoded['required_coins'] ?? decoded['rate_per_minute'] ?? 100,
+            'recharge_modal_data': decoded['recharge_modal_data'] ??
+                (decoded['data'] is Map ? (decoded['data'] as Map)['recharge_modal_data'] : null) ??
+                decoded,
+          };
+        }
+
         final dataMap = decoded['data'] is Map ? decoded['data'] as Map<String, dynamic> : decoded;
         final dynamic rawCallId = dataMap['call_id'] ?? dataMap['id'] ?? decoded['call_id'] ?? decoded['id'];
         final int? parsedCallId = rawCallId is int
@@ -187,9 +232,11 @@ class CallApiService {
         final String msg = (decoded['message'] ?? '').toString().toLowerCase();
         final bool isLowBalance = response.statusCode == 402 ||
             decoded['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
+            decoded['code'] == 'INSUFFICIENT_BALANCE' ||
             decoded['is_low_balance'] == true ||
+            decoded['show_recharge_modal'] == true ||
             msg.contains('insufficient') ||
-            msg.contains('recharge') ||
+            msg.contains('recharge and call') ||
             msg.contains('low balance') ||
             (msg.contains('coin') && (msg.contains('need') || msg.contains('not enough') || msg.contains('low')));
 
@@ -197,11 +244,13 @@ class CallApiService {
           return {
             'success': false,
             'is_low_balance': true,
-            'code': 'LOW_BALANCE_DEPOSIT_REQUIRED',
+            'code': decoded['code'] ?? 'INSUFFICIENT_BALANCE',
             'message': decoded['message'] ?? 'Insufficient coins balance. Please recharge now.',
             'current_coins': decoded['current_coins'] ?? decoded['user_balance'] ?? decoded['user_gems'] ?? 0,
             'required_coins': decoded['required_coins'] ?? decoded['rate_per_minute'] ?? 100,
-            'recharge_modal_data': decoded['recharge_modal_data'] ?? (decoded['data'] is Map ? (decoded['data'] as Map)['recharge_modal_data'] : null),
+            'recharge_modal_data': decoded['recharge_modal_data'] ??
+                (decoded['data'] is Map ? (decoded['data'] as Map)['recharge_modal_data'] : null) ??
+                decoded,
           };
         } else {
           return {

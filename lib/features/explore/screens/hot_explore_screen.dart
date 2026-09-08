@@ -27,8 +27,8 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
   static List<ModelProfile> _cachedHomeFeed = [];
   int _selectedTabIndex = 0;
   List<ModelProfile> _models = [];
-  String _selectedCountryCode = 'BGD';
-  String _selectedCountryName = 'Bangladesh';
+  String _selectedCountryCode = 'ALL';
+  String _selectedCountryName = 'All';
   String _searchQuery = '';
   bool _isLoading = false;
 
@@ -65,13 +65,13 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
         final firstName = (profile.firstName ?? '').trim().toLowerCase();
         final lastName = (profile.lastName ?? '').trim().toLowerCase();
         final email = (profile.email ?? '').trim().toLowerCase();
+        final accountId = profile.accountId.trim();
 
         return name == 'admin' ||
             name.contains('administrator') ||
-            name == 'ayeena04' ||
-            name == 'ayeena' ||
             firstName == 'admin' ||
             lastName == 'admin' ||
+            accountId == '1000000001' ||
             email.startsWith('admin@') ||
             email.contains('admin@');
       }
@@ -147,10 +147,11 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
       ),
       builder: (context) {
         final countries = [
+          {'code': 'ALL', 'name': 'Global 🌐', 'value': 'All'},
           {'code': 'BGD', 'name': 'Bangladesh 🇧🇩', 'value': 'Bangladesh'},
+          {'code': 'PAK', 'name': 'Pakistan 🇵🇰', 'value': 'Pakistan'},
           {'code': 'IND', 'name': 'India 🇮🇳', 'value': 'India'},
           {'code': 'USA', 'name': 'United States 🇺🇸', 'value': 'USA'},
-          {'code': 'ALL', 'name': 'Global 🌍', 'value': 'All'},
         ];
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -307,6 +308,30 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
     );
 
     try {
+      // 1. Check call permission & user balance via POST /api/call/check-permission
+      final permRes = await CallApiService.checkCallPermission(
+        receiverId: model.id,
+        callType: 'video',
+      );
+
+      if (permRes['can_call'] == false || permRes['show_recharge_modal'] == true || permRes['status'] == false) {
+        if (!mounted) return;
+        Navigator.pop(context); // close progress dialog
+        RechargeGemsSheet.show(
+          context,
+          model: model,
+          receiverId: model.id,
+          receiverName: model.name,
+          receiverAvatarUrl: model.avatarUrl,
+          modalData: permRes['recharge_modal_data'] as Map<String, dynamic>?,
+          onRechargeSuccess: () {
+            _startVideoCall(model);
+          },
+        );
+        return;
+      }
+
+      // 2. Initiate Call session
       final initiateRes = await CallApiService.initiateCall(
         receiverId: model.id,
         receiverAccountId: model.accountId,
@@ -343,6 +368,8 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
         );
       } else if (initiateRes['is_low_balance'] == true ||
                  initiateRes['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
+                 initiateRes['code'] == 'INSUFFICIENT_BALANCE' ||
+                 initiateRes['show_recharge_modal'] == true ||
                  (initiateRes['message']?.toString().toLowerCase().contains('insufficient') ?? false) ||
                  (initiateRes['message']?.toString().toLowerCase().contains('recharge') ?? false) ||
                  (initiateRes['message']?.toString().toLowerCase().contains('coin') ?? false) ||

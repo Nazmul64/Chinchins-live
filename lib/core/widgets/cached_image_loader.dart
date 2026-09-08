@@ -126,16 +126,11 @@ class CachedImageLoader extends StatelessWidget {
     }
     // 3. Network image with instant memory/disk caching & zero-spinner placeholder
     else if (cleanUrl.isNotEmpty && (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://'))) {
-      final cacheWidth = width != null && width! > 0 ? (width! * 2).toInt() : 800;
-      final cacheHeight = height != null && height! > 0 ? (height! * 2).toInt() : 800;
-
       imageWidget = CachedNetworkImage(
         imageUrl: cleanUrl,
         width: width,
         height: height,
         fit: fit,
-        memCacheWidth: cacheWidth > 1200 ? 1200 : cacheWidth,
-        memCacheHeight: cacheHeight > 1200 ? 1200 : cacheHeight,
         fadeInDuration: const Duration(milliseconds: 100),
         fadeOutDuration: const Duration(milliseconds: 100),
         placeholder: (context, url) => placeholder ?? _buildPlaceholder(),

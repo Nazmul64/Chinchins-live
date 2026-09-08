@@ -42,39 +42,55 @@ class ProfileApiService {
       if (data['data'] is List) {
         userList = data['data'] as List;
       } else if (data['data'] is Map) {
-        if (data['data']['users'] is List) {
-          userList = data['data']['users'] as List;
-        } else if (data['data']['data'] is List) {
-          userList = data['data']['data'] as List;
+        final d = data['data'] as Map;
+        if (d['users'] is List && (d['users'] as List).isNotEmpty) {
+          userList = d['users'] as List;
+        } else if (d['streamers'] is List && (d['streamers'] as List).isNotEmpty) {
+          userList = d['streamers'] as List;
+        } else if (d['hosts'] is List && (d['hosts'] as List).isNotEmpty) {
+          userList = d['hosts'] as List;
+        } else if (d['data'] is List) {
+          userList = d['data'] as List;
         }
       } else if (data['users'] is List) {
         userList = data['users'] as List;
+      } else if (data['streamers'] is List) {
+        userList = data['streamers'] as List;
+      } else if (data['hosts'] is List) {
+        userList = data['hosts'] as List;
       }
     }
 
     if (userList != null && userList.isNotEmpty) {
-      final parsed = userList
-          .whereType<Map<String, dynamic>>()
-          .map((u) => ModelProfile.fromJson(u))
-          .where((profile) {
+      final parsed = <ModelProfile>[];
+      for (final item in userList) {
+        if (item is Map) {
+          try {
+            final map = Map<String, dynamic>.from(item);
+            final profile = ModelProfile.fromJson(map);
+
             final name = profile.name.trim().toLowerCase();
             final firstName = (profile.firstName ?? '').trim().toLowerCase();
             final lastName = (profile.lastName ?? '').trim().toLowerCase();
             final email = (profile.email ?? '').trim().toLowerCase();
+            final accountId = profile.accountId.trim();
 
+            // Exclude only the system admin account
             if (name == 'admin' ||
                 name.contains('administrator') ||
-                name == 'ayeena04' ||
-                name == 'ayeena' ||
                 firstName == 'admin' ||
                 lastName == 'admin' ||
+                accountId == '1000000001' ||
                 email.startsWith('admin@') ||
                 email.contains('admin@')) {
-              return false;
+              continue;
             }
-            return true;
-          })
-          .toList();
+            parsed.add(profile);
+          } catch (e) {
+            debugPrint('Error parsing streamer profile: $e');
+          }
+        }
+      }
 
       if (parsed.isNotEmpty) {
         _inMemoryHomeCache = parsed;

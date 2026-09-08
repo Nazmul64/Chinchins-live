@@ -23,6 +23,7 @@ import '../../call/services/call_sound_manager.dart';
 import '../../call/services/streaming_service.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
 import '../../profile/screens/host_profile_screen.dart';
+import '../../../core/services/gifts_api_service.dart';
 import '../../../core/data/mock_data.dart';
 
 class ChatDetailScreen extends StatefulWidget {
@@ -538,7 +539,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     if (!mounted) return;
 
-    if (res['is_limit_reached'] == true || res['code'] == 'MESSAGE_LIMIT_REACHED') {
+    if (res['is_limit_reached'] == true ||
+        res['code'] == 'MESSAGE_LIMIT_REACHED' ||
+        res['show_recharge_modal'] == true) {
+      // Revert optimistically appended message & restore input text
+      setState(() {
+        _messages.remove(newMsg);
+        _textController.text = text;
+      });
       // Free message limit reached! Prompt coin recharge modal
       RechargeGemsSheet.show(
         context,
@@ -579,6 +587,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     });
 
     _scrollToBottom();
+    // In background, notify server of gift
+    GiftsApiService.sendGift(
+      receiverId: widget.thread.modelId,
+      giftId: gift.id,
+      context: 'chat',
+    );
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -590,14 +604,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Future<void> _openVideoCall() async {
-    if (_isBlockedByMe) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please unblock user to start video call.')),
-      );
-      return;
-    }
     final model = ModelProfile(
       id: widget.thread.modelId,
+      accountId: widget.thread.modelId,
       name: widget.thread.name,
       age: 22,
       location: 'Live Host',
@@ -605,9 +614,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       languages: const ['Bengali', 'English'],
       avatarUrl: widget.thread.avatarUrl,
       galleryUrls: [widget.thread.avatarUrl],
-      charmLevel: 8900,
-      topFan: 'user_fan',
-      pricePerMin: widget.thread.videoCallRate > 0 ? widget.thread.videoCallRate : 1800,
+      pricePerMin: widget.thread.videoCallRate > 0 ? widget.thread.videoCallRate : 100,
     );
 
     CallSoundManager.playOutgoingRingtone();
@@ -634,6 +641,30 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
 
     try {
+      // 1. Check call permission & user balance via POST /api/call/check-permission
+      final permRes = await CallApiService.checkCallPermission(
+        receiverId: model.id,
+        callType: 'video',
+      );
+
+      if (permRes['can_call'] == false || permRes['show_recharge_modal'] == true || permRes['status'] == false) {
+        CallSoundManager.stopRingtone();
+        if (!mounted) return;
+        Navigator.pop(context); // Close progress dialog
+        RechargeGemsSheet.show(
+          context,
+          model: model,
+          receiverId: widget.thread.modelId,
+          receiverName: widget.thread.name,
+          receiverAvatarUrl: widget.thread.avatarUrl,
+          modalData: permRes['recharge_modal_data'] as Map<String, dynamic>?,
+          onRechargeSuccess: () {
+            _openVideoCall();
+          },
+        );
+        return;
+      }
+
       final res = await CallApiService.initiateCall(
         receiverId: model.id,
         receiverAccountId: model.accountId,
@@ -665,7 +696,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ratePerMinute: ratePerMin,
           dialToneUrl: res['dial_tone_url']?.toString(),
         );
-      } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
+      } else if (res['is_low_balance'] == true ||
+                 res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
+                 res['code'] == 'INSUFFICIENT_BALANCE' ||
+                 res['show_recharge_modal'] == true) {
         CallSoundManager.stopRingtone();
         RechargeGemsSheet.show(
           context,
