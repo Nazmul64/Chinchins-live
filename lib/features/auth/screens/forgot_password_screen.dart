@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
@@ -497,16 +497,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
                   // Input Field
                   if (_selectedMethod == 0) ...[
-                    const Text(
-                      'Registered Email',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                     AuthTextField(
+                      label: 'Registered Email',
                       controller: _emailController,
                       hintText: 'e.g. user@example.com',
                       prefixIcon: Icons.mail_outline_rounded,
@@ -522,16 +514,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       },
                     ),
                   ] else ...[
-                    const Text(
-                      'Registered Phone Number',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                     AuthTextField(
+                      label: 'Registered Phone Number',
                       controller: _phoneController,
                       hintText: '01700000000',
                       prefixIcon: Icons.phone_outlined,
@@ -551,23 +535,21 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
                   // Send Code Button
                   GradientButton(
-                    text: 'Send Verification Code',
-                    isLoading: _isLoading,
-                    icon: Icons.send_rounded,
-                    onTap: _handleSendCode,
+                    text: _isLoading ? '' : 'Send Verification Code',
+                    icon: _isLoading ? null : Icons.send_rounded,
+                    customChild: _isLoading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : null,
+                    onTap: _isLoading ? null : _handleSendCode,
                   ),
                 ] else ...[
                   // STEP 2: Enter OTP & New Password
-                  const Text(
-                    '6-Digit Verification Code',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
                   AuthTextField(
+                    label: '6-Digit Verification Code',
                     controller: _otpController,
                     hintText: 'Enter 6-digit code',
                     prefixIcon: Icons.pin_outlined,
@@ -615,16 +597,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   const SizedBox(height: 20),
 
                   // New Password Field
-                  const Text(
-                    'New Password',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
                   AuthTextField(
+                    label: 'New Password',
                     controller: _newPasswordController,
                     hintText: 'Enter new password (min. 6 chars)',
                     prefixIcon: Icons.lock_outline_rounded,
@@ -650,16 +624,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   const SizedBox(height: 16),
 
                   // Confirm Password Field
-                  const Text(
-                    'Confirm New Password',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
                   AuthTextField(
+                    label: 'Confirm New Password',
                     controller: _confirmPasswordController,
                     hintText: 'Re-type your new password',
                     prefixIcon: Icons.lock_outline_rounded,
@@ -686,10 +652,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
                   // Reset Password Button
                   GradientButton(
-                    text: 'Reset Password',
-                    isLoading: _isLoading,
-                    icon: Icons.check_circle_outline_rounded,
-                    onTap: _handleResetPassword,
+                    text: _isLoading ? '' : 'Reset Password',
+                    icon: _isLoading ? null : Icons.check_circle_outline_rounded,
+                    customChild: _isLoading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : null,
+                    onTap: _isLoading ? null : _handleResetPassword,
                   ),
                 ],
 

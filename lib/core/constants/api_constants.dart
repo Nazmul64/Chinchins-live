@@ -16,6 +16,9 @@ class ApiConstants {
   static String get authMe => '$baseUrl/auth/me';
   static String get userProfile => '$baseUrl/user';
   static String get logout => '$baseUrl/logout';
+  static String get forgotPassword => '$baseUrl/forgot-password';
+  static String get verifyResetCode => '$baseUrl/verify-reset-code';
+  static String get resetPassword => '$baseUrl/reset-password';
 
   // Feed / Home / Search endpoints
   static String get countries => '$baseUrl/countries';

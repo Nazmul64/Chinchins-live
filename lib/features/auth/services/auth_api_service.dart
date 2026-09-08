@@ -395,26 +395,54 @@ class AuthApiService {
     String method = 'email',
   }) async {
     try {
-      final url = Uri.parse(ApiConstants.forgotPassword);
-      final response = await http
+      final cleanIdentifier = identifier.trim();
+      final isEmail = method == 'email' || cleanIdentifier.contains('@');
+      final payload = {
+        if (isEmail) 'email': cleanIdentifier,
+        if (!isEmail) 'phone': cleanIdentifier,
+        'identifier': cleanIdentifier,
+        'method': isEmail ? 'email' : 'phone',
+      };
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      // 1. Primary endpoint: /api/forgot-password
+      var response = await http
           .post(
-            url,
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode({
-              'email': identifier.trim(),
-              'phone': identifier.trim(),
-              'identifier': identifier.trim(),
-              'method': method,
-            }),
+            Uri.parse(ApiConstants.forgotPassword),
+            headers: headers,
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 15));
 
+      // 2. Fallback: /api/password/forgot
+      if (response.statusCode == 404) {
+        response = await http
+            .post(
+              Uri.parse('${ApiConstants.baseUrl}/password/forgot'),
+              headers: headers,
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 15));
+      }
+
+      // 3. Fallback: /api/password/send-code
+      if (response.statusCode == 404) {
+        response = await http
+            .post(
+              Uri.parse('${ApiConstants.baseUrl}/password/send-code'),
+              headers: headers,
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 15));
+      }
+
       final data = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && data is Map && data['status'] == true) {
+      if (response.statusCode == 200 && data is Map && (data['status'] == true || data['success'] == true)) {
         return {
           'success': true,
           'message': data['message'] ?? 'Verification code sent.',
@@ -441,26 +469,43 @@ class AuthApiService {
     required String code,
   }) async {
     try {
-      final url = Uri.parse(ApiConstants.verifyResetCode);
-      final response = await http
+      final cleanIdentifier = identifier.trim();
+      final isEmail = cleanIdentifier.contains('@');
+      final payload = {
+        if (isEmail) 'email': cleanIdentifier,
+        if (!isEmail) 'phone': cleanIdentifier,
+        'identifier': cleanIdentifier,
+        'code': code.trim(),
+      };
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      // 1. Primary: /api/verify-reset-code
+      var response = await http
           .post(
-            url,
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode({
-              'email': identifier.trim(),
-              'phone': identifier.trim(),
-              'identifier': identifier.trim(),
-              'code': code.trim(),
-            }),
+            Uri.parse(ApiConstants.verifyResetCode),
+            headers: headers,
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 15));
 
+      // 2. Fallback: /api/password/verify-code
+      if (response.statusCode == 404) {
+        response = await http
+            .post(
+              Uri.parse('${ApiConstants.baseUrl}/password/verify-code'),
+              headers: headers,
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 15));
+      }
+
       final data = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && data is Map && data['status'] == true) {
+      if (response.statusCode == 200 && data is Map && (data['status'] == true || data['success'] == true)) {
         return {
           'success': true,
           'message': data['message'] ?? 'Code verified successfully.',
@@ -490,30 +535,47 @@ class AuthApiService {
     required String passwordConfirmation,
   }) async {
     try {
-      final url = Uri.parse(ApiConstants.resetPassword);
-      final response = await http
+      final cleanIdentifier = identifier.trim();
+      final isEmail = cleanIdentifier.contains('@');
+      final payload = {
+        if (isEmail) 'email': cleanIdentifier,
+        if (!isEmail) 'phone': cleanIdentifier,
+        'identifier': cleanIdentifier,
+        'code': code.trim(),
+        'reset_token': resetToken ?? code.trim(),
+        'password': password,
+        'password_confirmation': passwordConfirmation,
+        'confirm_password': passwordConfirmation,
+      };
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      // 1. Primary: /api/reset-password
+      var response = await http
           .post(
-            url,
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode({
-              'email': identifier.trim(),
-              'phone': identifier.trim(),
-              'identifier': identifier.trim(),
-              'code': code.trim(),
-              'reset_token': resetToken ?? code.trim(),
-              'password': password,
-              'password_confirmation': passwordConfirmation,
-              'confirm_password': passwordConfirmation,
-            }),
+            Uri.parse(ApiConstants.resetPassword),
+            headers: headers,
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 15));
 
+      // 2. Fallback: /api/password/reset
+      if (response.statusCode == 404) {
+        response = await http
+            .post(
+              Uri.parse('${ApiConstants.baseUrl}/password/reset'),
+              headers: headers,
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 15));
+      }
+
       final data = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && data is Map && data['status'] == true) {
+      if (response.statusCode == 200 && data is Map && (data['status'] == true || data['success'] == true)) {
         return {
           'success': true,
           'message': data['message'] ?? 'Password reset successfully.',
