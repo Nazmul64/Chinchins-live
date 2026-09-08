@@ -9,6 +9,7 @@ import '../widgets/match_tab_view.dart';
 import '../widgets/draggable_extra_gems_widget.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
+import '../../wallet/services/wallet_api_service.dart';
 import '../../call/screens/random_match_screen.dart';
 import '../../call/services/call_api_service.dart';
 import '../../call/services/streaming_service.dart';
@@ -266,6 +267,25 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
   }
 
   Future<void> _startVideoCall(ModelProfile model) async {
+    final int cachedCoins = WalletApiService.getCachedCoins();
+    final int ratePerMin = model.pricePerMin > 0 ? model.pricePerMin : 1800;
+
+    // ⚡ ZERO-DELAY INSTANT SYNCHRONOUS CHECK (<0.001s):
+    // If cached coins are insufficient, open recharge sheet IMMEDIATELY with zero delay!
+    if (cachedCoins < ratePerMin) {
+      RechargeGemsSheet.show(
+        context,
+        model: model,
+        receiverId: model.id,
+        receiverName: model.name,
+        receiverAvatarUrl: model.avatarUrl,
+        onRechargeSuccess: () {
+          _startVideoCall(model);
+        },
+      );
+      return;
+    }
+
     final savedUser = await AuthApiService.getSavedUser();
     final myId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString();
     final myAccountId = savedUser?['account_id']?.toString();
@@ -282,7 +302,26 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
       return;
     }
 
-    // Show connecting loading dialog
+    // Secondary balance check against fresh savedUser:
+    final int userCoins = (savedUser?['coins'] is num)
+        ? (savedUser!['coins'] as num).toInt()
+        : (int.tryParse('${savedUser?['coins']}') ?? cachedCoins);
+
+    if (userCoins < ratePerMin) {
+      RechargeGemsSheet.show(
+        context,
+        model: model,
+        receiverId: model.id,
+        receiverName: model.name,
+        receiverAvatarUrl: model.avatarUrl,
+        onRechargeSuccess: () {
+          _startVideoCall(model);
+        },
+      );
+      return;
+    }
+
+    // Only if user has enough coins locally, show the connecting dialog and verify with backend:
     showDialog(
       context: context,
       barrierDismissible: false,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
@@ -468,7 +469,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
         crossAxisCount: 3,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
-        childAspectRatio: 0.69,
+        childAspectRatio: 0.68,
       ),
       itemBuilder: (context, index) {
         return _buildPackageCard(displayList[index], index);
@@ -593,22 +594,8 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const SizedBox(height: 6),
-                  // Gem Tier Artwork (Dynamic backend URL if present, or custom geometric jewel)
-                  Builder(
-                    builder: (context) {
-                      final String? pkgImg = pkg['png_url'] ?? pkg['svg_url'] ?? pkg['icon_full_url'] ?? pkg['image_url'] ?? pkg['icon_url'];
-                      if (pkgImg != null && pkgImg.toString().trim().isNotEmpty) {
-                        return CachedImageLoader(
-                          imageUrl: pkgImg.toString(),
-                          width: 38,
-                          height: 38,
-                          fit: BoxFit.contain,
-                          placeholder: _buildGemArtwork(index, useOrangeTheme),
-                        );
-                      }
-                      return _buildGemArtwork(index, useOrangeTheme);
-                    },
-                  ),
+                  // Gem Tier Artwork (Displays larger SVG from backend or native sparkling gems)
+                  _buildPackageIcon(pkg, index, useOrangeTheme),
                   const SizedBox(height: 4),
 
                   // Coin Count Text
@@ -618,7 +605,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
                       '$coins',
                       style: TextStyle(
                         color: useOrangeTheme ? Colors.white : const Color(0xFF221A2C),
-                        fontSize: 16.5,
+                        fontSize: 18,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -630,10 +617,17 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
                     // White pill for selected/orange card
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 3.5),
+                      padding: const EdgeInsets.symmetric(vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Center(
                         child: FittedBox(
@@ -644,7 +638,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
                               priceStr,
                               style: const TextStyle(
                                 color: Color(0xFFE64A00),
-                                fontSize: 10.5,
+                                fontSize: 11,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
@@ -661,9 +655,9 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
                         child: Text(
                           priceStr,
                           style: const TextStyle(
-                            color: Color(0xFF756A80),
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF8E8399),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -677,11 +671,44 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
     );
   }
 
+  /// Displays larger SVG image from backend or native fallback artwork
+  Widget _buildPackageIcon(Map<String, dynamic> pkg, int index, bool isSelected) {
+    final String? rawUrl = pkg['svg_url'] ??
+        pkg['icon_full_url'] ??
+        pkg['image_url'] ??
+        pkg['png_url'] ??
+        pkg['icon_url'];
+
+    if (rawUrl != null && rawUrl.trim().isNotEmpty) {
+      String cleanUrl = CachedImageLoader.normalize(rawUrl.trim());
+
+      if (cleanUrl.toLowerCase().contains('.svg')) {
+        return SvgPicture.network(
+          cleanUrl,
+          width: 56,
+          height: 48,
+          fit: BoxFit.contain,
+          placeholderBuilder: (context) => _buildGemArtwork(index, isSelected),
+        );
+      }
+
+      return CachedImageLoader(
+        imageUrl: cleanUrl,
+        width: 56,
+        height: 48,
+        fit: BoxFit.contain,
+        placeholder: _buildGemArtwork(index, isSelected),
+      );
+    }
+
+    return _buildGemArtwork(index, isSelected);
+  }
+
   /// Exact gemstone artwork for all 6 tiers (scaled with FittedBox to prevent any RenderFlex overflow)
   Widget _buildGemArtwork(int index, bool isOrangeCard) {
     return SizedBox(
-      width: 38,
-      height: 38,
+      width: 56,
+      height: 48,
       child: FittedBox(
         fit: BoxFit.contain,
         child: _buildRawGemArtwork(index, isOrangeCard),

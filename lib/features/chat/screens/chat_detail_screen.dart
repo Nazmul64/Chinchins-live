@@ -22,6 +22,7 @@ import '../../call/services/call_api_service.dart';
 import '../../call/services/call_sound_manager.dart';
 import '../../call/services/streaming_service.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
+import '../../wallet/services/wallet_api_service.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../../core/services/gifts_api_service.dart';
 import '../../../core/data/mock_data.dart';
@@ -616,6 +617,45 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       galleryUrls: [widget.thread.avatarUrl],
       pricePerMin: widget.thread.videoCallRate > 0 ? widget.thread.videoCallRate : 100,
     );
+
+    final int cachedCoins = WalletApiService.getCachedCoins();
+    final int ratePerMin = widget.thread.videoCallRate > 0 ? widget.thread.videoCallRate : 100;
+
+    // ⚡ ZERO-DELAY INSTANT SYNCHRONOUS CHECK (< 0.001s):
+    if (cachedCoins < ratePerMin) {
+      RechargeGemsSheet.show(
+        context,
+        model: model,
+        receiverId: widget.thread.modelId,
+        receiverName: widget.thread.name,
+        receiverAvatarUrl: widget.thread.avatarUrl,
+        onRechargeSuccess: () {
+          _openVideoCall();
+        },
+      );
+      return;
+    }
+
+    final savedUser = await AuthApiService.getSavedUser();
+    if (!mounted) return;
+
+    final int userCoins = (savedUser?['coins'] is num)
+        ? (savedUser!['coins'] as num).toInt()
+        : (int.tryParse('${savedUser?['coins']}') ?? cachedCoins);
+
+    if (userCoins < ratePerMin) {
+      RechargeGemsSheet.show(
+        context,
+        model: model,
+        receiverId: widget.thread.modelId,
+        receiverName: widget.thread.name,
+        receiverAvatarUrl: widget.thread.avatarUrl,
+        onRechargeSuccess: () {
+          _openVideoCall();
+        },
+      );
+      return;
+    }
 
     CallSoundManager.playOutgoingRingtone();
 

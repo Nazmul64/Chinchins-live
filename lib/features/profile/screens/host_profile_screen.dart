@@ -18,6 +18,7 @@ import '../../chat/screens/chat_detail_screen.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/services/gifts_api_service.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
+import '../../wallet/services/wallet_api_service.dart';
 import '../../auth/services/auth_api_service.dart';
 
 class HostProfileScreen extends StatefulWidget {
@@ -129,6 +130,15 @@ class _HostProfileScreenState extends State<HostProfileScreen>
   }
 
   Future<void> _startVideoCall() async {
+    final int cachedCoins = WalletApiService.getCachedCoins();
+    final int ratePerMin = widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 1800;
+
+    // ⚡ ZERO-DELAY INSTANT SYNCHRONOUS CHECK (<0.001s):
+    if (cachedCoins < ratePerMin) {
+      _showRechargeSheet();
+      return;
+    }
+
     final savedUser = await AuthApiService.getSavedUser();
     final myId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString();
     final myAccountId = savedUser?['account_id']?.toString();
@@ -142,6 +152,16 @@ class _HostProfileScreenState extends State<HostProfileScreen>
           backgroundColor: Colors.orangeAccent,
         ),
       );
+      return;
+    }
+
+    // Secondary check against fresh savedUser:
+    final int userCoins = (savedUser?['coins'] is num)
+        ? (savedUser!['coins'] as num).toInt()
+        : (int.tryParse('${savedUser?['coins']}') ?? cachedCoins);
+
+    if (userCoins < ratePerMin) {
+      _showRechargeSheet();
       return;
     }
 
@@ -240,6 +260,15 @@ class _HostProfileScreenState extends State<HostProfileScreen>
   }
 
   Future<void> _startAudioCall() async {
+    final int cachedCoins = WalletApiService.getCachedCoins();
+    final int ratePerMin = 60; // Standard audio rate
+
+    // ⚡ ZERO-DELAY INSTANT SYNCHRONOUS CHECK (<0.001s):
+    if (cachedCoins < ratePerMin) {
+      _showRechargeSheet();
+      return;
+    }
+
     final savedUser = await AuthApiService.getSavedUser();
     final myId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString();
     final myAccountId = savedUser?['account_id']?.toString();
@@ -253,6 +282,16 @@ class _HostProfileScreenState extends State<HostProfileScreen>
           backgroundColor: Colors.orangeAccent,
         ),
       );
+      return;
+    }
+
+    // Secondary check against fresh savedUser:
+    final int userCoins = (savedUser?['coins'] is num)
+        ? (savedUser!['coins'] as num).toInt()
+        : (int.tryParse('${savedUser?['coins']}') ?? cachedCoins);
+
+    if (userCoins < ratePerMin) {
+      _showRechargeSheet();
       return;
     }
 
