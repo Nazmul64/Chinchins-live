@@ -139,60 +139,101 @@ class _MessagesScreenState extends State<MessagesScreen> {
     final availableHosts = _liveHosts;
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.cardDarkElevated,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Start New Chat',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (availableHosts.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: Text('No active hosts online', style: TextStyle(color: AppColors.textMuted)),
-                ),
-              )
-            else
-              ...availableHosts.take(6).map((model) => ListTile(
-                    leading: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: const BoxDecoration(shape: BoxShape.circle),
-                      child: ClipOval(
-                        child: CachedImageLoader(imageUrl: model.avatarUrl, fit: BoxFit.cover),
-                      ),
+      builder: (context) => SafeArea(
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.75,
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Start New Chat',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
-                    title: Text(model.fullName.isNotEmpty ? model.fullName : model.name, style: const TextStyle(color: Colors.white)),
-                    subtitle: Text(model.location, style: const TextStyle(color: AppColors.textMuted)),
-                    trailing: const Icon(Icons.chat_bubble_outline, color: AppColors.neonPink),
-                    onTap: () {
-                      Navigator.pop(context);
-                      final thread = ChatThread(
-                        id: 't_${model.id}',
-                        modelId: model.id,
-                        name: model.fullName.isNotEmpty ? model.fullName : model.name,
-                        avatarUrl: model.avatarUrl,
-                        lastMessage: 'Hello! ❤️',
-                        time: 'Just now',
-                        messages: [],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
+                    onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (availableHosts.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text('No active hosts online', style: TextStyle(color: AppColors.textMuted)),
+                  ),
+                )
+              else
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: availableHosts.length,
+                    itemBuilder: (context, index) {
+                      final model = availableHosts[index];
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(vertical: 2),
+                        leading: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: const BoxDecoration(shape: BoxShape.circle),
+                          child: ClipOval(
+                            child: CachedImageLoader(
+                              imageUrl: model.avatarUrl,
+                              fit: BoxFit.cover,
+                              placeholder: Container(
+                                color: const Color(0xFF28203E),
+                                child: const Icon(Icons.person, color: Colors.white54, size: 24),
+                              ),
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          model.fullName.isNotEmpty ? model.fullName : model.name,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          model.location.isNotEmpty ? model.location : 'Online',
+                          style: const TextStyle(color: AppColors.textMuted),
+                        ),
+                        trailing: const Icon(Icons.chat_bubble_outline, color: AppColors.neonPink),
+                        onTap: () {
+                          Navigator.pop(context);
+                          final thread = ChatThread(
+                            id: 't_${model.id}',
+                            modelId: model.id,
+                            name: model.fullName.isNotEmpty ? model.fullName : model.name,
+                            avatarUrl: model.avatarUrl,
+                            lastMessage: 'Hello! ❤️',
+                            time: 'Just now',
+                            messages: [],
+                          );
+                          _openChat(thread);
+                        },
                       );
-                      _openChat(thread);
                     },
-                  )),
-          ],
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

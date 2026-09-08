@@ -77,6 +77,11 @@ class CachedImageLoader extends StatelessWidget {
       }
     }
 
+    // On chinchins.live, all gifts and coin package illustrations are SVG files
+    if ((url.contains('/uploads/gifts/') || url.contains('/coin_packages/')) && url.toLowerCase().endsWith('.png')) {
+      url = '${url.substring(0, url.length - 4)}.svg';
+    }
+
     return url;
   }
 
@@ -106,16 +111,19 @@ class CachedImageLoader extends StatelessWidget {
             height: height,
             fit: fit,
             errorBuilder: (context, error, stackTrace) {
-              return _buildErrorWidget();
+              return placeholder ?? _buildErrorWidget();
             },
           );
         }
       } else {
-        imageWidget = _buildErrorWidget();
+        imageWidget = placeholder ?? _buildErrorWidget();
       }
     }
-    // 2. SVG Network Image
-    else if (cleanUrl.isNotEmpty && cleanUrl.toLowerCase().contains('.svg')) {
+    // 2. SVG Network Image (all .svg, /gifts/, or /coin_packages/ routes to SvgPicture to prevent ImageDecoder crashes)
+    else if (cleanUrl.isNotEmpty &&
+        (cleanUrl.toLowerCase().contains('.svg') ||
+         cleanUrl.contains('/uploads/gifts/') ||
+         cleanUrl.contains('/coin_packages/'))) {
       imageWidget = SvgPicture.network(
         cleanUrl,
         width: width,
@@ -148,7 +156,7 @@ class CachedImageLoader extends StatelessWidget {
         },
       );
     } else {
-      imageWidget = _buildErrorWidget();
+      imageWidget = placeholder ?? _buildErrorWidget();
     }
 
     if (borderRadius != null) {
