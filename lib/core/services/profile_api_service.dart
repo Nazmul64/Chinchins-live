@@ -335,10 +335,22 @@ class ProfileApiService {
       if (response.statusCode == 200) {
         final data = _safeJsonDecode(response.body);
         if (data != null) {
-          final userData = data['data']?['user'] ?? data['user'];
-          if (userData != null && userData is Map<String, dynamic>) {
-            return ModelProfile.fromJson(userData);
-          }
+          final root = (data['data'] is Map)
+              ? Map<String, dynamic>.from(data['data'] as Map)
+              : (data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{});
+          final userRaw = (root['user'] is Map)
+              ? Map<String, dynamic>.from(root['user'] as Map)
+              : Map<String, dynamic>.from(root);
+
+          if (root['charm_level'] != null) userRaw['charm_level'] = root['charm_level'];
+          if (root['interest_tags'] != null) userRaw['interest_tags'] = root['interest_tags'];
+          if (root['speaking_languages'] != null) userRaw['speaking_languages'] = root['speaking_languages'];
+          if (root['top_fan'] != null) userRaw['top_fan'] = root['top_fan'];
+          if (root['video_call_rate'] != null) userRaw['video_call_rate'] = root['video_call_rate'];
+          if (root['likes'] != null) userRaw['likes'] = root['likes'];
+          if (root['gifts_received'] != null) userRaw['gifts_received'] = root['gifts_received'];
+
+          return ModelProfile.fromJson(userRaw);
         }
       }
     } catch (_) {}
@@ -802,6 +814,41 @@ class ProfileApiService {
       }
     } catch (e) {
       debugPrint('[ProfileApiService] recordProfileView error: $e');
+    }
+    return null;
+  }
+
+  /// Send instant Hi greeting to Host
+  static Future<Map<String, dynamic>?> sendHiGreeting(dynamic receiverId) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      final payload = {
+        'receiver_id': receiverId,
+        'message': 'Hi! 👋',
+      };
+
+      var uri = Uri.parse(ApiConstants.profileHi(receiverId));
+      var response = await http.post(uri, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 6));
+
+      if (response.statusCode != 200) {
+        uri = Uri.parse(ApiConstants.chatSendHi);
+        response = await http.post(uri, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 6));
+      }
+
+      if (response.statusCode == 200) {
+        final data = _safeJsonDecode(response.body);
+        if (data != null) {
+          return data is Map<String, dynamic> ? data : {'status': true};
+        }
+      }
+    } catch (e) {
+      debugPrint('[ProfileApiService] sendHiGreeting error: $e');
     }
     return null;
   }

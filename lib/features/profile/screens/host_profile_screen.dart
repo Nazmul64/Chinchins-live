@@ -39,15 +39,18 @@ class _HostProfileScreenState extends State<HostProfileScreen>
   final List<_FloatingHeart> _hearts = [];
   Timer? _heartTimer;
   UserGiftsData? _giftsData;
+  late ModelProfile _currentModel;
 
   @override
   void initState() {
     super.initState();
+    _currentModel = widget.model;
     _selectedGalleryIndex = 0;
 
     // Fast instant cached gifts data
     _giftsData = GiftsApiService.getCachedReceivedGifts(widget.model.id);
     _loadHostGifts();
+    _loadFullProfile();
 
     // Trigger RESTful profile view notification & auto-callback
     _triggerProfileViewAndAutoCallback();
@@ -58,6 +61,15 @@ class _HostProfileScreenState extends State<HostProfileScreen>
         _emitHeart();
       }
     });
+  }
+
+  Future<void> _loadFullProfile() async {
+    final fresh = await ProfileApiService.getProfile(widget.model.id);
+    if (fresh != null && mounted) {
+      setState(() {
+        _currentModel = fresh;
+      });
+    }
   }
 
   void _triggerProfileViewAndAutoCallback() {
@@ -76,7 +88,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                 context,
                 MaterialPageRoute(
                   builder: (context) => IncomingCallScreen(
-                    model: widget.model,
+                    model: _currentModel,
                     callId: callId,
                     channelName: callback['channel_name']?.toString(),
                     isFreeTrial: true,
@@ -85,7 +97,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                         : 10,
                     ratePerMinute: callback['required_coins'] is int
                         ? callback['required_coins'] as int
-                        : (widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100),
+                        : (_currentModel.pricePerMin > 0 ? _currentModel.pricePerMin : 100),
                   ),
                 ),
               );
@@ -113,7 +125,11 @@ class _HostProfileScreenState extends State<HostProfileScreen>
 
   void _emitHeart({bool isUserClick = false}) {
     if (isUserClick) {
-      GiftsApiService.sendLike(userId: widget.model.id, count: 1, context: 'profile');
+      GiftsApiService.sendLike(userId: _currentModel.id, count: 1, context: 'profile').then((res) {
+        if (mounted) {
+          _loadHostGifts();
+        }
+      });
     }
     setState(() {
       _hearts.add(_FloatingHeart(
@@ -131,7 +147,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
 
   Future<void> _startVideoCall() async {
     final int cachedCoins = WalletApiService.getCachedCoins();
-    final int ratePerMin = widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 1800;
+    final int ratePerMin = _currentModel.pricePerMin > 0 ? _currentModel.pricePerMin : 1800;
 
     // ⚡ ZERO-DELAY INSTANT SYNCHRONOUS CHECK (<0.001s):
     if (cachedCoins < ratePerMin) {
@@ -144,8 +160,8 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     final myAccountId = savedUser?['account_id']?.toString();
 
     if (!mounted) return;
-    if ((myId != null && (myId == widget.model.id || myId == widget.model.accountId)) ||
-        (myAccountId != null && (myAccountId == widget.model.accountId || myAccountId == widget.model.id))) {
+    if ((myId != null && (myId == _currentModel.id || myId == _currentModel.accountId)) ||
+        (myAccountId != null && (myAccountId == _currentModel.accountId || myAccountId == _currentModel.id))) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('You cannot call your own profile! Please choose another user to call.'),
@@ -190,7 +206,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     try {
       // 1. Check call permission & user balance via POST /api/call/check-permission
       final permRes = await CallApiService.checkCallPermission(
-        receiverId: widget.model.id,
+        receiverId: _currentModel.id,
         callType: 'video',
       );
 
@@ -203,8 +219,8 @@ class _HostProfileScreenState extends State<HostProfileScreen>
       }
 
       final res = await CallApiService.initiateCall(
-        receiverId: widget.model.id,
-        receiverAccountId: widget.model.accountId,
+        receiverId: _currentModel.id,
+        receiverAccountId: _currentModel.accountId,
         callType: 'video',
       );
 
@@ -215,14 +231,14 @@ class _HostProfileScreenState extends State<HostProfileScreen>
         final int? callId = res['call_id'] is int
             ? res['call_id'] as int
             : int.tryParse(res['call_id']?.toString() ?? '');
-        final channelName = res['channel_name']?.toString() ?? 'call_${widget.model.id}';
+        final channelName = res['channel_name']?.toString() ?? 'call_${_currentModel.id}';
         final isFreeTrial = res['is_free_trial'] == true;
         final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
-        final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100);
+        final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (_currentModel.pricePerMin > 0 ? _currentModel.pricePerMin : 1800);
 
         StreamingService.startDynamicCall(
           context: context,
-          model: widget.model,
+          model: _currentModel,
           callId: callId,
           channelName: channelName,
           isFreeTrial: isFreeTrial,
@@ -274,8 +290,8 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     final myAccountId = savedUser?['account_id']?.toString();
 
     if (!mounted) return;
-    if ((myId != null && (myId == widget.model.id || myId == widget.model.accountId)) ||
-        (myAccountId != null && (myAccountId == widget.model.accountId || myAccountId == widget.model.id))) {
+    if ((myId != null && (myId == _currentModel.id || myId == _currentModel.accountId)) ||
+        (myAccountId != null && (myAccountId == _currentModel.accountId || myAccountId == _currentModel.id))) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('You cannot call your own profile! Please choose another user to call.'),
@@ -320,7 +336,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     try {
       // 1. Check call permission & user balance via POST /api/call/check-permission
       final permRes = await CallApiService.checkCallPermission(
-        receiverId: widget.model.id,
+        receiverId: _currentModel.id,
         callType: 'audio',
       );
 
@@ -333,8 +349,8 @@ class _HostProfileScreenState extends State<HostProfileScreen>
       }
 
       final res = await CallApiService.initiateCall(
-        receiverId: widget.model.id,
-        receiverAccountId: widget.model.accountId,
+        receiverId: _currentModel.id,
+        receiverAccountId: _currentModel.accountId,
         callType: 'audio',
       );
 
@@ -345,14 +361,14 @@ class _HostProfileScreenState extends State<HostProfileScreen>
         final int? callId = res['call_id'] is int
             ? res['call_id'] as int
             : int.tryParse(res['call_id']?.toString() ?? '');
-        final channelName = res['channel_name']?.toString() ?? 'audio_call_${widget.model.id}';
+        final channelName = res['channel_name']?.toString() ?? 'audio_call_${_currentModel.id}';
         final isFreeTrial = res['is_free_trial'] == true;
         final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
-        final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100);
+        final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (_currentModel.pricePerMin > 0 ? _currentModel.pricePerMin : 100);
 
         StreamingService.startDynamicCall(
           context: context,
-          model: widget.model,
+          model: _currentModel,
           callId: callId,
           channelName: channelName,
           callType: 'audio',
@@ -393,10 +409,10 @@ class _HostProfileScreenState extends State<HostProfileScreen>
   void _showRechargeSheet({Map<String, dynamic>? modalData}) {
     RechargeGemsSheet.show(
       context,
-      model: widget.model,
-      receiverId: widget.model.id,
-      receiverName: widget.model.name,
-      receiverAvatarUrl: widget.model.avatarUrl,
+      model: _currentModel,
+      receiverId: _currentModel.id,
+      receiverName: _currentModel.name,
+      receiverAvatarUrl: _currentModel.avatarUrl,
       modalData: modalData,
       onRechargeSuccess: () {
         _startVideoCall();
@@ -511,20 +527,29 @@ class _HostProfileScreenState extends State<HostProfileScreen>
   }
 
   void _sendHiGreeting() {
+    ProfileApiService.sendHiGreeting(_currentModel.id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Sent greeting to ${_currentModel.name}! 👋'),
+        backgroundColor: const Color(0xFF8E24AA),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
     final thread = ChatThread(
-      id: 't_${widget.model.id}',
-      modelId: widget.model.id,
-      name: widget.model.name,
-      avatarUrl: widget.model.avatarUrl,
-      lastMessage: 'Hi! ❤️',
+      id: 't_${_currentModel.id}',
+      modelId: _currentModel.id,
+      name: _currentModel.name,
+      avatarUrl: _currentModel.avatarUrl,
+      lastMessage: 'Hi! 👋',
       time: 'Just now',
       messages: [
         ChatMessage(
-          id: 'hi_1',
+          id: 'hi_${DateTime.now().millisecondsSinceEpoch}',
           senderId: 'me',
           senderName: 'Me',
-          senderAvatar: widget.model.avatarUrl,
-          text: 'Hi! ❤️',
+          senderAvatar: _currentModel.avatarUrl,
+          text: 'Hi! 👋',
           type: MessageType.text,
           time: 'Just now',
           isFromMe: true,
@@ -542,7 +567,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
 
   @override
   Widget build(BuildContext context) {
-    final model = widget.model;
+    final model = _currentModel;
     final gallery = model.galleryUrls.isNotEmpty
         ? model.galleryUrls
         : [if (model.coverPhotoUrl != null) model.coverPhotoUrl!, model.avatarUrl];
@@ -858,19 +883,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                           ),
                           const SizedBox(height: 14),
 
-                          // 1. Charm Level & Top Fans Badges (Screenshot 1)
-                          _buildCharmAndFansRow(model),
-                          const SizedBox(height: 12),
-
-                          // 2. Gifts Received > Card (Screenshot 1)
-                          GiftsReceivedCard(userId: model.id, model: model),
-                          const SizedBox(height: 12),
-
-                          // 3. Gallery Card (Avatar Frame 1 & Crown Decoration) (Screenshot 1)
-                          _buildGallerySection(),
-                          const SizedBox(height: 14),
-
-                          // Close Friends (0/3) with Armchair / Sofa Icons (Screenshot 3)
+                          // 1. Close Friends (0/3) with Armchair / Sofa Icons (Screenshot 3)
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
@@ -924,7 +937,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                           ),
                           const SizedBox(height: 14),
 
-                          // Introduction
+                          // 2. Introduction (Screenshot 4)
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(14),
@@ -950,7 +963,57 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                           ),
                           const SizedBox(height: 12),
 
-                          // Speaking Languages
+                          // 3. Interest tag (Screenshot 4)
+                          if (model.tags.isNotEmpty)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: AppColors.cardDark,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppColors.cardBorder, width: 0.8),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Interest tag',
+                                    style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: model.tags
+                                        .map(
+                                          (tag) => Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF262A3D),
+                                              borderRadius: BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: const Color(0xFF3B4261),
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              tag,
+                                              style: const TextStyle(
+                                                color: Color(0xFFE2E8F0),
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (model.tags.isNotEmpty) const SizedBox(height: 12),
+
+                          // 4. Speaking Language (Screenshot 4)
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(14),
@@ -969,16 +1032,27 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                                 const SizedBox(height: 8),
                                 Wrap(
                                   spacing: 8,
+                                  runSpacing: 8,
                                   children: model.languages
                                       .map(
                                         (lang) => Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                                           decoration: BoxDecoration(
-                                            color: AppColors.cardDarkElevated,
+                                            color: const Color(0xFF262A3D),
                                             borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(color: AppColors.cardBorder),
+                                            border: Border.all(
+                                              color: const Color(0xFF3B4261),
+                                              width: 0.8,
+                                            ),
                                           ),
-                                          child: Text(lang, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                                          child: Text(
+                                            lang,
+                                            style: const TextStyle(
+                                              color: Color(0xFFE2E8F0),
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
                                         ),
                                       )
                                       .toList(),
@@ -986,59 +1060,31 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                               ],
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
 
-                          // Interests & Tags
-                          if (model.tags.isNotEmpty)
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: AppColors.cardDark,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: AppColors.cardBorder, width: 0.8),
+                          // 5. Honor (Charm Level & Top Fans Badges - Screenshot 3)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Padding(
+                                padding: EdgeInsets.only(left: 4, bottom: 8),
+                                child: Text(
+                                  'Honor',
+                                  style: TextStyle(color: AppColors.textMuted, fontSize: 13, fontWeight: FontWeight.bold),
+                                ),
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Interests & Tags',
-                                    style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: model.tags
-                                        .map(
-                                          (tag) => Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                            decoration: BoxDecoration(
-                                              gradient: const LinearGradient(
-                                                colors: [Color(0xFF2E1C44), Color(0xFF1E132D)],
-                                              ),
-                                              borderRadius: BorderRadius.circular(20),
-                                              border: Border.all(
-                                                color: AppColors.neonPurple.withValues(alpha: 0.4),
-                                                width: 0.8,
-                                              ),
-                                            ),
-                                            child: Text(
-                                              tag,
-                                              style: const TextStyle(
-                                                color: Color(0xFFFFD1E3),
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                        )
-                                        .toList(),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          if (model.tags.isNotEmpty) const SizedBox(height: 12),
+                              _buildCharmAndFansRow(model),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+
+                          // 6. Gifts Received > Card (Screenshot 3)
+                          GiftsReceivedCard(userId: model.id, model: model),
+                          const SizedBox(height: 14),
+
+                          // 7. Gallery Card
+                          _buildGallerySection(),
+                          const SizedBox(height: 14),
                         ],
                       ),
 

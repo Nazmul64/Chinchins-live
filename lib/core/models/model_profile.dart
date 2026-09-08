@@ -139,24 +139,55 @@ class ModelProfile {
     }
 
     // Parse languages
-    List<String> parsedLanguages = ['English', 'Bengali'];
-    if (json['languages'] is List) {
-      parsedLanguages = List<String>.from(json['languages']);
+    List<String> parsedLanguages = ['English', 'Spanish'];
+    final rawLanguages = json['speaking_languages'] ?? json['languages'] ?? json['speaking_language'];
+    if (rawLanguages is List && rawLanguages.isNotEmpty) {
+      parsedLanguages = rawLanguages.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+    } else if (rawLanguages is String && rawLanguages.trim().isNotEmpty) {
+      parsedLanguages = rawLanguages.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
     }
 
     // Parse tags
-    List<String> parsedTags = ['Live video', 'Music', 'Singing', 'Chat'];
-    if (json['tags'] is List) {
-      parsedTags = List<String>.from(json['tags']);
+    List<String> parsedTags = ['late night fun', 'fun show baby', 'sexy body'];
+    final rawTags = json['interest_tags'] ?? json['tags'] ?? json['interests'] ?? json['interest_tag'];
+    if (rawTags is List && rawTags.isNotEmpty) {
+      parsedTags = rawTags.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+    } else if (rawTags is String && rawTags.trim().isNotEmpty) {
+      parsedTags = rawTags.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
     }
 
     // Parse level
     int parsedLevel = 4;
-    final rawLevel = json['level']?.toString() ?? 'Lv4';
-    final levelDigits = rawLevel.replaceAll(RegExp(r'[^0-9]'), '');
+    final rawLevel = json['display_level'] ?? json['level']?.toString() ?? 'Lv4';
+    final levelDigits = rawLevel.toString().replaceAll(RegExp(r'[^0-9]'), '');
     if (levelDigits.isNotEmpty) {
       parsedLevel = int.tryParse(levelDigits) ?? 4;
     }
+
+    // Parse charm level
+    int parsedCharm = 7;
+    final rawCharm = json['charm_level'];
+    if (rawCharm is int) {
+      parsedCharm = rawCharm;
+    } else if (rawCharm != null) {
+      final digits = rawCharm.toString().replaceAll(RegExp(r'[^0-9]'), '');
+      if (digits.isNotEmpty) {
+        parsedCharm = int.tryParse(digits) ?? 7;
+      }
+    }
+
+    // Parse Top Fan
+    String parsedTopFan = 'Raza me';
+    final rawTopFan = json['top_fan'];
+    if (rawTopFan is Map) {
+      parsedTopFan = rawTopFan['name']?.toString() ?? rawTopFan['display_name']?.toString() ?? 'Top Fan';
+    } else if (rawTopFan is String && rawTopFan.trim().isNotEmpty) {
+      parsedTopFan = rawTopFan.trim();
+    }
+
+    // Parse video call rate
+    final rawRate = json['video_call_rate'] ?? json['rate_per_minute'] ?? json['call_rate'] ?? json['price_per_min'];
+    final int parsedRate = rawRate is int ? rawRate : (int.tryParse('$rawRate') ?? 1800);
 
     // Primary database ID and public 8-digit Account ID
     final primaryId = json['id']?.toString() ?? json['user_id']?.toString() ?? '1';
@@ -245,7 +276,7 @@ class ModelProfile {
       gender: gender,
       city: city,
       age: json['age'] is int ? json['age'] : (int.tryParse('${json['age']}') ?? 25),
-      location: json['country'] ?? json['location'] ?? 'Bangladesh',
+      location: json['country'] ?? json['location'] ?? 'Pakistan',
       intro: json['introduction'] ?? json['intro'] ?? 'Welcome to Chinchins Live! ✨',
       languages: parsedLanguages,
       tags: parsedTags,
@@ -253,12 +284,10 @@ class ModelProfile {
       avatarUrl: avatar,
       coverPhotoUrl: coverPhoto,
       galleryUrls: parsedGallery,
-      charmLevel: 98,
-      topFan: 'Prince_01',
-      pricePerMin: json['video_call_rate'] is int
-          ? json['video_call_rate']
-          : (int.tryParse('${json['video_call_rate']}') ?? 1800),
-      isOnline: json['is_active'] == true || json['is_active'] == 1 || json['is_active'] == '1' || json['status'] == 'Active',
+      charmLevel: parsedCharm,
+      topFan: parsedTopFan,
+      pricePerMin: parsedRate,
+      isOnline: json['is_active'] == true || json['is_active'] == 1 || json['is_active'] == '1' || json['status'] == 'Active' || json['is_online'] == true,
       isVerified: json['is_verified'] == true || json['is_verified'] == 1 || json['is_verified'] == '1',
       isFollowed: json['is_followed'] == true || json['is_following'] == true || json['followed'] == true || json['is_favorite'] == true,
       hasExtraGems: json['has_extra_gems'] == true || json['extra_gems'] == true,
