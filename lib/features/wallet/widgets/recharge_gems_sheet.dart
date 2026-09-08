@@ -468,7 +468,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
         crossAxisCount: 3,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
-        childAspectRatio: 0.72,
+        childAspectRatio: 0.69,
       ),
       itemBuilder: (context, index) {
         return _buildPackageCard(displayList[index], index);
@@ -584,14 +584,15 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
                 ),
               ),
 
-            // Center Content: Artwork + Coins + Price
+            // Center Content (Gems Icon, Coin Count, Price Button)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 6),
                   // Gem Tier Artwork (Dynamic backend URL if present, or custom geometric jewel)
                   Builder(
                     builder: (context) {
@@ -608,7 +609,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
                       return _buildGemArtwork(index, useOrangeTheme);
                     },
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
 
                   // Coin Count Text
                   FittedBox(
@@ -622,7 +623,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
 
                   // Bottom Price
                   if (useOrangeTheme)
@@ -635,24 +636,36 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Center(
-                        child: Text(
-                          priceStr,
-                          style: const TextStyle(
-                            color: Color(0xFFE64A00),
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w900,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Text(
+                              priceStr,
+                              style: const TextStyle(
+                                color: Color(0xFFE64A00),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     )
                   else
                     // Normal muted price
-                    Text(
-                      priceStr,
-                      style: const TextStyle(
-                        color: Color(0xFF756A80),
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          priceStr,
+                          style: const TextStyle(
+                            color: Color(0xFF756A80),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ),
                 ],
@@ -664,8 +677,19 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
     );
   }
 
-  /// Exact gemstone artwork for all 6 tiers
+  /// Exact gemstone artwork for all 6 tiers (scaled with FittedBox to prevent any RenderFlex overflow)
   Widget _buildGemArtwork(int index, bool isOrangeCard) {
+    return SizedBox(
+      width: 38,
+      height: 38,
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: _buildRawGemArtwork(index, isOrangeCard),
+      ),
+    );
+  }
+
+  Widget _buildRawGemArtwork(int index, bool isOrangeCard) {
     switch (index) {
       case 0:
         // Tier 1: Single sparkling golden diamond
@@ -680,6 +704,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
       case 1:
         // Tier 2: Double diamonds
         return Row(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.diamond_rounded, color: Color(0xFFFFB300), size: 24),
@@ -692,6 +717,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
       case 2:
         // Tier 3: Triple diamonds
         return Row(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.diamond_rounded, color: Color(0xFFFFB300), size: 22),
@@ -708,9 +734,11 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
       case 3:
         // Tier 4: Diamond Pyramid Stack
         return const Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.diamond_rounded, color: Color(0xFFFFE082), size: 20),
             Row(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.diamond_rounded, color: Color(0xFFFFB300), size: 18),
@@ -740,6 +768,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
               ),
             ),
             const Row(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.diamond_rounded, color: Color(0xFFFFB300), size: 18),
@@ -768,6 +797,7 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
               ),
             ),
             const Row(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.diamond_rounded, color: Color(0xFFFFD54F), size: 18),

@@ -144,7 +144,7 @@ class CachedImageLoader extends StatelessWidget {
               placeholderBuilder: (_) => placeholder ?? _buildPlaceholder(),
             );
           }
-          return _buildErrorWidget();
+          return placeholder ?? _buildErrorWidget();
         },
       );
     } else {
