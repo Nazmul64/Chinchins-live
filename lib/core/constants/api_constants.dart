@@ -157,6 +157,9 @@ class ApiConstants {
   static String profileLike(dynamic userId) => '$baseUrl/profile/$userId/like';
   static String profileHi(dynamic userId) => '$baseUrl/profile/$userId/hi';
   static String get chatSendHi => '$baseUrl/chat/send-hi';
+  static String get userLikes => '$baseUrl/profile/likes';
+  static String get profileLikes => '$baseUrl/profile/likes';
+  static String likesByType(String type) => '$baseUrl/profile/likes?type=$type';
 
   // App OTA In-App Updates, Remote Config & Device Registration
   static String get appCheckUpdate => '$baseUrl/app/check-update';

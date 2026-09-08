@@ -775,6 +775,43 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                                   ],
                                 ),
                               ),
+                              const SizedBox(width: 8),
+
+                              // Circular Glowing Heart / Like Button (Screenshot 1 & 2)
+                              GestureDetector(
+                                onTap: () {
+                                  _emitHeart(isUserClick: true);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('You liked ${model.name}! ❤️'),
+                                      duration: const Duration(seconds: 1),
+                                      backgroundColor: AppColors.neonPink,
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  width: 46,
+                                  height: 46,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFFFF4081), Color(0xFFFF80AB), Color(0xFFFF5252)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFFFF4081).withValues(alpha: 0.5),
+                                        blurRadius: 12,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Center(
+                                    child: Icon(Icons.favorite_rounded, color: Colors.white, size: 24),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -1088,48 +1125,19 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                         ],
                       ),
 
-                      // Floating Emitting Love Hearts Stack (User circled in red on right of Screenshot 3)
+                      // Floating Emitting Love Hearts Stack (Single clean heart emission)
                       Positioned(
-                        top: 0,
-                        right: 0,
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          alignment: Alignment.center,
-                          children: [
-                            // Render all active rising floating hearts
-                            ..._hearts,
-
-                            // Heart Reaction Glowing Base Button
-                            GestureDetector(
-                              onTap: () => _emitHeart(isUserClick: true),
-                              child: Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFFFF2D75), Color(0xFFFF6D00)],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.neonPink.withValues(alpha: 0.6),
-                                      blurRadius: 12,
-                                      spreadRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                                child: const Center(
-                                  child: Icon(
-                                    Icons.favorite_rounded,
-                                    color: Colors.white,
-                                    size: 24,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                        top: 24,
+                        right: 24,
+                        child: IgnorePointer(
+                          ignoring: true,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            alignment: Alignment.center,
+                            children: [
+                              ..._hearts,
+                            ],
+                          ),
                         ),
                       ),
                     ],

@@ -16,6 +16,7 @@ import '../../auth/widgets/logout_confirmation_dialog.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../profile/screens/edit_profile_media_screen.dart';
 import '../../profile/screens/level_progression_screen.dart';
+import '../../profile/screens/user_likes_list_screen.dart';
 import '../../wallet/screens/wallet_screen.dart';
 import '../../wallet/screens/withdraw_screen.dart';
 import '../../wallet/screens/monthly_card_screen.dart';
@@ -38,8 +39,8 @@ class MeScreen extends StatefulWidget {
 class _MeScreenState extends State<MeScreen> {
   int _myGems = 0;
   int _beans = 0;
-  final int _iLikeCount = 0;
-  final int _likeMeCount = 0;
+  int get _iLikeCount => _myProfile?.iLikeCount ?? 0;
+  int get _likeMeCount => _myProfile?.likeMeCount ?? 0;
 
   ModelProfile? _myProfile;
   final ImagePicker _picker = ImagePicker();
@@ -907,9 +908,19 @@ class _MeScreenState extends State<MeScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildStatItem('I Like', '$_iLikeCount'),
+                    _buildStatItem('I Like', '$_iLikeCount', onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const UserLikesListScreen(initialTab: 'i_like')),
+                      );
+                    }),
                     Container(width: 1, height: 20, color: AppColors.cardBorder),
-                    _buildStatItem('Like Me', '$_likeMeCount'),
+                    _buildStatItem('Like Me', '$_likeMeCount', onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const UserLikesListScreen(initialTab: 'like_me')),
+                      );
+                    }),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -1142,7 +1153,7 @@ class _MeScreenState extends State<MeScreen> {
                               MaterialPageRoute(builder: (context) => const MyBagScreen()),
                             ).then((_) => _loadUserProfile());
                           }),
-                          _buildGridMenuItem(Icons.diamond_rounded, 'Gems Center', const Color(0xFF00E676), onTap: () => _openWalletScreen(initialTabIndex: 0)),
+                          _buildGridMenuItem(Icons.diamond_rounded, 'Top Up', const Color(0xFF00E676), onTap: () => _openWalletScreen(initialTabIndex: 0)),
                           _buildGridMenuItem(Icons.account_balance_wallet_rounded, 'Payment\ndetails', const Color(0xFF42A5F5), onTap: () => _openWalletScreen(initialTabIndex: 1)),
                         ],
                       ),
@@ -1321,19 +1332,23 @@ class _MeScreenState extends State<MeScreen> {
     );
   }
 
-  Widget _buildStatItem(String label, String value) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          label,
-          style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-        ),
-      ],
+  Widget _buildStatItem(String label, String value, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 

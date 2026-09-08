@@ -185,15 +185,62 @@ class ProfileApiService {
       if (response.statusCode == 200) {
         final data = _safeJsonDecode(response.body);
         if (data != null) {
-          final userData = data['data']?['user'] ?? data['data'] ?? data['user'];
-          if (userData != null && userData is Map<String, dynamic>) {
-            await AuthApiService.saveUser(userData);
-            return ModelProfile.fromJson(userData);
-          }
+          final root = (data['data'] is Map)
+              ? Map<String, dynamic>.from(data['data'] as Map)
+              : (data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{});
+          final userData = (root['user'] is Map)
+              ? Map<String, dynamic>.from(root['user'] as Map)
+              : Map<String, dynamic>.from(root);
+
+          if (root['charm_level'] != null) userData['charm_level'] = root['charm_level'];
+          if (root['interest_tags'] != null) userData['interest_tags'] = root['interest_tags'];
+          if (root['speaking_languages'] != null) userData['speaking_languages'] = root['speaking_languages'];
+          if (root['top_fan'] != null) userData['top_fan'] = root['top_fan'];
+          if (root['video_call_rate'] != null) userData['video_call_rate'] = root['video_call_rate'];
+          if (root['likes'] != null) userData['likes'] = root['likes'];
+          if (root['i_like'] != null) userData['i_like'] = root['i_like'];
+          if (root['like_me'] != null) userData['like_me'] = root['like_me'];
+          if (root['my_gems'] != null) userData['my_gems'] = root['my_gems'];
+          if (root['beans_central'] != null) userData['beans_central'] = root['beans_central'];
+          if (root['gifts_received'] != null) userData['gifts_received'] = root['gifts_received'];
+
+          await AuthApiService.saveUser(userData);
+          return ModelProfile.fromJson(userData);
         }
       }
     } catch (_) {}
     return null;
+  }
+
+  /// Fetch list of users for 'i_like' (I Like) or 'like_me' (Like Me)
+  static Future<List<ModelProfile>> getLikesUsers({required String type}) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final headers = {
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      // 1. Try GET /api/profile/likes?type={type}
+      Uri url = Uri.parse(ApiConstants.likesByType(type));
+      var response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode != 200) {
+        url = Uri.parse('${ApiConstants.baseUrl}/likes?type=$type');
+        response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+      }
+
+      if (response.statusCode == 200) {
+        final data = _safeJsonDecode(response.body);
+        if (data != null) {
+          return _parseUserList(data);
+        }
+      }
+    } catch (e) {
+      debugPrint('[ProfileApiService] getLikesUsers error: $e');
+    }
+
+    return [];
   }
 
   /// Fetch streamers/users for Home Feed

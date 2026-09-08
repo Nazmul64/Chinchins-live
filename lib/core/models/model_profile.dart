@@ -35,6 +35,10 @@ class ModelProfile {
   final String? glowColor;
   final int totalEarnedCoins;
   final Map<String, dynamic>? levelInfo;
+  final int iLikeCount;
+  final int likeMeCount;
+  final int coins;
+  final int beans;
 
   const ModelProfile({
     required this.id,
@@ -50,13 +54,13 @@ class ModelProfile {
     required this.location,
     required this.intro,
     required this.languages,
-    this.tags = const ['Live video', 'Music', 'Singing', 'Chat'],
+    this.tags = const ['late night fun', 'fun show baby', 'sexy body'],
     this.level = 4,
     required this.avatarUrl,
     this.coverPhotoUrl,
     required this.galleryUrls,
-    this.charmLevel = 98,
-    this.topFan = 'Prince_01',
+    this.charmLevel = 7,
+    this.topFan = 'No Top Fan yet',
     this.pricePerMin = 1800,
     this.isOnline = true,
     this.isVerified = true,
@@ -71,6 +75,10 @@ class ModelProfile {
     this.glowColor,
     this.totalEarnedCoins = 0,
     this.levelInfo,
+    this.iLikeCount = 0,
+    this.likeMeCount = 0,
+    this.coins = 0,
+    this.beans = 0,
   });
 
   /// Country Flag emoji helper
@@ -177,7 +185,7 @@ class ModelProfile {
     }
 
     // Parse Top Fan
-    String parsedTopFan = 'Raza me';
+    String parsedTopFan = 'No Top Fan yet';
     final rawTopFan = json['top_fan'];
     if (rawTopFan is Map) {
       parsedTopFan = rawTopFan['name']?.toString() ?? rawTopFan['display_name']?.toString() ?? 'Top Fan';
@@ -265,6 +273,26 @@ class ModelProfile {
         ? Map<String, dynamic>.from(json['level_info'])
         : null;
 
+    final int iLike = json['i_like'] is int
+        ? json['i_like']
+        : (json['likes'] is Map && json['likes']['i_like'] is int
+            ? json['likes']['i_like']
+            : (int.tryParse('${json['i_like'] ?? json['likes']?['i_like']}') ?? 0));
+
+    final int likeMe = json['like_me'] is int
+        ? json['like_me']
+        : (json['likes'] is Map && json['likes']['like_me'] is int
+            ? json['likes']['like_me']
+            : (int.tryParse('${json['like_me'] ?? json['likes']?['like_me']}') ?? 0));
+
+    final int userCoins = json['coins'] is int
+        ? json['coins']
+        : (json['my_gems'] is int ? json['my_gems'] : (int.tryParse('${json['coins'] ?? json['my_gems']}') ?? 0));
+
+    final int userBeans = json['beans'] is int
+        ? json['beans']
+        : (json['beans_central'] is int ? json['beans_central'] : (int.tryParse('${json['beans'] ?? json['beans_central']}') ?? 0));
+
     return ModelProfile(
       id: primaryId,
       accountId: accountId,
@@ -299,12 +327,17 @@ class ModelProfile {
       glowColor: glowColor,
       totalEarnedCoins: totalEarned,
       levelInfo: levelInfoMap,
+      iLikeCount: iLike,
+      likeMeCount: likeMe,
+      coins: userCoins,
+      beans: userBeans,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'account_id': id,
+      'id': id,
+      'account_id': accountId,
       'name': name,
       'first_name': firstName,
       'last_name': lastName,
@@ -333,6 +366,10 @@ class ModelProfile {
       'glow_color': glowColor,
       'total_earned_coins': totalEarnedCoins,
       'level_info': levelInfo,
+      'i_like': iLikeCount,
+      'like_me': likeMeCount,
+      'coins': coins,
+      'beans': beans,
     };
   }
 }

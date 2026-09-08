@@ -43,6 +43,37 @@ class _EditProfileMediaScreenState extends State<EditProfileMediaScreen> {
   String _selectedCountry = 'Bangladesh';
   bool _isOnline = true;
 
+  // Tags & Languages
+  List<String> _selectedTags = ['late night fun', 'fun show baby', 'sexy body'];
+  List<String> _selectedLanguages = ['English', 'Spanish'];
+  final List<String> _presetTags = [
+    'late night fun',
+    'fun show baby',
+    'sexy body',
+    'Music',
+    'Gaming',
+    'Chat',
+    'Dancing',
+    'Singing',
+    'Lifestyle',
+    'Romance',
+    'Cosplay',
+    'Fitness',
+  ];
+  final List<String> _presetLanguages = [
+    'English',
+    'Spanish',
+    'Urdu',
+    'Hindi',
+    'Bengali',
+    'Arabic',
+    'French',
+    'German',
+    'Turkish',
+    'Indonesian',
+    'Tagalog',
+  ];
+
   // Local state copies
   String? _avatarUrl;
   String? _coverUrl;
@@ -97,12 +128,19 @@ class _EditProfileMediaScreenState extends State<EditProfileMediaScreen> {
       _selectedCountry = profile.location;
       _isOnline = profile.isOnline;
 
+      if (profile.tags.isNotEmpty) {
+        _selectedTags = List<String>.from(profile.tags);
+      }
+      if (profile.languages.isNotEmpty) {
+        _selectedLanguages = List<String>.from(profile.languages);
+      }
+
       _avatarUrl = profile.avatarUrl;
       _coverUrl = profile.coverPhotoUrl;
       _galleryUrls = List<String>.from(profile.galleryUrls);
     } else {
       _ageController.text = '22';
-      _videoCallRateController.text = '100';
+      _videoCallRateController.text = '1800';
       _introController.text = 'Hello! Welcome to my live profile ❤️';
     }
 
@@ -703,6 +741,8 @@ class _EditProfileMediaScreenState extends State<EditProfileMediaScreen> {
       country: _selectedCountry,
       city: _cityController.text.trim().isNotEmpty ? _cityController.text.trim() : null,
       videoCallRate: rateInt,
+      languages: _selectedLanguages,
+      tags: _selectedTags,
       isActive: _isOnline,
     );
 
@@ -1386,29 +1426,261 @@ class _EditProfileMediaScreenState extends State<EditProfileMediaScreen> {
 
             const SizedBox(height: 16),
 
-            // City & Country Row
-            Row(
-              children: [
-                // City
-                Expanded(
-                  child: _buildInputField(
-                    controller: _cityController,
-                    label: 'City',
-                    hint: 'e.g. Dhaka',
-                    icon: Icons.location_city_rounded,
-                  ),
-                ),
-                const SizedBox(width: 14),
+            // City
+            _buildInputField(
+              controller: _cityController,
+              label: 'City / Location',
+              hint: 'e.g. Dhaka, Lahore, Manila',
+              icon: Icons.location_city_rounded,
+            ),
 
-                // Video Call Rate
-                Expanded(
-                  child: _buildInputField(
-                    controller: _videoCallRateController,
-                    label: 'Call Rate (Gems/m)',
-                    hint: '100',
-                    icon: Icons.videocam_rounded,
-                    keyboardType: TextInputType.number,
-                  ),
+            const SizedBox(height: 18),
+
+            // Interest Tags Section
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.local_offer_rounded, color: AppColors.neonPink, size: 16),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Interest Tags',
+                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '(${_selectedTags.length} selected)',
+                      style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ...{..._selectedTags, ..._presetTags}.map((tag) {
+                      final isSelected = _selectedTags.contains(tag);
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedTags.remove(tag);
+                            } else {
+                              _selectedTags.add(tag);
+                            }
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: isSelected ? AppColors.primaryGradient : null,
+                            color: isSelected ? null : AppColors.cardDark,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: isSelected ? Colors.transparent : AppColors.cardBorder,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                tag,
+                                style: TextStyle(
+                                  color: isSelected ? Colors.white : AppColors.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                ),
+                              ),
+                              if (isSelected) ...[
+                                const SizedBox(width: 4),
+                                const Icon(Icons.check_rounded, color: Colors.white, size: 13),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                    // Add Custom Tag Button
+                    GestureDetector(
+                      onTap: _showAddCustomTagDialog,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.neonPurple.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: AppColors.neonPurple.withValues(alpha: 0.4)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add_rounded, color: AppColors.neonPurple, size: 14),
+                            SizedBox(width: 4),
+                            Text(
+                              'Add Tag',
+                              style: TextStyle(color: AppColors.neonPurple, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 18),
+
+            // Speaking Languages Section
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.language_rounded, color: AppColors.neonPurple, size: 16),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Speaking Languages',
+                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '(${_selectedLanguages.length} selected)',
+                      style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ...{..._selectedLanguages, ..._presetLanguages}.map((lang) {
+                      final isSelected = _selectedLanguages.contains(lang);
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedLanguages.remove(lang);
+                            } else {
+                              _selectedLanguages.add(lang);
+                            }
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: isSelected
+                                ? const LinearGradient(colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)])
+                                : null,
+                            color: isSelected ? null : AppColors.cardDark,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: isSelected ? Colors.transparent : AppColors.cardBorder,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                lang,
+                                style: TextStyle(
+                                  color: isSelected ? Colors.white : AppColors.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                ),
+                              ),
+                              if (isSelected) ...[
+                                const SizedBox(width: 4),
+                                const Icon(Icons.check_rounded, color: Colors.white, size: 13),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                    // Add Custom Language Button
+                    GestureDetector(
+                      onTap: _showAddCustomLangDialog,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.neonPink.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.4)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add_rounded, color: AppColors.neonPink, size: 14),
+                            SizedBox(width: 4),
+                            Text(
+                              'Add Lang',
+                              style: TextStyle(color: AppColors.neonPink, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 18),
+
+            // Video Call Rate
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.videocam_rounded, color: AppColors.gemYellow, size: 16),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Video Call Rate (Gems / Minute)',
+                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [100, 300, 500, 1000, 1800, 2500, 5000].map((rate) {
+                    final isSelected = _videoCallRateController.text.trim() == '$rate';
+                    return GestureDetector(
+                      onTap: () => setState(() => _videoCallRateController.text = '$rate'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.gemYellow.withValues(alpha: 0.25) : AppColors.cardDark,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isSelected ? AppColors.gemYellow : AppColors.cardBorder,
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Text(
+                          '💎 $rate/m',
+                          style: TextStyle(
+                            color: isSelected ? AppColors.gemYellow : Colors.white70,
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 10),
+                _buildInputField(
+                  controller: _videoCallRateController,
+                  label: 'Custom Call Rate',
+                  hint: '1800',
+                  icon: Icons.diamond_outlined,
+                  keyboardType: TextInputType.number,
                 ),
               ],
             ),
@@ -1512,6 +1784,90 @@ class _EditProfileMediaScreenState extends State<EditProfileMediaScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  void _showAddCustomTagDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Add Custom Tag', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: controller,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'e.g. Model, Traveler, Dancer',
+            hintStyle: TextStyle(color: AppColors.textMuted),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.neonPurple),
+            onPressed: () {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) {
+                setState(() {
+                  if (!_selectedTags.contains(text)) {
+                    _selectedTags.add(text);
+                  }
+                });
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddCustomLangDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Add Custom Language', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: controller,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'e.g. Italian, Russian, Japanese',
+            hintStyle: TextStyle(color: AppColors.textMuted),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.neonPink),
+            onPressed: () {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) {
+                setState(() {
+                  if (!_selectedLanguages.contains(text)) {
+                    _selectedLanguages.add(text);
+                  }
+                });
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 }
