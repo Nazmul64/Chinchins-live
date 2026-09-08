@@ -50,6 +50,9 @@ class AuthApiService {
         'password': password,
         'password_confirmation': passwordConfirmation,
         'confirm_password': passwordConfirmation,
+        'level': 0,
+        'charm_level': 1,
+        'is_active': 1,
       };
 
       if (email != null && email.trim().isNotEmpty) {
