@@ -177,6 +177,7 @@ class ApiConstants {
   static String get bagEquip => '$baseUrl/bag/use';
   static String get bagUnequip => '$baseUrl/bag/unequip';
   static String get bagGift => '$baseUrl/bag/gift';
+  static String get bagSearchUser => '$baseUrl/bag/search-user';
 
   // In-Chat & In-Call Recharge Modal Endpoints
   static String get rechargeModalData => '$baseUrl/recharge/modal-data';

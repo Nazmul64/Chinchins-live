@@ -53,9 +53,9 @@ class BagApiService {
 
       final headers = <String, String>{
         'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-        if (userId != null) 'X-User-Id': userId,
       };
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+      if (userId != null) headers['X-User-Id'] = userId;
 
       final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 8));
 
@@ -88,14 +88,15 @@ class BagApiService {
     }
 
     final localCached = await FastApiClient.getCached(ApiConstants.bagStore, queryParams);
-    if (localCached is Map && localCached['status'] == true && localCached['items'] is List) {
-      final items = (localCached['items'] as List)
-          .whereType<Map<String, dynamic>>()
-          .map((i) => BagStoreItem.fromJson(i))
-          .toList();
-      _cachedStoreCatalog = items;
-      _syncStoreCatalogInBackground(queryParams);
-      return _filterCatalog(items, category);
+    if (localCached is Map && localCached['status'] == true) {
+      final root = (localCached['data'] is Map) ? localCached['data'] as Map : localCached;
+      final rawList = root['items'] is List ? root['items'] as List : (localCached['items'] is List ? localCached['items'] as List : []);
+      if (rawList.isNotEmpty) {
+        final items = rawList.whereType<Map<String, dynamic>>().map((i) => BagStoreItem.fromJson(i)).toList();
+        _cachedStoreCatalog = items;
+        _syncStoreCatalogInBackground(queryParams);
+        return _filterCatalog(items, category);
+      }
     }
 
     final liveCatalog = await _syncStoreCatalogInBackground(queryParams);
@@ -127,12 +128,11 @@ class BagApiService {
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['status'] == true && decoded['items'] is List) {
+        if (decoded is Map && decoded['status'] == true) {
           await FastApiClient.putCache(ApiConstants.bagStore, decoded, queryParams);
-          final items = (decoded['items'] as List)
-              .whereType<Map<String, dynamic>>()
-              .map((i) => BagStoreItem.fromJson(i))
-              .toList();
+          final root = (decoded['data'] is Map) ? decoded['data'] as Map : decoded;
+          final rawList = root['items'] is List ? root['items'] as List : (decoded['items'] is List ? decoded['items'] as List : []);
+          final items = rawList.whereType<Map<String, dynamic>>().map((i) => BagStoreItem.fromJson(i)).toList();
           _cachedStoreCatalog = items;
           return items;
         }
@@ -143,7 +143,99 @@ class BagApiService {
     return _cachedStoreCatalog ?? [];
   }
 
-  /// 3. Equip or Use Item
+  /// 3. Search Recipient User by 8-Digit Account ID or Name for Gifting
+  static Future<Map<String, dynamic>?> searchUserByAccountId(String query) async {
+    if (query.trim().isEmpty) return null;
+    final cleanQuery = query.trim();
+
+    try {
+      final token = await AuthApiService.getToken();
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      // 1. Try GET /api/bag/search-user?q={cleanQuery}
+      final searchUrl = Uri.parse('${ApiConstants.bagSearchUser}?q=${Uri.encodeComponent(cleanQuery)}');
+      final res = await http.get(searchUrl, headers: headers).timeout(const Duration(seconds: 6));
+
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body);
+        if (decoded is Map && decoded['status'] == true && decoded['data'] is Map) {
+          return Map<String, dynamic>.from(decoded['data']);
+        }
+      }
+
+      // 2. Fallback to GET /api/search?q={cleanQuery}
+      final globalSearchUrl = Uri.parse('${ApiConstants.search}?q=${Uri.encodeComponent(cleanQuery)}');
+      final gRes = await http.get(globalSearchUrl, headers: headers).timeout(const Duration(seconds: 6));
+      if (gRes.statusCode == 200) {
+        final decoded = jsonDecode(gRes.body);
+        if (decoded is Map && decoded['data'] is Map) {
+          final data = decoded['data'] as Map;
+          if (data['user'] is Map) {
+            return Map<String, dynamic>.from(data['user']);
+          }
+          if (data['users'] is List && (data['users'] as List).isNotEmpty) {
+            return Map<String, dynamic>.from((data['users'] as List).first);
+          }
+        }
+      }
+    } catch (e, st) {
+      AppLogger.error('BagSearchUserError', e, st);
+    }
+    return null;
+  }
+
+  /// 4. Gift Bag Item directly to a recipient by 8-Digit Account ID
+  static Future<Map<String, dynamic>> giftItem({
+    required String receiverAccountId,
+    int? bagItemId,
+    int? userBagItemId,
+    int? receiverId,
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.bagGift);
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+
+      final bodyMap = <String, dynamic>{
+        'receiver_account_id': receiverAccountId,
+      };
+      if (bagItemId != null) bodyMap['bag_item_id'] = bagItemId;
+      if (userBagItemId != null) bodyMap['user_bag_item_id'] = userBagItemId;
+      if (receiverId != null) bodyMap['receiver_id'] = receiverId;
+
+      final response = await http
+          .post(url, headers: headers, body: jsonEncode(bodyMap))
+          .timeout(const Duration(seconds: 10));
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map) {
+        final success = response.statusCode == 200 || decoded['status'] == true;
+        if (success) {
+          _cachedInventory = null;
+        }
+        return {
+          'success': success,
+          'message': decoded['message'] ?? (success ? 'Gift sent successfully!' : 'Failed to send gift.'),
+          'new_balance': decoded['data']?['new_coins_balance'] ?? decoded['new_balance'],
+        };
+      }
+    } catch (e, st) {
+      AppLogger.error('BagGiftError', e, st);
+    }
+    return {
+      'success': false,
+      'message': 'Failed to send gift. Please check connection and try again.',
+    };
+  }
+
+  /// 5. Equip or Use Item
   static Future<Map<String, dynamic>> useOrEquipItem(int bagItemId) async {
     try {
       final token = await AuthApiService.getToken();
@@ -154,18 +246,20 @@ class BagApiService {
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-        if (userId != null) 'X-User-Id': userId,
       };
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+      if (userId != null) headers['X-User-Id'] = userId;
 
       final response = await http
-          .post(url, headers: headers, body: jsonEncode({'bag_item_id': bagItemId}))
+          .post(url, headers: headers, body: jsonEncode({
+            'user_bag_item_id': bagItemId,
+            'bag_item_id': bagItemId,
+          }))
           .timeout(const Duration(seconds: 10));
 
       final decoded = jsonDecode(response.body);
       if (decoded is Map) {
         if (response.statusCode == 200 || decoded['status'] == true) {
-          // Invalidate inventory cache to refresh state
           _cachedInventory = null;
           return {
             'success': true,
@@ -191,19 +285,24 @@ class BagApiService {
     };
   }
 
-  /// 4. Unequip Item for a given Category
-  static Future<Map<String, dynamic>> unequipItem(String category) async {
+  /// 6. Unequip Item for a given Category
+  static Future<Map<String, dynamic>> unequipItem(String category, {int? userBagItemId}) async {
     try {
       final token = await AuthApiService.getToken();
       final url = Uri.parse(ApiConstants.bagUnequip);
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
       };
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+
+      final bodyMap = <String, dynamic>{
+        'category': category,
+      };
+      if (userBagItemId != null) bodyMap['user_bag_item_id'] = userBagItemId;
 
       final response = await http
-          .post(url, headers: headers, body: jsonEncode({'category': category}))
+          .post(url, headers: headers, body: jsonEncode(bodyMap))
           .timeout(const Duration(seconds: 8));
 
       final decoded = jsonDecode(response.body);
@@ -219,7 +318,7 @@ class BagApiService {
     return {'success': false, 'message': 'Failed to unequip item.'};
   }
 
-  /// 5. Purchase Item from Store
+  /// 7. Purchase Item from Store
   static Future<Map<String, dynamic>> purchaseItem(int itemId, {int quantity = 1}) async {
     try {
       final token = await AuthApiService.getToken();
@@ -235,6 +334,7 @@ class BagApiService {
             url,
             headers: headers,
             body: jsonEncode({
+              'bag_item_id': itemId,
               'item_id': itemId,
               'quantity': quantity,
             }),
@@ -248,7 +348,14 @@ class BagApiService {
           return {
             'success': true,
             'message': decoded['message'] ?? 'Purchased successfully! Added to your bag.',
-            'new_balance': decoded['new_balance'],
+            'new_balance': decoded['data']?['new_coins_balance'] ?? decoded['new_balance'],
+          };
+        } else if (response.statusCode == 402 || decoded['code'] == 'INSUFFICIENT_FUNDS') {
+          return {
+            'success': false,
+            'is_insufficient': true,
+            'message': decoded['message'] ?? 'Insufficient gems balance.',
+            'shortage': decoded['data']?['shortage'],
           };
         } else {
           return {
@@ -272,75 +379,165 @@ class BagApiService {
       activeCategory: 'all',
       activeStatus: 'all',
       categories: [
-        BagCategory(slug: 'coupon', name: 'Coupon', nameBn: 'কুপন', icon: 'coupon', count: 0),
-        BagCategory(slug: 'avatar_frame', name: 'Avatar frame', nameBn: 'এভাটার ফ্রেম', icon: 'avatar_frame', count: 0),
-        BagCategory(slug: 'chat_style', name: 'Chat style', nameBn: 'চ্যাট স্টাইল', icon: 'chat_style', count: 0),
-        BagCategory(slug: 'profile_card', name: 'Profile card', nameBn: 'প্রোফাইল কার্ড', icon: 'profile_card', count: 0),
-        BagCategory(slug: 'entrance_bubble', name: 'Entrance bubble', nameBn: 'এন্ট্রান্স বাবল', icon: 'entrance_bubble', count: 0),
-        BagCategory(slug: 'big_entrance', name: 'Big entrance', nameBn: 'বিগ এন্ট্রান্স', icon: 'big_entrance', count: 0),
+        BagCategory(slug: 'coupon', name: 'Coupon', nameBn: 'কুপন', icon: 'coupon', iconUrl: 'https://chinchins.live/uploads/my_bag/coupon_sale_yellow.svg', count: 0),
+        BagCategory(slug: 'avatar_frame', name: 'Avatar frame', nameBn: 'এভাটার ফ্রেম', icon: 'avatar_frame', iconUrl: 'https://chinchins.live/uploads/my_bag/frame_royal_amethyst.svg', count: 0),
+        BagCategory(slug: 'chat_style', name: 'Chat style', nameBn: 'চ্যাট স্টাইল', icon: 'chat_style', iconUrl: 'https://chinchins.live/uploads/my_bag/chat_bubble_neon_pink.svg', count: 0),
+        BagCategory(slug: 'profile_card', name: 'Profile card', nameBn: 'প্রোফাইল কার্ড', icon: 'profile_card', iconUrl: 'https://chinchins.live/uploads/my_bag/profile_card_aurora_galaxy.svg', count: 0),
+        BagCategory(slug: 'entrance_bubble', name: 'Entrance bubble', nameBn: 'এন্ট্রান্স বাবল', icon: 'entrance_bubble', iconUrl: 'https://chinchins.live/uploads/my_bag/entrance_bubble_gold_crown.svg', count: 0),
+        BagCategory(slug: 'big_entrance', name: 'Big entrance', nameBn: 'বিগ এন্ট্রান্স', icon: 'big_entrance', iconUrl: 'https://chinchins.live/uploads/my_bag/big_entrance_sports_car.svg', count: 0),
       ],
       counts: {'unused': 0, 'used': 0, 'expired': 0, 'total': 0},
       items: [],
     );
   }
 
-  /// Default store catalog fallback
+  /// Default store catalog fallback (Clean 11 Items matching all 6 categories with production SVGs)
   static List<BagStoreItem> _getDefaultStoreCatalog() {
     return const [
+      // 1. Coupon (কুপন)
       BagStoreItem(
         id: 1,
+        name: '50% Off Recharge Coupon',
+        category: 'coupon',
+        categoryName: 'Coupon',
+        priceCoins: 0,
+        formattedPrice: 'Free',
+        couponCoins: 0,
+        badge: '50% OFF',
+        imageUrl: 'https://chinchins.live/uploads/my_bag/coupon_sale_yellow.svg',
+        daysValid: 7,
+        durationText: '7 Days',
+        description: 'Gives 50% extra gems on next diamond purchase.',
+      ),
+      BagStoreItem(
+        id: 2,
         name: 'Mega Sale 500 Coin Voucher',
         category: 'coupon',
         categoryName: 'Coupon',
         priceCoins: 300,
+        formattedPrice: '300 Gems',
         couponCoins: 500,
+        badge: 'SALE',
         imageUrl: 'https://chinchins.live/uploads/my_bag/coupon_sale_yellow.svg',
         daysValid: 30,
+        durationText: '30 Days',
+        description: 'Instantly redeems for 500 coins in wallet.',
       ),
-      BagStoreItem(
-        id: 2,
-        name: 'Royal Cyber Neon Frame',
-        category: 'avatar_frame',
-        categoryName: 'Avatar frame',
-        priceCoins: 5000,
-        imageUrl: 'https://chinchins.live/uploads/bases/profile_base_cyber_neon.svg',
-        daysValid: 30,
-      ),
+
+      // 2. Avatar frame (এভাটার ফ্রেম)
       BagStoreItem(
         id: 3,
-        name: 'Luxury Rose Gold Chat Bubble',
-        category: 'chat_style',
-        categoryName: 'Chat style',
-        priceCoins: 3500,
-        imageUrl: 'https://chinchins.live/uploads/my_bag/chat_bubble_gold.svg',
+        name: 'Royal Amethyst Frame',
+        category: 'avatar_frame',
+        categoryName: 'Avatar frame',
+        priceCoins: 1500,
+        formattedPrice: '1,500 Gems',
+        badge: 'POPULAR',
+        imageUrl: 'https://chinchins.live/uploads/my_bag/frame_royal_amethyst.svg',
         daysValid: 30,
+        durationText: '30 Days',
       ),
       BagStoreItem(
         id: 4,
-        name: 'Midnight Nebula Profile Card',
-        category: 'profile_card',
-        categoryName: 'Profile card',
-        priceCoins: 6000,
-        imageUrl: 'https://chinchins.live/uploads/my_bag/profile_card_nebula.svg',
+        name: 'Royal Cyber Neon Frame',
+        category: 'avatar_frame',
+        categoryName: 'Avatar frame',
+        priceCoins: 2500,
+        formattedPrice: '2,500 Gems',
+        badge: 'HOT',
+        imageUrl: 'https://chinchins.live/uploads/bases/profile_base_cyber_neon.svg',
         daysValid: 30,
+        durationText: '30 Days',
       ),
+
+      // 3. Chat style (চ্যাট স্টাইল)
       BagStoreItem(
         id: 5,
-        name: 'Golden Crest Entrance Bubble',
-        category: 'entrance_bubble',
-        categoryName: 'Entrance bubble',
-        priceCoins: 8000,
-        imageUrl: 'https://chinchins.live/uploads/my_bag/entrance_bubble_gold.svg',
+        name: 'Neon Pink Chat Bubble',
+        category: 'chat_style',
+        categoryName: 'Chat style',
+        priceCoins: 1200,
+        formattedPrice: '1,200 Gems',
+        badge: 'NEW',
+        imageUrl: 'https://chinchins.live/uploads/my_bag/chat_bubble_neon_pink.svg',
         daysValid: 30,
+        durationText: '30 Days',
       ),
       BagStoreItem(
         id: 6,
-        name: 'Supercar Cyber Phantom',
+        name: 'Luxury Rose Gold Bubble',
+        category: 'chat_style',
+        categoryName: 'Chat style',
+        priceCoins: 2000,
+        formattedPrice: '2,000 Gems',
+        badge: 'VIP',
+        imageUrl: 'https://chinchins.live/uploads/my_bag/chat_bubble_gold.svg',
+        daysValid: 30,
+        durationText: '30 Days',
+      ),
+
+      // 4. Profile card (প্রোফাইল কার্ড)
+      BagStoreItem(
+        id: 7,
+        name: 'Aurora Galaxy Card',
+        category: 'profile_card',
+        categoryName: 'Profile card',
+        priceCoins: 3500,
+        formattedPrice: '3,500 Gems',
+        badge: 'PREMIUM',
+        imageUrl: 'https://chinchins.live/uploads/my_bag/profile_card_aurora_galaxy.svg',
+        daysValid: 30,
+        durationText: '30 Days',
+      ),
+      BagStoreItem(
+        id: 8,
+        name: 'Midnight Nebula Profile Card',
+        category: 'profile_card',
+        categoryName: 'Profile card',
+        priceCoins: 4000,
+        formattedPrice: '4,000 Gems',
+        imageUrl: 'https://chinchins.live/uploads/my_bag/profile_card_nebula.svg',
+        daysValid: 30,
+        durationText: '30 Days',
+      ),
+
+      // 5. Entrance bubble (এন্ট্রান্স বাবল)
+      BagStoreItem(
+        id: 9,
+        name: 'Gold Crown Entrance Bubble',
+        category: 'entrance_bubble',
+        categoryName: 'Entrance bubble',
+        priceCoins: 5000,
+        formattedPrice: '5,000 Gems',
+        badge: 'ROYAL',
+        imageUrl: 'https://chinchins.live/uploads/my_bag/entrance_bubble_gold_crown.svg',
+        daysValid: 30,
+        durationText: '30 Days',
+      ),
+      BagStoreItem(
+        id: 10,
+        name: 'Golden Crest Entrance Bubble',
+        category: 'entrance_bubble',
+        categoryName: 'Entrance bubble',
+        priceCoins: 4500,
+        formattedPrice: '4,500 Gems',
+        imageUrl: 'https://chinchins.live/uploads/my_bag/entrance_bubble_gold.svg',
+        daysValid: 30,
+        durationText: '30 Days',
+      ),
+
+      // 6. Big entrance (বিগ এন্ট্রান্স)
+      BagStoreItem(
+        id: 11,
+        name: 'Luxury Supercar Big Entrance',
         category: 'big_entrance',
         categoryName: 'Big entrance',
-        priceCoins: 15000,
+        priceCoins: 12000,
+        formattedPrice: '12,000 Gems',
+        badge: 'SUPERCAR',
         imageUrl: 'https://chinchins.live/uploads/my_bag/big_entrance_sports_car.svg',
         daysValid: 7,
+        durationText: '7 Days',
       ),
     ];
   }
