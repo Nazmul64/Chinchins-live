@@ -55,13 +55,13 @@ class ModelProfile {
     required this.intro,
     required this.languages,
     this.tags = const ['late night fun', 'fun show baby', 'sexy body'],
-    this.level = 4,
+    this.level = 0,
     required this.avatarUrl,
     this.coverPhotoUrl,
     required this.galleryUrls,
-    this.charmLevel = 7,
+    this.charmLevel = 1,
     this.topFan = 'No Top Fan yet',
-    this.pricePerMin = 1800,
+    this.pricePerMin = 100,
     this.isOnline = true,
     this.isVerified = true,
     this.isFollowed = false,
@@ -165,22 +165,24 @@ class ModelProfile {
     }
 
     // Parse level
-    int parsedLevel = 4;
-    final rawLevel = json['display_level'] ?? json['level']?.toString() ?? 'Lv4';
-    final levelDigits = rawLevel.toString().replaceAll(RegExp(r'[^0-9]'), '');
-    if (levelDigits.isNotEmpty) {
-      parsedLevel = int.tryParse(levelDigits) ?? 4;
+    int parsedLevel = 0;
+    final rawLevel = json['display_level'] ?? json['level']?.toString();
+    if (rawLevel != null) {
+      final levelDigits = rawLevel.toString().replaceAll(RegExp(r'[^0-9]'), '');
+      if (levelDigits.isNotEmpty) {
+        parsedLevel = int.tryParse(levelDigits) ?? 0;
+      }
     }
 
     // Parse charm level
-    int parsedCharm = 7;
+    int parsedCharm = 1;
     final rawCharm = json['charm_level'];
     if (rawCharm is int) {
       parsedCharm = rawCharm;
     } else if (rawCharm != null) {
       final digits = rawCharm.toString().replaceAll(RegExp(r'[^0-9]'), '');
       if (digits.isNotEmpty) {
-        parsedCharm = int.tryParse(digits) ?? 7;
+        parsedCharm = int.tryParse(digits) ?? 1;
       }
     }
 
@@ -193,9 +195,9 @@ class ModelProfile {
       parsedTopFan = rawTopFan.trim();
     }
 
-    // Parse video call rate
+    // Parse video call rate (default 100 from admin settings)
     final rawRate = json['video_call_rate'] ?? json['rate_per_minute'] ?? json['call_rate'] ?? json['price_per_min'];
-    final int parsedRate = rawRate is int ? rawRate : (int.tryParse('$rawRate') ?? 1800);
+    final int parsedRate = rawRate is int ? rawRate : (int.tryParse('$rawRate') ?? 100);
 
     // Primary database ID and public 8-digit Account ID
     final primaryId = json['id']?.toString() ?? json['user_id']?.toString() ?? '1';

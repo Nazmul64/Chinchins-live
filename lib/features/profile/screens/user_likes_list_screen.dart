@@ -1,12 +1,9 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/models/chat_message.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/widgets/cached_image_loader.dart';
-import '../../call/services/call_api_service.dart';
-import '../../call/widgets/call_recharge_modal.dart';
-import '../../call/screens/call_ringing_screen.dart';
 import 'host_profile_screen.dart';
 import '../../chat/screens/chat_detail_screen.dart';
 
@@ -73,47 +70,11 @@ class _UserLikesListScreenState extends State<UserLikesListScreen> with SingleTi
     }
   }
 
-  Future<void> _initiateVideoCall(ModelProfile user) async {
-    try {
-      final permRes = await CallApiService.checkCallPermission(
-        receiverId: user.id,
-        callType: 'video',
-      );
-
-      if (!mounted) return;
-
-      if (permRes['can_call'] == false || permRes['show_recharge_modal'] == true || permRes['status'] == false) {
-        CallRechargeModal.show(
-          context,
-          shortageCoins: permRes['shortage_coins'] ?? (user.videoCallRate - (permRes['user_coins'] ?? 0)),
-          hostName: user.name,
-          callRate: user.videoCallRate,
-        );
-        return;
-      }
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => CallRingingScreen(
-            receiverId: user.id,
-            receiverName: user.name,
-            receiverAvatar: user.avatarUrl,
-            callType: 'video',
-            channelName: 'call_${DateTime.now().millisecondsSinceEpoch}',
-            isCaller: true,
-            videoRate: user.videoCallRate,
-          ),
-        ),
-      );
-    } catch (_) {
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => HostProfileScreen(model: user)),
-        );
-      }
-    }
+  void _initiateVideoCall(ModelProfile user) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => HostProfileScreen(model: user)),
+    );
   }
 
   @override
@@ -299,7 +260,10 @@ class _UserLikesListScreenState extends State<UserLikesListScreen> with SingleTi
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Row(
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -312,7 +276,6 @@ class _UserLikesListScreenState extends State<UserLikesListScreen> with SingleTi
                           style: const TextStyle(color: Colors.white70, fontSize: 10.5, fontWeight: FontWeight.w600),
                         ),
                       ),
-                      const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(

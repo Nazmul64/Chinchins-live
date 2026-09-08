@@ -147,7 +147,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
 
   Future<void> _startVideoCall() async {
     final int cachedCoins = WalletApiService.getCachedCoins();
-    final int ratePerMin = _currentModel.pricePerMin > 0 ? _currentModel.pricePerMin : 1800;
+    final int ratePerMin = _currentModel.pricePerMin > 0 ? _currentModel.pricePerMin : 100;
 
     // ⚡ ZERO-DELAY INSTANT SYNCHRONOUS CHECK (<0.001s):
     if (cachedCoins < ratePerMin) {
@@ -234,7 +234,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
         final channelName = res['channel_name']?.toString() ?? 'call_${_currentModel.id}';
         final isFreeTrial = res['is_free_trial'] == true;
         final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
-        final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (_currentModel.pricePerMin > 0 ? _currentModel.pricePerMin : 1800);
+        final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (_currentModel.pricePerMin > 0 ? _currentModel.pricePerMin : 100);
 
         StreamingService.startDynamicCall(
           context: context,

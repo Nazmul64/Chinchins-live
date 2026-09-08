@@ -388,5 +388,148 @@ class AuthApiService {
     await logout();
     return {'success': true, 'message': 'Account deleted successfully.'};
   }
-}
 
+  /// Send Forgot Password OTP Verification Code
+  static Future<Map<String, dynamic>> sendForgotPasswordCode({
+    required String identifier,
+    String method = 'email',
+  }) async {
+    try {
+      final url = Uri.parse(ApiConstants.forgotPassword);
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'email': identifier.trim(),
+              'phone': identifier.trim(),
+              'identifier': identifier.trim(),
+              'method': method,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data is Map && data['status'] == true) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Verification code sent.',
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data is Map ? (data['message'] ?? 'Failed to send verification code.') : 'Failed to send code.',
+        };
+      }
+    } catch (e) {
+      AppLogger.error('ForgotPasswordSendCodeError', e);
+      return {
+        'success': false,
+        'message': 'Network connection error. Please check your internet and try again.',
+      };
+    }
+  }
+
+  /// Verify 6-digit OTP code
+  static Future<Map<String, dynamic>> verifyResetCode({
+    required String identifier,
+    required String code,
+  }) async {
+    try {
+      final url = Uri.parse(ApiConstants.verifyResetCode);
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'email': identifier.trim(),
+              'phone': identifier.trim(),
+              'identifier': identifier.trim(),
+              'code': code.trim(),
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data is Map && data['status'] == true) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Code verified successfully.',
+          'reset_token': data['data']?['reset_token'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data is Map ? (data['message'] ?? 'Invalid or expired verification code.') : 'Invalid code.',
+        };
+      }
+    } catch (e) {
+      AppLogger.error('VerifyResetCodeError', e);
+      return {
+        'success': false,
+        'message': 'Network connection error. Please try again.',
+      };
+    }
+  }
+
+  /// Reset Password with confirmed code / token
+  static Future<Map<String, dynamic>> resetPassword({
+    required String identifier,
+    required String code,
+    String? resetToken,
+    required String password,
+    required String passwordConfirmation,
+  }) async {
+    try {
+      final url = Uri.parse(ApiConstants.resetPassword);
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'email': identifier.trim(),
+              'phone': identifier.trim(),
+              'identifier': identifier.trim(),
+              'code': code.trim(),
+              'reset_token': resetToken ?? code.trim(),
+              'password': password,
+              'password_confirmation': passwordConfirmation,
+              'confirm_password': passwordConfirmation,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data is Map && data['status'] == true) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Password reset successfully.',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data is Map ? (data['message'] ?? 'Failed to reset password.') : 'Failed to reset password.',
+        };
+      }
+    } catch (e) {
+      AppLogger.error('ResetPasswordError', e);
+      return {
+        'success': false,
+        'message': 'Network connection error. Please try again.',
+      };
+    }
+  }
+}

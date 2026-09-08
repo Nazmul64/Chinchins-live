@@ -731,7 +731,6 @@ class _EditProfileMediaScreenState extends State<EditProfileMediaScreen> {
     setState(() => _isSaving = true);
 
     final ageInt = int.tryParse(_ageController.text.trim()) ?? 22;
-    final rateInt = int.tryParse(_videoCallRateController.text.trim()) ?? 100;
 
     final res = await ProfileApiService.updateProfile(
       nickname: _nicknameController.text.trim(),
@@ -740,7 +739,6 @@ class _EditProfileMediaScreenState extends State<EditProfileMediaScreen> {
       age: ageInt,
       country: _selectedCountry,
       city: _cityController.text.trim().isNotEmpty ? _cityController.text.trim() : null,
-      videoCallRate: rateInt,
       languages: _selectedLanguages,
       tags: _selectedTags,
       isActive: _isOnline,
@@ -1628,62 +1626,6 @@ class _EditProfileMediaScreenState extends State<EditProfileMediaScreen> {
               ],
             ),
 
-            const SizedBox(height: 18),
-
-            // Video Call Rate
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.videocam_rounded, color: AppColors.gemYellow, size: 16),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'Video Call Rate (Gems / Minute)',
-                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [100, 300, 500, 1000, 1800, 2500, 5000].map((rate) {
-                    final isSelected = _videoCallRateController.text.trim() == '$rate';
-                    return GestureDetector(
-                      onTap: () => setState(() => _videoCallRateController.text = '$rate'),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isSelected ? AppColors.gemYellow.withValues(alpha: 0.25) : AppColors.cardDark,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isSelected ? AppColors.gemYellow : AppColors.cardBorder,
-                            width: isSelected ? 1.5 : 1,
-                          ),
-                        ),
-                        child: Text(
-                          '💎 $rate/m',
-                          style: TextStyle(
-                            color: isSelected ? AppColors.gemYellow : Colors.white70,
-                            fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 10),
-                _buildInputField(
-                  controller: _videoCallRateController,
-                  label: 'Custom Call Rate',
-                  hint: '1800',
-                  icon: Icons.diamond_outlined,
-                  keyboardType: TextInputType.number,
-                ),
-              ],
-            ),
 
             const SizedBox(height: 16),
 
