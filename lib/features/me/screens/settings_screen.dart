@@ -6,6 +6,7 @@ import '../../auth/widgets/logout_confirmation_dialog.dart';
 import 'about_us_screen.dart';
 import 'blocklist_screen.dart';
 import 'privacy_policy_screen.dart';
+import 'terms_of_service_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -177,6 +178,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const PrivacyPolicyScreen()),
+    );
+  }
+
+  void _showTermsOfService() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const TermsOfServiceScreen()),
     );
   }
 
@@ -413,6 +421,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: 'Privacy Policy',
             trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 22),
             onTap: _showPrivacyPolicy,
+          ),
+
+          // 8.1. Terms of Service
+          _buildSettingsTile(
+            title: 'Terms of Service',
+            trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 22),
+            onTap: _showTermsOfService,
           ),
 
           // 9. Clean Cache

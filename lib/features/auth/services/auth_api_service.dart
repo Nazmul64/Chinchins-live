@@ -30,10 +30,20 @@ class AuthApiService {
     int? videoCallRate,
   }) async {
     try {
-      final url = Uri.parse(ApiConstants.register);
+      final cleanFirst = firstName.trim();
+      final cleanLast = lastName.trim();
+      final derivedName = (cleanFirst.isNotEmpty || cleanLast.isNotEmpty)
+          ? '$cleanFirst $cleanLast'.trim()
+          : (nickname?.trim().isNotEmpty == true ? nickname!.trim() : 'User');
+      final derivedNickname = (nickname != null && nickname.trim().isNotEmpty)
+          ? nickname.trim()
+          : (cleanFirst.isNotEmpty ? cleanFirst : derivedName);
+
       final Map<String, dynamic> requestPayload = {
-        'first_name': firstName.trim(),
-        'last_name': lastName.trim(),
+        'name': derivedName,
+        'nickname': derivedNickname,
+        'first_name': cleanFirst.isNotEmpty ? cleanFirst : derivedName,
+        'last_name': cleanLast.isNotEmpty ? cleanLast : '',
         'phone': phone.trim(),
         'phone_number': phone.trim(),
         'country': country ?? 'Bangladesh',
@@ -44,9 +54,6 @@ class AuthApiService {
 
       if (email != null && email.trim().isNotEmpty) {
         requestPayload['email'] = email.trim().toLowerCase();
-      }
-      if (nickname != null && nickname.trim().isNotEmpty) {
-        requestPayload['nickname'] = nickname.trim();
       }
       if (city != null && city.trim().isNotEmpty) {
         requestPayload['city'] = city.trim();
@@ -71,22 +78,46 @@ class AuthApiService {
       }
 
       final body = jsonEncode(requestPayload);
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
 
-      final response = await http
+      // 1. Primary: /api/auth/register
+      var response = await http
           .post(
-            url,
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
+            Uri.parse(ApiConstants.register),
+            headers: headers,
             body: body,
           )
           .timeout(const Duration(seconds: 15));
 
+      // 2. Fallback: /api/register
+      if (response.statusCode == 404) {
+        response = await http
+            .post(
+              Uri.parse(ApiConstants.legacyRegister),
+              headers: headers,
+              body: body,
+            )
+            .timeout(const Duration(seconds: 15));
+      }
+
+      // 3. Fallback: /api/user/register
+      if (response.statusCode == 404) {
+        response = await http
+            .post(
+              Uri.parse('${ApiConstants.baseUrl}/user/register'),
+              headers: headers,
+              body: body,
+            )
+            .timeout(const Duration(seconds: 15));
+      }
+
       final data = jsonDecode(response.body);
 
-      if (response.statusCode == 201 || (data is Map && data['status'] == true)) {
-        final token = data['data']?['token'] ?? data['token'];
+      if (response.statusCode == 201 || response.statusCode == 200 || (data is Map && (data['status'] == true || data['success'] == true))) {
+        final token = data['data']?['token'] ?? data['token'] ?? data['access_token'];
         final user = data['data']?['user'] ?? data['user'];
 
         if (token != null) {
@@ -107,6 +138,8 @@ class AuthApiService {
             final firstErrorList = errors.values.first;
             if (firstErrorList is List && firstErrorList.isNotEmpty) {
               message = firstErrorList.first.toString();
+            } else if (firstErrorList is String) {
+              message = firstErrorList;
             }
           }
         }
@@ -140,26 +173,44 @@ class AuthApiService {
     required String password,
   }) async {
     try {
-      final url = Uri.parse(ApiConstants.login);
-      final body = jsonEncode({
-        'identifier': identifier.trim(),
+      final cleanId = identifier.trim();
+      final Map<String, dynamic> requestPayload = {
+        'phone': cleanId,
+        'email': cleanId,
+        'identifier': cleanId,
+        'login': cleanId,
         'password': password,
-      });
+      };
 
-      final response = await http
+      final body = jsonEncode(requestPayload);
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      // 1. Primary: /api/auth/login
+      var response = await http
           .post(
-            url,
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
+            Uri.parse(ApiConstants.login),
+            headers: headers,
             body: body,
           )
           .timeout(const Duration(seconds: 15));
 
+      // 2. Fallback: /api/login
+      if (response.statusCode == 404) {
+        response = await http
+            .post(
+              Uri.parse(ApiConstants.legacyLogin),
+              headers: headers,
+              body: body,
+            )
+            .timeout(const Duration(seconds: 15));
+      }
+
       final data = jsonDecode(response.body);
 
-      final isSuccess = response.statusCode == 200 &&
+      final isSuccess = (response.statusCode == 200 || response.statusCode == 201) &&
           (data is Map && (data['status'] == true || data['status'] == 'success' || data['token'] != null || data['data']?['token'] != null));
 
       if (isSuccess) {
@@ -184,6 +235,8 @@ class AuthApiService {
             final firstErrorList = errors.values.first;
             if (firstErrorList is List && firstErrorList.isNotEmpty) {
               message = firstErrorList.first.toString();
+            } else if (firstErrorList is String) {
+              message = firstErrorList;
             }
           }
         }
@@ -200,14 +253,68 @@ class AuthApiService {
     } on TimeoutException {
       return {
         'success': false,
-        'message': 'Connection timed out. Please try again.',
+        'message': 'Login request timed out. Please try again.',
       };
     } catch (e) {
       return {
         'success': false,
-        'message': 'An unexpected error occurred: $e',
+        'message': 'Login failed: $e',
       };
     }
+  }
+
+  /// Fetch Dynamic Terms of Service
+  static Future<Map<String, dynamic>> getTermsOfService() async {
+    try {
+      final headers = {'Accept': 'application/json'};
+      var response = await http.get(Uri.parse(ApiConstants.appTerms), headers: headers).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 404) {
+        response = await http.get(Uri.parse('${ApiConstants.baseUrl}/terms-of-service'), headers: headers).timeout(const Duration(seconds: 10));
+      }
+      if (response.statusCode == 404) {
+        response = await http.get(Uri.parse('${ApiConstants.baseUrl}/terms'), headers: headers).timeout(const Duration(seconds: 10));
+      }
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data is Map && (data['status'] == true || data['data'] != null)) {
+        return {'success': true, 'data': data['data'] ?? data};
+      }
+    } catch (_) {}
+    return {'success': false};
+  }
+
+  /// Fetch Dynamic Privacy Policy
+  static Future<Map<String, dynamic>> getPrivacyPolicy() async {
+    try {
+      final headers = {'Accept': 'application/json'};
+      var response = await http.get(Uri.parse(ApiConstants.appPrivacy), headers: headers).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 404) {
+        response = await http.get(Uri.parse('${ApiConstants.baseUrl}/privacy-policy'), headers: headers).timeout(const Duration(seconds: 10));
+      }
+      if (response.statusCode == 404) {
+        response = await http.get(Uri.parse('${ApiConstants.baseUrl}/privacy'), headers: headers).timeout(const Duration(seconds: 10));
+      }
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data is Map && (data['status'] == true || data['data'] != null)) {
+        return {'success': true, 'data': data['data'] ?? data};
+      }
+    } catch (_) {}
+    return {'success': false};
+  }
+
+  /// Fetch Dynamic About Us
+  static Future<Map<String, dynamic>> getAboutUs() async {
+    try {
+      final headers = {'Accept': 'application/json'};
+      var response = await http.get(Uri.parse(ApiConstants.appAbout), headers: headers).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 404) {
+        response = await http.get(Uri.parse('${ApiConstants.baseUrl}/about'), headers: headers).timeout(const Duration(seconds: 10));
+      }
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data is Map && (data['status'] == true || data['data'] != null)) {
+        return {'success': true, 'data': data['data'] ?? data};
+      }
+    } catch (_) {}
+    return {'success': false};
   }
 
   /// Check if user has an existing saved login session

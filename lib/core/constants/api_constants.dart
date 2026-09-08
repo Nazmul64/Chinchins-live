@@ -10,15 +10,26 @@ class ApiConstants {
   static const String reverbKey = 'chinchins_app_key';
 
   // Auth endpoints
-  static String get register => '$baseUrl/register';
-  static String get login => '$baseUrl/login';
+  static String get register => '$baseUrl/auth/register';
+  static String get legacyRegister => '$baseUrl/register';
+  static String get login => '$baseUrl/auth/login';
+  static String get legacyLogin => '$baseUrl/login';
   static String get authCheck => '$baseUrl/auth/check';
   static String get authMe => '$baseUrl/auth/me';
   static String get userProfile => '$baseUrl/user';
-  static String get logout => '$baseUrl/logout';
-  static String get forgotPassword => '$baseUrl/forgot-password';
-  static String get verifyResetCode => '$baseUrl/verify-reset-code';
-  static String get resetPassword => '$baseUrl/reset-password';
+  static String get logout => '$baseUrl/auth/logout';
+  static String get legacyLogout => '$baseUrl/logout';
+  static String get forgotPassword => '$baseUrl/auth/forgot-password';
+  static String get legacyForgotPassword => '$baseUrl/forgot-password';
+  static String get verifyResetCode => '$baseUrl/auth/verify-reset-code';
+  static String get legacyVerifyResetCode => '$baseUrl/verify-reset-code';
+  static String get resetPassword => '$baseUrl/auth/reset-password';
+  static String get legacyResetPassword => '$baseUrl/reset-password';
+
+  // App Legal & Settings (Admin Configurable)
+  static String get appTerms => '$baseUrl/app/terms';
+  static String get appPrivacy => '$baseUrl/app/privacy-policy';
+  static String get appAbout => '$baseUrl/app/about';
 
   // Feed / Home / Search endpoints
   static String get countries => '$baseUrl/countries';

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
@@ -5,6 +6,8 @@ import '../../../core/models/model_profile.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../../core/services/country_service.dart';
 import '../../profile/screens/edit_profile_media_screen.dart';
+import '../../me/screens/terms_of_service_screen.dart';
+import '../../me/screens/privacy_policy_screen.dart';
 import '../services/auth_api_service.dart';
 import '../widgets/auth_text_field.dart';
 import '../widgets/country_picker_bottom_sheet.dart';
@@ -473,24 +476,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: RichText(
-                        text: const TextSpan(
+                        text: TextSpan(
                           text: 'I agree to Chinchins Live ',
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
+                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
                           children: [
                             TextSpan(
                               text: 'Terms of Service',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: AppColors.neonPink,
                                 fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
                               ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => const TermsOfServiceScreen()),
+                                  );
+                                },
                             ),
-                            TextSpan(text: ' and '),
+                            const TextSpan(text: ' and '),
                             TextSpan(
                               text: 'Privacy Policy',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: AppColors.neonPink,
                                 fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
                               ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => const PrivacyPolicyScreen()),
+                                  );
+                                },
                             ),
                           ],
                         ),
