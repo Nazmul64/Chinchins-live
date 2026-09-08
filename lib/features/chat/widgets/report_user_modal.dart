@@ -96,7 +96,6 @@ class _ReportUserModalState extends State<ReportUserModal> {
         ),
         backgroundColor: const Color(0xFF2E7D32),
         duration: const Duration(seconds: 3),
-        behavior: SnackBarBehavior.floating,
       ),
     );
   }

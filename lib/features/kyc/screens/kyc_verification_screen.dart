@@ -299,7 +299,6 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           ],
         ),
         backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
       ),
     );

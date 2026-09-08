@@ -64,7 +64,6 @@ class AppUpdateService {
               const SnackBar(
                 content: Text('Your app is up to date with the latest version!'),
                 backgroundColor: Color(0xFF1E1C2E),
-                behavior: SnackBarBehavior.floating,
               ),
             );
           }

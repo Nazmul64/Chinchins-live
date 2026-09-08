@@ -223,7 +223,6 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
         ),
         backgroundColor: const Color(0xFFF43F5E),
         duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
       ),
     );
   }
