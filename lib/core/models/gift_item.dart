@@ -229,17 +229,15 @@ class UserGiftsData {
         ? json['data'] as Map<String, dynamic>
         : (json['data'] is Map ? Map<String, dynamic>.from(json['data'] as Map) : json);
 
-    final Map<String, dynamic> charmJson = data['charm_level'] is Map
-        ? Map<String, dynamic>.from(data['charm_level'] as Map)
-        : <String, dynamic>{};
-
-    final Map<String, dynamic> topFanJson = data['top_fan'] is Map
-        ? Map<String, dynamic>.from(data['top_fan'] as Map)
-        : <String, dynamic>{};
-
-    final Map<String, dynamic> summaryJson = data['summary'] is Map
+    final charmRaw = data['charm_level'];
+    final topFanRaw = data['top_fan'];
+    final summaryJson = data['summary'] is Map
         ? Map<String, dynamic>.from(data['summary'] as Map)
-        : <String, dynamic>{};
+        : <String, dynamic>{
+            'total_unique_gifts': data['gifts_count'] ?? 0,
+            'total_coins': data['gifts_total_coins'] ?? 0,
+            'formatted_coins': data['formatted_gifts_coins'] ?? '0',
+          };
 
     List<GiftItem> previewList = [];
     if (data['profile_preview_gifts'] is List) {
@@ -255,6 +253,11 @@ class UserGiftsData {
           .whereType<Map>()
           .map((item) => GiftItem.fromJson(Map<String, dynamic>.from(item)))
           .toList();
+    } else if (data['gifts'] is List) {
+      fullList = (data['gifts'] as List)
+          .whereType<Map>()
+          .map((item) => GiftItem.fromJson(Map<String, dynamic>.from(item)))
+          .toList();
     }
 
     // If preview list was empty but full list exists, take first 8
@@ -264,8 +267,8 @@ class UserGiftsData {
 
     return UserGiftsData(
       user: data['user'] is Map ? Map<String, dynamic>.from(data['user'] as Map) : null,
-      charmLevel: CharmLevelInfo.fromJson(charmJson),
-      topFan: TopFanInfo.fromJson(topFanJson),
+      charmLevel: CharmLevelInfo.fromDynamic(charmRaw),
+      topFan: TopFanInfo.fromDynamic(topFanRaw),
       summary: GiftsSummary.fromJson(summaryJson),
       profilePreviewGifts: previewList,
       giftsReceived: fullList,
@@ -279,20 +282,35 @@ class CharmLevelInfo {
   final int progress;
 
   const CharmLevelInfo({
-    this.level = 6,
-    this.levelTag = 'Lv6',
+    this.level = 7,
+    this.levelTag = 'Lv7',
     this.progress = 75,
   });
 
-  factory CharmLevelInfo.fromJson(Map<String, dynamic> json) {
-    final rawLvl = json['level'] ?? 6;
-    final int parsedLvl = rawLvl is int ? rawLvl : (int.tryParse('$rawLvl') ?? 6);
+  factory CharmLevelInfo.fromDynamic(dynamic raw) {
+    if (raw == null) {
+      return const CharmLevelInfo(level: 7, levelTag: 'Lv7', progress: 75);
+    }
+    if (raw is Map) {
+      final lvl = raw['level'] ?? 7;
+      final int parsedLvl = lvl is int ? lvl : (int.tryParse('$lvl') ?? 7);
+      return CharmLevelInfo(
+        level: parsedLvl,
+        levelTag: raw['level_tag']?.toString() ?? 'Lv$parsedLvl',
+        progress: raw['progress'] is int ? raw['progress'] : (int.tryParse('${raw['progress']}') ?? 75),
+      );
+    }
+    final rawStr = raw.toString();
+    final digits = rawStr.replaceAll(RegExp(r'[^0-9]'), '');
+    final int parsed = int.tryParse(digits) ?? 7;
     return CharmLevelInfo(
-      level: parsedLvl,
-      levelTag: json['level_tag']?.toString() ?? 'Lv$parsedLvl',
-      progress: json['progress'] is int ? json['progress'] : (int.tryParse('${json['progress']}') ?? 75),
+      level: parsed,
+      levelTag: rawStr.startsWith('Lv') ? rawStr : 'Lv$parsed',
+      progress: 75,
     );
   }
+
+  factory CharmLevelInfo.fromJson(Map<String, dynamic> json) => CharmLevelInfo.fromDynamic(json);
 }
 
 class TopFanInfo {
@@ -304,24 +322,47 @@ class TopFanInfo {
   final String formatted;
 
   const TopFanInfo({
-    this.id = 45,
-    this.accountId = '1000293841',
-    this.name = 'Sajid',
+    this.id = 84,
+    this.accountId = '229051289',
+    this.name = 'Raza me',
     this.avatarUrl = '',
     this.fanCoins = 54200,
     this.formatted = '54.20K',
   });
 
-  factory TopFanInfo.fromJson(Map<String, dynamic> json) {
+  factory TopFanInfo.fromDynamic(dynamic raw) {
+    if (raw == null) {
+      return const TopFanInfo(
+        id: 0,
+        accountId: '',
+        name: 'No Top Fan yet',
+        avatarUrl: '',
+        fanCoins: 0,
+        formatted: '0',
+      );
+    }
+    if (raw is Map) {
+      final map = Map<String, dynamic>.from(raw);
+      return TopFanInfo(
+        id: map['id'] is int ? map['id'] : (int.tryParse('${map['id']}') ?? 0),
+        accountId: map['account_id']?.toString() ?? '',
+        name: map['name']?.toString() ?? map['display_name']?.toString() ?? 'Top Fan',
+        avatarUrl: CachedImageLoader.normalize(map['avatar_url']?.toString() ?? map['avatar']?.toString()),
+        fanCoins: map['fan_coins'] is int ? map['fan_coins'] : (int.tryParse('${map['fan_coins'] ?? map['coins']}') ?? 0),
+        formatted: map['formatted']?.toString() ?? (map['fan_coins'] != null ? '${map['fan_coins']}' : '0'),
+      );
+    }
     return TopFanInfo(
-      id: json['id'] is int ? json['id'] : (int.tryParse('${json['id']}') ?? 0),
-      accountId: json['account_id']?.toString() ?? '',
-      name: json['name']?.toString() ?? 'Sajid',
-      avatarUrl: CachedImageLoader.normalize(json['avatar_url']?.toString()),
-      fanCoins: json['fan_coins'] is int ? json['fan_coins'] : (int.tryParse('${json['fan_coins']}') ?? 0),
-      formatted: json['formatted']?.toString() ?? '54.20K',
+      id: 0,
+      accountId: '',
+      name: raw.toString(),
+      avatarUrl: '',
+      fanCoins: 0,
+      formatted: '0',
     );
   }
+
+  factory TopFanInfo.fromJson(Map<String, dynamic> json) => TopFanInfo.fromDynamic(json);
 }
 
 class GiftsSummary {
@@ -339,9 +380,9 @@ class GiftsSummary {
 
   factory GiftsSummary.fromJson(Map<String, dynamic> json) {
     return GiftsSummary(
-      totalUniqueGifts: json['total_unique_gifts'] is int ? json['total_unique_gifts'] : 0,
-      totalItemsCount: json['total_items_count'] is int ? json['total_items_count'] : 0,
-      totalCoins: json['total_coins'] is int ? json['total_coins'] : 0,
+      totalUniqueGifts: json['total_unique_gifts'] is int ? json['total_unique_gifts'] : (int.tryParse('${json['total_unique_gifts']}') ?? 0),
+      totalItemsCount: json['total_items_count'] is int ? json['total_items_count'] : (int.tryParse('${json['total_items_count']}') ?? 0),
+      totalCoins: json['total_coins'] is int ? json['total_coins'] : (int.tryParse('${json['total_coins']}') ?? 0),
       formattedCoins: json['formatted_coins']?.toString() ?? '0',
     );
   }
