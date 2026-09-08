@@ -18,6 +18,7 @@ class ApiConstants {
   static String get logout => '$baseUrl/logout';
 
   // Feed / Home / Search endpoints
+  static String get countries => '$baseUrl/countries';
   static String get homeFeed => '$baseUrl/home';
   static String get users => '$baseUrl/users';
   static String get search => '$baseUrl/search';

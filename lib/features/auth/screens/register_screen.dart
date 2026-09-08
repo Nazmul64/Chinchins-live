@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/widgets/gradient_button.dart';
+import '../../../core/services/country_service.dart';
 import '../../profile/screens/edit_profile_media_screen.dart';
 import '../services/auth_api_service.dart';
 import '../widgets/auth_text_field.dart';
+import '../widgets/country_picker_bottom_sheet.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -25,28 +27,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  // Supported Countries
-  final List<Map<String, String>> _countries = const [
-    {'name': 'Bangladesh', 'code': '+880', 'flag': '🇧🇩'},
-    {'name': 'Pakistan', 'code': '+92', 'flag': '🇵🇰'},
-    {'name': 'India', 'code': '+91', 'flag': '🇮🇳'},
-    {'name': 'Saudi Arabia', 'code': '+966', 'flag': '🇸🇦'},
-    {'name': 'United Arab Emirates', 'code': '+971', 'flag': '🇦🇪'},
-    {'name': 'United States', 'code': '+1', 'flag': '🇺🇸'},
-    {'name': 'United Kingdom', 'code': '+44', 'flag': '🇬🇧'},
-    {'name': 'Malaysia', 'code': '+60', 'flag': '🇲🇾'},
-    {'name': 'Singapore', 'code': '+65', 'flag': '🇸🇬'},
-    {'name': 'Other', 'code': '+', 'flag': '🌐'},
-  ];
-
-  // State
+  // State: Default country is ALWAYS Bangladesh 🇧🇩 (+880) as requested
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _agreeToTerms = true;
   bool _isLoading = false;
-  String _selectedCountry = 'Bangladesh';
-  String _countryCode = '+880';
-  String _countryFlag = '🇧🇩';
+  String _selectedCountry = CountryService.defaultCountry.name;
+  String _countryCode = CountryService.defaultCountry.dialCode;
+  String _countryFlag = CountryService.defaultCountry.flag;
 
   @override
   void dispose() {
@@ -60,137 +48,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _showCountryPicker() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surfaceDark,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        String searchQuery = '';
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final filtered = _countries.where((c) {
-              final q = searchQuery.toLowerCase();
-              return c['name']!.toLowerCase().contains(q) || c['code']!.contains(q);
-            }).toList();
-
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.65,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              child: Column(
-                children: [
-                  // Handle bar
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Select Country / Region',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 20),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Search box
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.cardDark,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.cardBorder),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: TextField(
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                      onChanged: (val) => setModalState(() => searchQuery = val),
-                      decoration: const InputDecoration(
-                        hintText: 'Search country or code...',
-                        hintStyle: TextStyle(color: AppColors.textHint, fontSize: 13),
-                        icon: Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
-                        border: InputBorder.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: ListView.separated(
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: filtered.length,
-                      separatorBuilder: (context, index) => const Divider(color: AppColors.cardBorder, height: 1),
-                      itemBuilder: (context, idx) {
-                        final c = filtered[idx];
-                        final isSelected = c['name'] == _selectedCountry;
-                        return ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          leading: Container(
-                            width: 36,
-                            height: 36,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.05),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(c['flag'] ?? '🌐', style: const TextStyle(fontSize: 20)),
-                          ),
-                          title: Text(
-                            c['name'] ?? '',
-                            style: TextStyle(
-                              color: isSelected ? AppColors.neonPink : Colors.white,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                              fontSize: 15,
-                            ),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                c['code'] ?? '',
-                                style: TextStyle(
-                                  color: isSelected ? AppColors.neonPink : AppColors.textMuted,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              if (isSelected) ...[
-                                const SizedBox(width: 8),
-                                const Icon(Icons.check_circle_rounded, color: AppColors.neonPink, size: 18),
-                              ],
-                            ],
-                          ),
-                          onTap: () {
-                            setState(() {
-                              _selectedCountry = c['name']!;
-                              _countryCode = c['code']!;
-                              _countryFlag = c['flag']!;
-                            });
-                            Navigator.pop(ctx);
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
+    CountryPickerBottomSheet.show(
+      context,
+      initialSelectedCountry: _selectedCountry,
+      onSelect: (Country country) {
+        setState(() {
+          _selectedCountry = country.name;
+          _countryCode = country.dialCode;
+          _countryFlag = country.flag;
+        });
       },
     );
   }

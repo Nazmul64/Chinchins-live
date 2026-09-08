@@ -13,6 +13,7 @@ import '../../wallet/widgets/in_call_recharge_gems_sheet.dart';
 import '../services/call_api_service.dart';
 import '../services/call_sound_manager.dart';
 import '../services/streaming_service.dart';
+import '../widgets/call_end_confirmation_dialog.dart';
 
 class AgoraCallScreen extends StatefulWidget {
   final ModelProfile model;
@@ -560,6 +561,14 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     }
   }
 
+  Future<void> _handleUserHangup() async {
+    if (!_isConnecting && _callSeconds > 0) {
+      final shouldEnd = await showCallEndConfirmationDialog(context);
+      if (shouldEnd != true) return;
+    }
+    _endCall();
+  }
+
   @override
   void dispose() {
     _isEndingCall = true;
@@ -587,7 +596,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        _endCall();
+        await _handleUserHangup();
         return false;
       },
       child: Scaffold(
@@ -614,7 +623,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
                     icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 34),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _handleUserHangup,
                   ),
                   const SizedBox(width: 4),
                   // Host Badge
@@ -838,7 +847,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
 
                   // End Call Hangup
                   GestureDetector(
-                    onTap: _endCall,
+                    onTap: _handleUserHangup,
                     child: Container(
                       width: 60,
                       height: 60,
