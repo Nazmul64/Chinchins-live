@@ -228,6 +228,12 @@ class ApiConstants {
   static String get chatReport => '$baseUrl/chat/report';
   static String get userReport => '$baseUrl/user/report';
   static String get reportReasons => '$baseUrl/chat/report-reasons';
+
+  // 24/7 Customer Service & Admin Live Support Endpoints
+  static String get supportMessages => '$baseUrl/support/messages';
+  static String get supportSend => '$baseUrl/support/send';
+  static String get supportUpload => '$baseUrl/support/upload';
+  static String get supportUnreadCount => '$baseUrl/support/unread-count';
 }
 
 

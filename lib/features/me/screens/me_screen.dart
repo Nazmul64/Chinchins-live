@@ -10,7 +10,6 @@ import '../../../core/models/model_profile.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/services/local_image_cache.dart';
 import '../../../core/services/app_update_service.dart';
-import '../../../core/services/remote_config_service.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../../auth/widgets/logout_confirmation_dialog.dart';
 import '../../profile/screens/host_profile_screen.dart';
@@ -26,6 +25,7 @@ import '../../party/screens/create_room_screen.dart';
 import '../../kyc/screens/kyc_verification_screen.dart';
 import '../../kyc/services/kyc_api_service.dart';
 import '../../bag/screens/my_bag_screen.dart';
+import '../../support/screens/admin_live_support_screen.dart';
 import 'settings_screen.dart';
 import 'feedback_screen.dart';
 
@@ -428,65 +428,10 @@ class _MeScreenState extends State<MeScreen> {
   }
 
   void _showCustomerServiceDialog() {
-    final remoteConfig = RemoteConfigService.instance.config;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1829),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: AppColors.primaryPink.withValues(alpha: 0.4)),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.support_agent_rounded, color: AppColors.primaryPink),
-            SizedBox(width: 8),
-            Text('Customer Support', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Need help or experiencing issues? Contact our official 24/7 Live Support team:',
-              style: TextStyle(color: Colors.white70, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.chat_rounded, color: Colors.greenAccent, size: 20),
-              ),
-              title: const Text('WhatsApp Support', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-              subtitle: Text(remoteConfig.supportWhatsapp, style: const TextStyle(color: Colors.white60, fontSize: 12)),
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.email_rounded, color: Colors.lightBlueAccent, size: 20),
-              ),
-              title: const Text('Email Support', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-              subtitle: Text(remoteConfig.supportEmail, style: const TextStyle(color: Colors.white60, fontSize: 12)),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close', style: TextStyle(color: AppColors.primaryPink, fontWeight: FontWeight.bold)),
-          ),
-        ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AdminLiveSupportScreen(),
       ),
     );
   }
