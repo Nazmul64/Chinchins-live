@@ -466,53 +466,88 @@ class AuthApiService {
     return true;
   }
 
-  /// Permanently delete authenticated user account
-  static Future<Map<String, dynamic>> deleteAccount({String? reason, String? password}) async {
+  /// In-App Self-Delete Account (App Store & Google Play Store Compliance)
+  static Future<Map<String, dynamic>> deleteAccount({
+    String reason = 'I no longer wish to use this account',
+    String? password,
+  }) async {
     try {
       final token = await getToken();
-      if (token != null && token.isNotEmpty) {
-        final url = Uri.parse('${ApiConstants.baseUrl}/user/delete-account');
-        var response = await http.post(
-          url,
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-          body: jsonEncode({
-            if (reason != null && reason.isNotEmpty) 'reason': reason,
-            if (password != null && password.isNotEmpty) 'password': password,
-          }),
-        ).timeout(const Duration(seconds: 8));
+      final savedUser = await getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-        if (response.statusCode == 404) {
-          response = await http.post(
-            Uri.parse('${ApiConstants.baseUrl}/account/delete'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
-            body: jsonEncode({
-              if (reason != null && reason.isNotEmpty) 'reason': reason,
-              if (password != null && password.isNotEmpty) 'password': password,
-            }),
-          ).timeout(const Duration(seconds: 8));
-        }
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (userId != null) 'X-User-Id': userId,
+      };
 
-        try {
-          final data = jsonDecode(response.body);
-          if (response.statusCode == 200 || response.statusCode == 201) {
-            await logout();
-            return {'success': true, 'message': data['message'] ?? 'Account deleted successfully.'};
-          }
-        } catch (_) {}
+      final body = jsonEncode({
+        'reason': reason,
+        if (password != null && password.isNotEmpty) 'password': password,
+      });
+
+      // 1. Primary: POST /api/user/delete-account
+      var response = await http
+          .post(
+            Uri.parse(ApiConstants.deleteAccount),
+            headers: headers,
+            body: body,
+          )
+          .timeout(const Duration(seconds: 15));
+
+      // 2. Fallback: DELETE /api/user/account
+      if (response.statusCode == 404) {
+        response = await http
+            .delete(
+              Uri.parse(ApiConstants.deleteUserAccount),
+              headers: headers,
+              body: body,
+            )
+            .timeout(const Duration(seconds: 15));
+      }
+
+      // 3. Fallback: POST /api/user/account/delete
+      if (response.statusCode == 404) {
+        response = await http
+            .post(
+              Uri.parse(ApiConstants.deleteUserAccountAlias),
+              headers: headers,
+              body: body,
+            )
+            .timeout(const Duration(seconds: 15));
+      }
+
+      final data = jsonDecode(response.body);
+      final isSuccess = response.statusCode == 200 ||
+          (data is Map && (data['status'] == true || data['is_deleted'] == true));
+
+      if (isSuccess) {
+        await logout(); // Clear local token and session
+        return {
+          'success': true,
+          'message': (data is Map && data['message'] != null)
+              ? data['message']
+              : 'Your account has been deleted successfully. You may register a new account anytime.',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': (data is Map && data['message'] != null)
+              ? data['message']
+              : 'Failed to delete account.',
+        };
       }
     } catch (e) {
-      AppLogger.error('AuthDeleteAccountError', e);
+      AppLogger.error('DeleteAccountError', e);
+      // Ensure local state is wiped
+      await logout();
+      return {
+        'success': true,
+        'message': 'Account deleted successfully.',
+      };
     }
-    await logout();
-    return {'success': true, 'message': 'Account deleted successfully.'};
   }
 
   /// Send Forgot Password OTP Verification Code
@@ -717,86 +752,6 @@ class AuthApiService {
       return {
         'success': false,
         'message': 'Network connection error. Please try again.',
-      };
-    }
-  }
-
-  /// In-App Self-Delete Account (App Store & Google Play Store Compliance)
-  static Future<Map<String, dynamic>> deleteAccount({
-    String reason = 'I no longer wish to use this account',
-  }) async {
-    try {
-      final token = await getToken();
-      final savedUser = await getSavedUser();
-      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
-
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-        if (userId != null) 'X-User-Id': userId,
-      };
-
-      final body = jsonEncode({'reason': reason});
-
-      // 1. Primary: POST /api/user/delete-account
-      var response = await http
-          .post(
-            Uri.parse(ApiConstants.deleteAccount),
-            headers: headers,
-            body: body,
-          )
-          .timeout(const Duration(seconds: 15));
-
-      // 2. Fallback: DELETE /api/user/account
-      if (response.statusCode == 404) {
-        response = await http
-            .delete(
-              Uri.parse(ApiConstants.deleteUserAccount),
-              headers: headers,
-              body: body,
-            )
-            .timeout(const Duration(seconds: 15));
-      }
-
-      // 3. Fallback: POST /api/user/account/delete
-      if (response.statusCode == 404) {
-        response = await http
-            .post(
-              Uri.parse(ApiConstants.deleteUserAccountAlias),
-              headers: headers,
-              body: body,
-            )
-            .timeout(const Duration(seconds: 15));
-      }
-
-      final data = jsonDecode(response.body);
-      final isSuccess = response.statusCode == 200 ||
-          (data is Map && (data['status'] == true || data['is_deleted'] == true));
-
-      if (isSuccess) {
-        await logout(); // Clear local token and session
-        return {
-          'success': true,
-          'message': (data is Map && data['message'] != null)
-              ? data['message']
-              : 'Your account has been deleted successfully. You may register a new account anytime.',
-        };
-      } else {
-        return {
-          'success': false,
-          'message': (data is Map && data['message'] != null)
-              ? data['message']
-              : 'Failed to delete account.',
-        };
-      }
-    } catch (e) {
-      AppLogger.error('DeleteAccountError', e);
-      // Ensure local state is wiped even if server was unreachable or error occurred
-      await logout();
-      return {
-        'success': true,
-        'message': 'Account deleted successfully.',
       };
     }
   }
