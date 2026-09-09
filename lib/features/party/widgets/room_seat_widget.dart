@@ -50,13 +50,14 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
 
     return GestureDetector(
       onTap: widget.onTap,
+      behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Seat Avatar or Empty Seat Chair
           SizedBox(
-            width: 60,
-            height: 60,
+            width: 50,
+            height: 50,
             child: Stack(
               alignment: Alignment.center,
               children: [
@@ -66,8 +67,8 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
                     animation: _rippleAnimation,
                     builder: (context, child) {
                       return Container(
-                        width: 60 * _rippleAnimation.value,
-                        height: 60 * _rippleAnimation.value,
+                        width: 50 * _rippleAnimation.value,
+                        height: 50 * _rippleAnimation.value,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: AppColors.neonPink.withValues(
@@ -84,8 +85,8 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
 
                 // Main Circle Avatar / Empty Chair
                 Container(
-                  width: 52,
-                  height: 52,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: const Color(0xFF251E36),
@@ -93,7 +94,7 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
                       color: seat.isHost
                           ? AppColors.gemYellow
                           : (seat.isSpeaking ? AppColors.neonPink : AppColors.cardBorder),
-                      width: seat.isHost ? 2 : 1.5,
+                      width: seat.isHost ? 2 : 1.2,
                     ),
                   ),
                   child: seat.isEmpty
@@ -104,13 +105,13 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
                               const Icon(
                                 Icons.chair_rounded,
                                 color: Color(0xFF756E8A),
-                                size: 20,
+                                size: 18,
                               ),
                               Text(
                                 '$displayIndex',
                                 style: const TextStyle(
                                   color: Color(0xFF756E8A),
-                                  fontSize: 9,
+                                  fontSize: 8,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -133,7 +134,7 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 16,
+                                        fontSize: 14,
                                       ),
                                     ),
                                   ),
@@ -146,7 +147,7 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
                   Positioned(
                     top: -2,
                     child: Container(
-                      padding: const EdgeInsets.all(2),
+                      padding: const EdgeInsets.all(1.5),
                       decoration: const BoxDecoration(
                         color: Colors.black87,
                         shape: BoxShape.circle,
@@ -154,7 +155,7 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
                       child: const Icon(
                         Icons.military_tech_rounded,
                         color: AppColors.gemYellow,
-                        size: 15,
+                        size: 13,
                       ),
                     ),
                   ),
@@ -165,7 +166,7 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
                     top: 0,
                     right: 0,
                     child: Container(
-                      padding: const EdgeInsets.all(1.5),
+                      padding: const EdgeInsets.all(1),
                       decoration: const BoxDecoration(
                         color: Color(0xFF00E5FF),
                         shape: BoxShape.circle,
@@ -173,7 +174,7 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
                       child: const Icon(
                         Icons.check_rounded,
                         color: Colors.black,
-                        size: 9,
+                        size: 8,
                       ),
                     ),
                   ),
@@ -184,7 +185,7 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
                     bottom: 0,
                     right: 0,
                     child: Container(
-                      padding: const EdgeInsets.all(2.5),
+                      padding: const EdgeInsets.all(2),
                       decoration: const BoxDecoration(
                         color: Color(0xFFFF1744),
                         shape: BoxShape.circle,
@@ -192,51 +193,44 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
                       child: const Icon(
                         Icons.mic_off_rounded,
                         color: Colors.white,
-                        size: 9,
+                        size: 8,
                       ),
                     ),
                   ),
               ],
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 2),
 
           // User Name / Take Seat label + Level
           SizedBox(
-            width: 66,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    seat.isEmpty ? 'Seat $displayIndex' : (seat.userName ?? 'Guest'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: seat.isEmpty ? AppColors.textMuted : Colors.white,
-                      fontSize: 10.5,
-                      fontWeight: seat.isHost ? FontWeight.bold : FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+            width: 54,
+            child: Text(
+              seat.isEmpty ? 'Seat $displayIndex' : (seat.userName ?? 'Guest'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: seat.isEmpty ? AppColors.textMuted : Colors.white,
+                fontSize: 9.5,
+                fontWeight: seat.isHost ? FontWeight.bold : FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
 
           // Coins Received / Role Badge
           if (!seat.isEmpty && seat.coinsReceived > 0)
             Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 9),
-                const SizedBox(width: 2),
+                const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 8),
+                const SizedBox(width: 1),
                 Text(
                   '${seat.coinsReceived}',
                   style: const TextStyle(
                     color: AppColors.gemYellow,
-                    fontSize: 8.5,
+                    fontSize: 7.5,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -245,16 +239,16 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
           else if (seat.isHost)
             Container(
               margin: const EdgeInsets.only(top: 1),
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 0.5),
               decoration: BoxDecoration(
                 color: AppColors.gemYellow.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(3),
               ),
               child: const Text(
                 'HOST',
                 style: TextStyle(
                   color: AppColors.gemYellow,
-                  fontSize: 7.5,
+                  fontSize: 7,
                   fontWeight: FontWeight.w900,
                 ),
               ),

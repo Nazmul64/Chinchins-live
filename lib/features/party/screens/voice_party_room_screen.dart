@@ -767,12 +767,13 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
                       children: [
                         // Row 1 (Seats 1 - 5)
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: List.generate(
                             5,
-                            (index) => RoomSeatWidget(
-                              seat: _seats[index],
-                              onTap: () => _handleSeatTap(index),
+                            (index) => Expanded(
+                              child: RoomSeatWidget(
+                                seat: _seats[index],
+                                onTap: () => _handleSeatTap(index),
+                              ),
                             ),
                           ),
                         ),
@@ -780,12 +781,13 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
 
                         // Row 2 (Seats 6 - 10)
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: List.generate(
                             5,
-                            (index) => RoomSeatWidget(
-                              seat: _seats[index + 5],
-                              onTap: () => _handleSeatTap(index + 5),
+                            (index) => Expanded(
+                              child: RoomSeatWidget(
+                                seat: _seats[index + 5],
+                                onTap: () => _handleSeatTap(index + 5),
+                              ),
                             ),
                           ),
                         ),
