@@ -35,7 +35,7 @@ class PreloaderService {
             // 3. User Bag & Backpack Inventory
             BagApiService.getBagInventory(),
             // 4. KYC Status & Verification Badge
-            KycApiService.getStatus(),
+            KycApiService.getKycStatus(),
             // 5. Wallet Balance, Payment Methods & Coin Packages
             WalletApiService.getWalletBalance(),
             WalletApiService.getPaymentMethods(),

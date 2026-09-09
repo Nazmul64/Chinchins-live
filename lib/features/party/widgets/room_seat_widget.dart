@@ -203,14 +203,14 @@ class _RoomSeatWidgetState extends State<RoomSeatWidget>
           const SizedBox(height: 2),
 
           // User Name / Take Seat label + Level
-          SizedBox(
-            width: 54,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 1),
             child: Text(
               seat.isEmpty ? 'Seat $displayIndex' : (seat.userName ?? 'Guest'),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: seat.isEmpty ? AppColors.textMuted : Colors.white,
-                fontSize: 9.5,
+                fontSize: 9,
                 fontWeight: seat.isHost ? FontWeight.bold : FontWeight.w500,
               ),
               maxLines: 1,

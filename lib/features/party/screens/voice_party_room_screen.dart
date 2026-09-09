@@ -755,12 +755,12 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
 
                 // 2. 10-Seat Stage Grid (2 rows x 5 seats)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
                     decoration: BoxDecoration(
                       color: const Color(0xFF1F1735).withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(18),
                       border: Border.all(color: AppColors.cardBorder.withValues(alpha: 0.6)),
                     ),
                     child: Column(
