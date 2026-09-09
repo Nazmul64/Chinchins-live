@@ -175,7 +175,7 @@ class GroupPartyRoom {
 
   const GroupPartyRoom({
     required this.id,
-    required this.roomId,
+    this.roomId = '',
     required this.title,
     required this.hostId,
     this.hostAccountId,
@@ -184,7 +184,7 @@ class GroupPartyRoom {
     this.hostLevel = 1,
     this.hostIsVerified = false,
     required this.coverUrl,
-    required this.channelName,
+    this.channelName = '',
     required this.roomType,
     required this.tag,
     this.maxSeats = 10,
