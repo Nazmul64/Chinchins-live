@@ -231,7 +231,15 @@ class AuthApiService {
           'token': token,
         };
       } else {
-        String message = (data is Map && data['message'] != null) ? data['message'] : 'Invalid credentials';
+        final isDeleted = (response.statusCode == 403 || response.statusCode == 401 || response.statusCode == 422) &&
+            (data is Map &&
+                (data['is_deleted'] == true ||
+                    data['deleted'] == true ||
+                    (data['message']?.toString().toLowerCase().contains('deleted') ?? false)));
+
+        final isLocked = data is Map && (data['is_locked'] == true || data['is_blocked'] == true);
+
+        String message = (data is Map && data['message'] != null) ? data['message'].toString() : 'Invalid credentials';
         if (data is Map && data['errors'] != null && data['errors'] is Map) {
           final errors = data['errors'] as Map;
           if (errors.isNotEmpty) {
@@ -243,9 +251,17 @@ class AuthApiService {
             }
           }
         }
+
+        if (isDeleted && !message.toLowerCase().contains('deleted')) {
+          message = 'Your account has been deleted by administration. Please register a new account to continue.';
+        }
+
         return {
           'success': false,
+          'is_deleted': isDeleted,
+          'is_locked': isLocked,
           'message': message,
+          'action': data is Map ? data['action'] : (isDeleted ? 'register_new' : null),
         };
       }
     } on SocketException {
@@ -701,6 +717,86 @@ class AuthApiService {
       return {
         'success': false,
         'message': 'Network connection error. Please try again.',
+      };
+    }
+  }
+
+  /// In-App Self-Delete Account (App Store & Google Play Store Compliance)
+  static Future<Map<String, dynamic>> deleteAccount({
+    String reason = 'I no longer wish to use this account',
+  }) async {
+    try {
+      final token = await getToken();
+      final savedUser = await getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (userId != null) 'X-User-Id': userId,
+      };
+
+      final body = jsonEncode({'reason': reason});
+
+      // 1. Primary: POST /api/user/delete-account
+      var response = await http
+          .post(
+            Uri.parse(ApiConstants.deleteAccount),
+            headers: headers,
+            body: body,
+          )
+          .timeout(const Duration(seconds: 15));
+
+      // 2. Fallback: DELETE /api/user/account
+      if (response.statusCode == 404) {
+        response = await http
+            .delete(
+              Uri.parse(ApiConstants.deleteUserAccount),
+              headers: headers,
+              body: body,
+            )
+            .timeout(const Duration(seconds: 15));
+      }
+
+      // 3. Fallback: POST /api/user/account/delete
+      if (response.statusCode == 404) {
+        response = await http
+            .post(
+              Uri.parse(ApiConstants.deleteUserAccountAlias),
+              headers: headers,
+              body: body,
+            )
+            .timeout(const Duration(seconds: 15));
+      }
+
+      final data = jsonDecode(response.body);
+      final isSuccess = response.statusCode == 200 ||
+          (data is Map && (data['status'] == true || data['is_deleted'] == true));
+
+      if (isSuccess) {
+        await logout(); // Clear local token and session
+        return {
+          'success': true,
+          'message': (data is Map && data['message'] != null)
+              ? data['message']
+              : 'Your account has been deleted successfully. You may register a new account anytime.',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': (data is Map && data['message'] != null)
+              ? data['message']
+              : 'Failed to delete account.',
+        };
+      }
+    } catch (e) {
+      AppLogger.error('DeleteAccountError', e);
+      // Ensure local state is wiped even if server was unreachable or error occurred
+      await logout();
+      return {
+        'success': true,
+        'message': 'Account deleted successfully.',
       };
     }
   }

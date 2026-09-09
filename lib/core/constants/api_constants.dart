@@ -211,6 +211,11 @@ class ApiConstants {
   static String get resellerValidateUser => '$baseUrl/reseller/validate-user';
   static String get resellerTransferCoins => '$baseUrl/reseller/transfer-coins';
 
+  // Account Deletion & Lifecycle Management endpoints
+  static String get deleteAccount => '$baseUrl/user/delete-account';
+  static String get deleteUserAccount => '$baseUrl/user/account';
+  static String get deleteUserAccountAlias => '$baseUrl/user/account/delete';
+
   // User Block & Moderation Report endpoints
   static String get chatBlock => '$baseUrl/chat/block';
   static String get userBlock => '$baseUrl/user/block';
