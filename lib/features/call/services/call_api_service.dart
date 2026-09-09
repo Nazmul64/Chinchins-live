@@ -185,6 +185,18 @@ class CallApiService {
       }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        final bool isBusy = decoded['code'] == 'USER_BUSY' ||
+            decoded['is_busy'] == true ||
+            (decoded['receiver'] is Map && (decoded['receiver'] as Map)['is_busy'] == true);
+        if (isBusy) {
+          return {
+            'success': false,
+            'is_busy': true,
+            'code': 'USER_BUSY',
+            'message': decoded['message'] ?? 'Host is currently busy in another call. Please try again in a few moments.',
+          };
+        }
+
         final String msg = (decoded['message'] ?? '').toString().toLowerCase();
         final bool isLowBalance = decoded['can_call'] == false ||
             decoded['show_recharge_modal'] == true ||
@@ -229,6 +241,18 @@ class CallApiService {
           'message': decoded['message'] ?? 'Call initiated successfully.',
         };
       } else {
+        final bool isBusy = decoded['code'] == 'USER_BUSY' ||
+            decoded['is_busy'] == true ||
+            (decoded['receiver'] is Map && (decoded['receiver'] as Map)['is_busy'] == true);
+        if (isBusy) {
+          return {
+            'success': false,
+            'is_busy': true,
+            'code': 'USER_BUSY',
+            'message': decoded['message'] ?? 'Host is currently busy in another call. Please try again in a few moments.',
+          };
+        }
+
         final String msg = (decoded['message'] ?? '').toString().toLowerCase();
         final bool isLowBalance = response.statusCode == 402 ||
             decoded['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/services/fast_api_client.dart';
+import '../../../core/services/preloader_service.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/services/remote_config_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -48,11 +49,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     final token = await AuthApiService.getToken();
     final savedUser = await AuthApiService.getSavedUser();
 
-    // If authenticated, kick off background session & config sync in parallel immediately
+    // If authenticated, kick off background session & essential preloading in parallel immediately
     if (token != null && token.isNotEmpty) {
       unawaited(AuthApiService.syncSessionInBackground());
-      unawaited(ProfileApiService.preloadHomeFeedInBackground());
-      unawaited(RemoteConfigService.instance.fetchRemoteConfig());
+      PreloaderService.preloadAppEssentials();
     }
 
     // Keep pleasant smooth branded entrance (350ms max)

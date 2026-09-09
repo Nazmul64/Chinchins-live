@@ -328,6 +328,15 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
         profile: AudioProfileType.audioProfileMusicStandard,
         scenario: AudioScenarioType.audioScenarioGameStreaming,
       );
+
+      // 🔊 Enable Acoustic Echo Cancellation (AEC), Noise Suppression (NS), Auto Gain Control (AGC) & OpenSL
+      try {
+        await _engine!.setParameters('{"che.audio.enable.aec": true}');
+        await _engine!.setParameters('{"che.audio.enable.ns": true}');
+        await _engine!.setParameters('{"che.audio.enable.agc": true}');
+        await _engine!.setParameters('{"che.audio.opensl": true}');
+      } catch (_) {}
+
       await _engine!.adjustRecordingSignalVolume(400);
       await _engine!.adjustPlaybackSignalVolume(400);
 

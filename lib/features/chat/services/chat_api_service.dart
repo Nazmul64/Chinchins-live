@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/constants/api_constants.dart';
+import '../../../core/services/fast_api_client.dart';
 import '../../auth/services/auth_api_service.dart';
 
 class ChatApiService {
@@ -23,8 +24,8 @@ class ChatApiService {
     return savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
   }
 
-  /// Get conversations list (Inbox) - Real Dynamic Server Data
-  static Future<Map<String, dynamic>?> getConversations() async {
+  /// Get conversations list (Inbox) - Instant SWR Cached + Network Sync
+  static Future<Map<String, dynamic>?> getConversations({bool forceRefresh = false}) async {
     try {
       final token = await AuthApiService.getToken();
       final currentUserId = await _getCurrentUserId();
@@ -41,6 +42,15 @@ class ChatApiService {
         queryParams['user_id'] = currentUserId;
       }
 
+      // Check fast cache first
+      final cached = FastApiClient.getCachedSync(ApiConstants.messages, queryParams);
+      if (cached is Map && cached['data'] is Map) {
+        final data = cached['data'] as Map<String, dynamic>;
+        if (data['total_unread_badge'] is int) {
+          totalUnreadBadgeNotifier.value = data['total_unread_badge'] as int;
+        }
+      }
+
       final uri = Uri.parse(ApiConstants.messages).replace(
         queryParameters: queryParams.isNotEmpty ? queryParams : null,
       );
@@ -54,11 +64,18 @@ class ChatApiService {
           if (data['total_unread_badge'] is int) {
             totalUnreadBadgeNotifier.value = data['total_unread_badge'] as int;
           }
+          await FastApiClient.putCache(ApiConstants.messages, res, queryParams);
           return data;
         }
       }
     } catch (e) {
       debugPrint('[ChatApiService] getConversations error: $e');
+    }
+
+    // If network fails, return cached copy
+    final fallbackCached = await FastApiClient.getCached(ApiConstants.messages);
+    if (fallbackCached is Map && fallbackCached['data'] is Map) {
+      return fallbackCached['data'] as Map<String, dynamic>;
     }
     return null;
   }

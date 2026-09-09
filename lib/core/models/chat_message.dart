@@ -1,3 +1,5 @@
+import '../utils/date_time_utils.dart';
+
 enum MessageType {
   text,
   introSecret,
@@ -101,19 +103,9 @@ class ChatMessage {
       type = MessageType.image;
     }
 
-    String timeStr = 'Just now';
-    if (json['created_at'] != null) {
-      try {
-        final dt = DateTime.parse(json['created_at'].toString()).toLocal();
-        final h = dt.hour.toString().padLeft(2, '0');
-        final m = dt.minute.toString().padLeft(2, '0');
-        timeStr = '$h:$m';
-      } catch (_) {
-        timeStr = json['time']?.toString() ?? 'Just now';
-      }
-    } else if (json['time'] != null) {
-      timeStr = json['time'].toString();
-    }
+    final rawCreatedAt = json['created_at']?.toString();
+    final rawTime = json['time']?.toString() ?? json['formatted_time']?.toString() ?? json['time_formatted']?.toString();
+    final String timeStr = DateTimeUtils.formatBubbleTime(rawCreatedAt, fallbackTime: rawTime);
 
     final senderObj = json['sender'] is Map<String, dynamic> ? json['sender'] as Map<String, dynamic> : null;
     final senderName = isFromMe
@@ -231,14 +223,21 @@ class ChatThread {
       } else if (msgType == 'voice' || msgType == 'audio') {
         lastMsgPrefix = '[Voice Note]';
       }
-      timeStr = lm['time']?.toString() ?? 'Just now';
+      final rawTime = lm['time_formatted']?.toString() ?? lm['time']?.toString() ?? lm['time_ago']?.toString();
+      final int? minsAgo = lm['minutes_ago'] is int ? lm['minutes_ago'] as int : int.tryParse(lm['minutes_ago']?.toString() ?? '');
       if (lm['created_at'] != null) {
         try {
           lastMsgAt = DateTime.parse(lm['created_at'].toString());
         } catch (_) {}
       }
+      timeStr = DateTimeUtils.formatChatTimestamp(
+        lm['created_at']?.toString(),
+        fallbackTime: rawTime,
+        minutesAgo: minsAgo,
+      );
     } else if (json['last_message'] != null) {
       lastMsgText = json['last_message'].toString();
+      timeStr = DateTimeUtils.cleanRawTimeString(json['time']?.toString() ?? 'Just now');
     }
 
     if (json['updated_at'] != null && lastMsgAt == null) {
