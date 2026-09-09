@@ -282,11 +282,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             );
                           }
                           return Container(
-                            width: 84,
-                            height: 84,
+                            width: 88,
+                            height: 88,
                             decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: AppColors.primaryGradient,
+                              borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
                                   color: AppColors.neonPink.withValues(alpha: 0.45),
@@ -295,11 +294,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ],
                             ),
-                            child: const Center(
-                              child: Icon(
-                                Icons.mic_external_on_rounded,
-                                color: Colors.white,
-                                size: 44,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: Image.asset(
+                                'assets/icon/app_icon.png',
+                                width: 88,
+                                height: 88,
+                                fit: BoxFit.cover,
                               ),
                             ),
                           );

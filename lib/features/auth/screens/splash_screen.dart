@@ -2,8 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/services/fast_api_client.dart';
 import '../../../core/services/preloader_service.dart';
-import '../../../core/services/profile_api_service.dart';
-import '../../../core/services/remote_config_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../navigation/screens/main_navigation_screen.dart';
 import '../services/auth_api_service.dart';
@@ -134,24 +132,25 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 96,
-                      height: 96,
+                      width: 100,
+                      height: 100,
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.neonPink.withValues(alpha: 0.5),
+                            color: AppColors.neonPink.withValues(alpha: 0.4),
                             blurRadius: 32,
-                            spreadRadius: 6,
+                            spreadRadius: 4,
                           ),
                         ],
                       ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.mic_external_on_rounded,
-                          color: Colors.white,
-                          size: 50,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: Image.asset(
+                          'assets/icon/app_icon.png',
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
                         ),
                       ),
                     ),
