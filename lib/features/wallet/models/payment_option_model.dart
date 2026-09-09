@@ -30,6 +30,29 @@ class PaymentOption {
   bool get isGateway => type == 'gateway';
 
   factory PaymentOption.fromJson(Map<String, dynamic> json) {
+    String? rawIcon = json['icon_url']?.toString() ??
+        json['svg_url']?.toString() ??
+        json['png_url']?.toString() ??
+        json['icon']?.toString() ??
+        json['logo']?.toString() ??
+        json['logo_url']?.toString() ??
+        json['image']?.toString() ??
+        json['image_url']?.toString() ??
+        json['gateway_icon']?.toString() ??
+        json['icon_path']?.toString();
+
+    if (rawIcon != null && rawIcon.isNotEmpty) {
+      if (!rawIcon.startsWith('http://') &&
+          !rawIcon.startsWith('https://') &&
+          !rawIcon.startsWith('assets/')) {
+        if (rawIcon.startsWith('/')) {
+          rawIcon = 'https://chinchins.live$rawIcon';
+        } else {
+          rawIcon = 'https://chinchins.live/$rawIcon';
+        }
+      }
+    }
+
     return PaymentOption(
       id: json['id'] ?? json['key'] ?? 'unknown',
       key: json['key']?.toString().toLowerCase() ?? 'gateway',
@@ -37,7 +60,7 @@ class PaymentOption {
       type: json['type']?.toString().toLowerCase() ?? 'gateway',
       accountType: json['account_type']?.toString(),
       accountNumber: json['account_number']?.toString(),
-      icon: json['icon']?.toString(),
+      icon: rawIcon,
       badge: json['badge']?.toString(),
       badgeColor: json['badge_color']?.toString(),
       activeCount: json['active_count'] is int ? json['active_count'] : int.tryParse('${json['active_count']}'),

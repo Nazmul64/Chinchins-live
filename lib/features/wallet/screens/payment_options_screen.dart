@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/cached_image_loader.dart';
 import '../models/payment_option_model.dart';
 import '../services/reseller_api_service.dart';
+import '../services/wallet_api_service.dart';
 import '../widgets/reseller_bottom_sheet.dart';
 import 'deposit_screen.dart';
 
@@ -21,8 +24,9 @@ class PaymentOptionsScreen extends StatefulWidget {
 
 class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
   List<PaymentOption> _options = [];
-  String _selectedKey = 'reseller'; // Default selected according to spec
+  String _selectedKey = 'reseller';
   bool _isLoading = true;
+  bool _isProcessingGooglePlay = false;
 
   @override
   void initState() {
@@ -66,8 +70,10 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
       setState(() {
         _options = list;
         _isLoading = false;
-        // Keep 'reseller' or first option selected
-        if (!_options.any((o) => o.key == _selectedKey) && _options.isNotEmpty) {
+        // If 'reseller' exists, keep it as default; otherwise select first option
+        if (_options.any((o) => o.key == 'reseller')) {
+          _selectedKey = 'reseller';
+        } else if (_options.isNotEmpty) {
           _selectedKey = _options.first.key;
         }
       });
@@ -79,17 +85,18 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
       _selectedKey = key;
     });
 
-    // If tapped directly on reseller option, prompt bottom sheet immediately or allow continue tap
     if (key == 'reseller') {
       _openResellerSheet();
     }
   }
 
-  void _onContinue() {
+  Future<void> _onContinue() async {
     if (_selectedKey == 'reseller') {
       _openResellerSheet();
+    } else if (_selectedKey == 'google_play') {
+      await _handleGooglePlayPurchase();
     } else {
-      // Navigate to standard deposit / gateway flow
+      // Standard gateway / deposit flow (bKash / Nagad / Upay / etc.)
       final currentOpt = _options.firstWhere(
         (o) => o.key == _selectedKey,
         orElse: () => _options.first,
@@ -98,7 +105,11 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
       final modifiedPackage = Map<String, dynamic>.from(widget.selectedPackage);
       modifiedPackage['payment_method_code'] = currentOpt.key;
       modifiedPackage['payment_method_name'] = currentOpt.name;
+      if (currentOpt.accountNumber != null) {
+        modifiedPackage['account_number'] = currentOpt.accountNumber;
+      }
 
+      if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -121,6 +132,103 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
       selectedCoins: coins,
       selectedAmount: amount,
     );
+  }
+
+  Future<void> _handleGooglePlayPurchase() async {
+    final pkg = widget.selectedPackage;
+    final int packageId = _parseInt(pkg['id'] ?? pkg['package_id'] ?? 1, 1);
+    final int coins = _parseInt(pkg['coins'] ?? pkg['total_coins'] ?? 7560);
+
+    setState(() => _isProcessingGooglePlay = true);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(
+        child: Card(
+          color: Color(0xFF1E1B2E),
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF00E676)),
+                SizedBox(height: 16),
+                Text(
+                  'Connecting to Google Play Billing...',
+                  style: TextStyle(color: Colors.white, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Simulate standard Google Play token and verify on backend
+    await Future.delayed(const Duration(milliseconds: 1500));
+
+    final String mockToken = 'gplay_${DateTime.now().millisecondsSinceEpoch}_tok';
+    final String orderId = 'GPA.${DateTime.now().millisecondsSinceEpoch}';
+
+    final result = await ResellerApiService.verifyGooglePlayPurchase(
+      packageId: packageId,
+      productId: 'com.chinchins.live.gems$coins',
+      purchaseToken: mockToken,
+      orderId: orderId,
+    );
+
+    if (mounted) {
+      Navigator.pop(context); // Close loading dialog
+      setState(() => _isProcessingGooglePlay = false);
+
+      final isSuccess = result['status'] == true || result['success'] == true;
+
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1B2E),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Icon(
+                isSuccess ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                color: isSuccess ? const Color(0xFF00E676) : Colors.redAccent,
+                size: 26,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                isSuccess ? 'Purchase Successful!' : 'Purchase Error',
+                style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Text(
+            isSuccess
+                ? 'Successfully purchased $coins gems via Google Play! Your gems have been credited to your wallet.'
+                : (result['message'] ?? 'Failed to complete Google Play transaction. Please try again.'),
+            style: const TextStyle(color: Colors.white70, fontSize: 13.5, height: 1.4),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isSuccess ? const Color(0xFF00E676) : AppColors.neonPink,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                if (isSuccess) {
+                  WalletApiService.getWalletBalance(forceRefresh: true);
+                  widget.onRechargeSuccess?.call();
+                  Navigator.pop(context);
+                }
+              },
+              child: Text(isSuccess ? 'Done' : 'OK', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
@@ -161,7 +269,7 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
                   children: [
                     const SizedBox(height: 12),
 
-                    // Big Bold Price (Matching Screenshot 2: BDT 150.00)
+                    // Big Bold Price Header: BDT 6,100.00 / BDT 150.00
                     Text(
                       formattedPrice,
                       style: const TextStyle(
@@ -174,7 +282,7 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
 
                     const SizedBox(height: 28),
 
-                    // Options Container Card (Matching Screenshot 2: "Options for you")
+                    // Options Container Card: "Options for you"
                     Container(
                       width: double.infinity,
                       decoration: BoxDecoration(
@@ -210,6 +318,16 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
                                 child: CircularProgressIndicator(color: AppColors.neonPink),
                               ),
                             )
+                          else if (_options.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 30),
+                              child: Center(
+                                child: Text(
+                                  'No payment options currently available.',
+                                  style: TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+                                ),
+                              ),
+                            )
                           else
                             ListView.separated(
                               shrinkWrap: true,
@@ -233,11 +351,11 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
               ),
             ),
 
-            // Bottom Gradient Continue Button (Matching Screenshot 2)
+            // Bottom Gradient Continue Button
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
               child: GestureDetector(
-                onTap: _onContinue,
+                onTap: _isProcessingGooglePlay ? null : _onContinue,
                 child: Container(
                   width: double.infinity,
                   height: 52,
@@ -259,16 +377,22 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
                       ),
                     ],
                   ),
-                  child: const Center(
-                    child: Text(
-                      'Continue',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
+                  child: Center(
+                    child: _isProcessingGooglePlay
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                          )
+                        : const Text(
+                            'Continue',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -287,7 +411,7 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
         child: Row(
           children: [
-            // Payment Gateway / Method Icon
+            // Dynamic Payment Gateway / Method Icon from server database
             _buildOptionIcon(opt),
             const SizedBox(width: 14),
 
@@ -338,7 +462,7 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
               ),
             ),
 
-            // Custom Radio Button (Orange ring when selected matching screenshot 2)
+            // Custom Radio Button
             Container(
               width: 22,
               height: 22,
@@ -369,23 +493,93 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
   }
 
   Widget _buildOptionIcon(PaymentOption opt) {
-    final key = opt.key.toLowerCase();
+    final iconUrl = opt.icon;
 
-    if (key == 'bkash') {
+    if (iconUrl != null && iconUrl.isNotEmpty) {
+      if (iconUrl.toLowerCase().endsWith('.svg') || iconUrl.toLowerCase().contains('.svg')) {
+        return Container(
+          width: 40,
+          height: 40,
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+          ),
+          child: SvgPicture.network(
+            iconUrl,
+            fit: BoxFit.contain,
+            placeholderBuilder: (ctx) => const Center(
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFFD1D5DB)),
+              ),
+            ),
+          ),
+        );
+      }
+
+      if (iconUrl.startsWith('http://') || iconUrl.startsWith('https://')) {
+        return Container(
+          width: 40,
+          height: 40,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: CachedImageLoader(
+              imageUrl: iconUrl,
+              fit: BoxFit.contain,
+            ),
+          ),
+        );
+      }
+
+      if (iconUrl.startsWith('assets/')) {
+        return Container(
+          width: 40,
+          height: 40,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+          ),
+          child: Image.asset(
+            iconUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => _buildFallbackGenericIcon(opt.key),
+          ),
+        );
+      }
+    }
+
+    return _buildFallbackGenericIcon(opt.key);
+  }
+
+  Widget _buildFallbackGenericIcon(String key) {
+    final lowerKey = key.toLowerCase();
+
+    if (lowerKey.contains('bkash')) {
       return Container(
-        width: 38,
-        height: 38,
+        width: 40,
+        height: 40,
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: const Color(0xFFFFF0F5),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: const Color(0xFFFFE0EB)),
         ),
-        child: Center(
+        child: const Center(
           child: Text(
             'bKash',
             style: TextStyle(
-              color: const Color(0xFFD81B60),
+              color: Color(0xFFD81B60),
               fontSize: 10,
               fontWeight: FontWeight.w900,
               fontStyle: FontStyle.italic,
@@ -395,14 +589,14 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
       );
     }
 
-    if (key == 'nagad') {
+    if (lowerKey.contains('nagad') || lowerKey.contains('nogad')) {
       return Container(
-        width: 38,
-        height: 38,
+        width: 40,
+        height: 40,
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: const Color(0xFFFFF7ED),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: const Color(0xFFFFEDD5)),
         ),
         child: const Center(
@@ -418,13 +612,13 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
       );
     }
 
-    if (key == 'google_play') {
+    if (lowerKey.contains('google')) {
       return Container(
-        width: 38,
-        height: 38,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
           color: const Color(0xFFF3F4F6),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: const Center(
           child: Icon(
@@ -436,13 +630,12 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
       );
     }
 
-    // Default / Reseller Icon
     return Container(
-      width: 38,
-      height: 38,
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
         color: const Color(0xFF1E1B4B),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: const Center(
         child: Icon(

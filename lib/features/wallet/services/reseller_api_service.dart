@@ -12,7 +12,7 @@ class ResellerApiService {
   static List<PaymentOption> _cachedOptions = [];
   static List<ResellerModel> _cachedResellers = [];
 
-  /// 1. Get Payment Options (bKash, Nagad, Google Play, Reseller Up To 29%↑)
+  /// 1. Get Payment Options (bKash, Nagad, Google Play, Dynamic Resellers)
   static Future<List<PaymentOption>> getPaymentOptions({
     int? packageId,
     double? amount,
@@ -35,7 +35,7 @@ class ResellerApiService {
       return liveOptions;
     }
 
-    return _getDefaultPaymentOptionsFallback();
+    return _cachedOptions.isNotEmpty ? _cachedOptions : _getDefaultPaymentOptionsFallback();
   }
 
   static Future<List<PaymentOption>> _syncPaymentOptionsInBackground(Map<String, String> queryParams) async {
@@ -44,27 +44,122 @@ class ResellerApiService {
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      Uri uri = Uri.parse(ApiConstants.paymentOptions);
-      if (queryParams.isNotEmpty) {
-        uri = uri.replace(queryParameters: queryParams);
-      }
-
       final headers = <String, String>{
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
         if (userId != null) 'X-User-Id': userId,
       };
 
-      final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 6));
+      // 1. Check if active resellers exist in database
+      final activeResellers = await getResellers(
+        coins: queryParams['coins'] != null ? int.tryParse(queryParams['coins']!) : null,
+        forceRefresh: true,
+      );
+
+      // 2. Try primary /api/payment-options endpoint
+      Uri uri = Uri.parse(ApiConstants.paymentOptions);
+      if (queryParams.isNotEmpty) {
+        uri = uri.replace(queryParameters: queryParams);
+      }
+
+      var response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 6));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['options'] is List) {
-          final list = (decoded['options'] as List)
+        List? rawList;
+        if (decoded is Map) {
+          if (decoded['options'] is List) {
+            rawList = decoded['options'] as List;
+          } else if (decoded['data'] is List) {
+            rawList = decoded['data'] as List;
+          }
+        } else if (decoded is List) {
+          rawList = decoded;
+        }
+
+        if (rawList != null && rawList.isNotEmpty) {
+          final list = rawList
               .map((e) => PaymentOption.fromJson(Map<String, dynamic>.from(e)))
               .toList();
+
+          // Dynamic Reseller filter: If no active resellers in DB, omit reseller option
+          if (activeResellers.isEmpty) {
+            list.removeWhere((o) => o.isReseller);
+          }
+
           if (list.isNotEmpty) {
             _cachedOptions = list;
+            return _cachedOptions;
+          }
+        }
+      }
+
+      // 3. Fallback / Alternative: Fetch direct from admin Payment Gateways (/api/payment-methods)
+      final pmResponse = await http
+          .get(Uri.parse(ApiConstants.paymentMethods), headers: headers)
+          .timeout(const Duration(seconds: 6));
+
+      if (pmResponse.statusCode == 200) {
+        final pmDecoded = jsonDecode(pmResponse.body);
+        List? gateways;
+        if (pmDecoded is Map && pmDecoded['data'] is List) {
+          gateways = pmDecoded['data'] as List;
+        } else if (pmDecoded is List) {
+          gateways = pmDecoded;
+        }
+
+        if (gateways != null && gateways.isNotEmpty) {
+          final List<PaymentOption> builtOptions = [];
+
+          for (final g in gateways) {
+            if (g is Map) {
+              final isEnabled = g['is_active'] == true ||
+                  g['is_active'] == 1 ||
+                  g['status'] == 'active' ||
+                  g['status'] == 1 ||
+                  g['enabled'] == true;
+              if (isEnabled || g['is_active'] == null) {
+                builtOptions.add(PaymentOption.fromJson(Map<String, dynamic>.from(g)));
+              }
+            }
+          }
+
+          // Append Google Play option
+          builtOptions.add(
+            const PaymentOption(
+              id: 'google_play',
+              key: 'google_play',
+              name: 'Google Play',
+              type: 'in_app_purchase',
+              accountType: 'Official In-App Store',
+              icon: 'https://chinchins.live/uploads/payment_methods/google_play.svg',
+              badge: null,
+              instructions: 'Instant Google Play in-app purchase.',
+            ),
+          );
+
+          // Append Reseller option only if active resellers exist in DB
+          if (activeResellers.isNotEmpty) {
+            builtOptions.add(
+              PaymentOption(
+                id: 'reseller',
+                key: 'reseller',
+                name: 'Reseller',
+                type: 'reseller',
+                accountType: 'Direct Agent Chat',
+                icon: 'https://chinchins.live/uploads/payment_methods/reseller.svg',
+                badge: activeResellers.first.discountTag.isNotEmpty
+                    ? activeResellers.first.discountTag
+                    : 'Up To 29%↑',
+                badgeColor: '#ef4444',
+                activeCount: activeResellers.length,
+                instructions: 'Recharge via authorized live resellers with exclusive discounts.',
+              ),
+            );
+          }
+
+          if (builtOptions.isNotEmpty) {
+            _cachedOptions = builtOptions;
             return _cachedOptions;
           }
         }
@@ -80,24 +175,24 @@ class ResellerApiService {
       const PaymentOption(
         id: 1,
         key: 'bkash',
-        name: 'Bkash',
+        name: 'bkash',
         type: 'gateway',
-        accountType: 'Personal / Merchant',
-        accountNumber: '01706640864',
-        icon: 'assets/images/gateways/bkash.png',
+        accountType: 'Personal',
+        accountNumber: '01706640777',
+        icon: 'https://chinchins.live/uploads/payment_methods/bkash.svg',
         badge: null,
-        instructions: 'Send money to our bKash number.',
+        instructions: 'Send money to our bKash Personal Number: 01706640777.',
       ),
       const PaymentOption(
         id: 2,
         key: 'nagad',
         name: 'Nagad',
         type: 'gateway',
-        accountType: 'Personal / Merchant',
-        accountNumber: '01706640864',
-        icon: 'assets/images/gateways/nagad.png',
+        accountType: 'Personal',
+        accountNumber: '01706640777',
+        icon: 'https://chinchins.live/uploads/payment_methods/nagad.svg',
         badge: null,
-        instructions: 'Send money to our Nagad number.',
+        instructions: 'Send money to our Nagad Personal Number: 01706640777.',
       ),
       const PaymentOption(
         id: 'google_play',
@@ -105,26 +200,14 @@ class ResellerApiService {
         name: 'Google Play',
         type: 'in_app_purchase',
         accountType: 'Official In-App Store',
-        icon: 'https://upload.wikimedia.org/wikipedia/commons/7/7a/Google_Play_2022_logo.svg',
+        icon: 'https://chinchins.live/uploads/payment_methods/google_play.svg',
         badge: null,
         instructions: 'Instant Google Play in-app purchase.',
-      ),
-      const PaymentOption(
-        id: 'reseller',
-        key: 'reseller',
-        name: 'Reseller',
-        type: 'reseller',
-        accountType: 'Direct Agent Chat',
-        icon: 'https://ui-avatars.com/api/?name=Reseller&background=1e1b4b&color=fbbf24&bold=true',
-        badge: 'Up To 29%↑',
-        badgeColor: '#ef4444',
-        activeCount: 3,
-        instructions: 'Recharge via authorized live resellers with exclusive discounts.',
       ),
     ];
   }
 
-  /// 2. Get Authorized Resellers List
+  /// 2. Get Authorized Resellers List (100% Dynamic from Database)
   static Future<List<ResellerModel>> getResellers({int? coins, bool forceRefresh = false}) async {
     final queryParams = <String, String>{
       if (coins != null) 'coins': coins.toString(),
@@ -136,11 +219,7 @@ class ResellerApiService {
     }
 
     final liveList = await _syncResellersInBackground(queryParams);
-    if (liveList.isNotEmpty) {
-      return liveList;
-    }
-
-    return _getDefaultResellersFallback();
+    return liveList;
   }
 
   static Future<List<ResellerModel>> _syncResellersInBackground(Map<String, String> queryParams) async {
@@ -168,42 +247,14 @@ class ResellerApiService {
           final list = (decoded['data'] as List)
               .map((e) => ResellerModel.fromJson(Map<String, dynamic>.from(e)))
               .toList();
-          if (list.isNotEmpty) {
-            _cachedResellers = list;
-            return _cachedResellers;
-          }
+          _cachedResellers = list;
+          return list;
         }
       }
     } catch (e, st) {
       AppLogger.error('ResellersSyncError', e, st);
     }
-    return _cachedResellers.isNotEmpty ? _cachedResellers : _getDefaultResellersFallback();
-  }
-
-  static List<ResellerModel> _getDefaultResellersFallback() {
-    return [
-      const ResellerModel(
-        id: 1,
-        resellerId: '595082249',
-        name: 'MURAD COINS RESELLER',
-        avatar: 'https://chinchins.live/uploads/reseller/murad_avatar.jpg',
-        avatarUrl: 'https://chinchins.live/uploads/reseller/murad_avatar.jpg',
-        level: 'Lv5',
-        location: 'Dhaka, Bangladesh',
-        age: 27,
-        gender: 'male',
-        phone: '01848340232',
-        bio: 'কয়েন রিচার্জ, হোস্টিং এবং বিভিন্ন ধরণের গিফট ক্রয় করা হয়\nযোগাযোগ ০১৮৪৮৩৪০২৩২\nহোস্টিং স্যালারি তুলনামূলক বেশি দেওয়া হয়\nঅনেক কথা বলা\nমানুষটা যদি হঠাৎ চুপ হয়ে যায়,\nবুঝে নিও আঘাতটা অনেক গভীরে লেগেছে।',
-        discountTag: 'Up To 29%↑',
-        badgeTitle: 'Diamond Reseller',
-        sales: 15549000,
-        formattedSales: '💎 15,549,000',
-        successRate: '91.79%',
-        isOnline: true,
-        statusText: 'Online',
-        prefillMessage: 'Hello! My user ID is 266813634. I want to recharge 7560 gems. How much should I pay? 【GIVE THE BEST DISCOUNT 💎DIAMOND💎】',
-      ),
-    ];
+    return _cachedResellers;
   }
 
   /// 3. Fetch 1-on-1 Chat History with Reseller
@@ -392,5 +443,52 @@ class ResellerApiService {
       return {'status': false, 'message': 'Connection error: ${e.toString()}'};
     }
     return {'status': false, 'message': 'Unknown error occurred'};
+  }
+
+  /// 8. Verify Google Play In-App Purchase and Credit Coins
+  static Future<Map<String, dynamic>> verifyGooglePlayPurchase({
+    required int packageId,
+    required String productId,
+    required String purchaseToken,
+    String? orderId,
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (userId != null) 'X-User-Id': userId,
+      };
+
+      final payload = jsonEncode({
+        'package_id': packageId,
+        'product_id': productId,
+        'purchase_token': purchaseToken,
+        if (orderId != null) 'order_id': orderId,
+      });
+
+      var response = await http
+          .post(Uri.parse(ApiConstants.googlePlayVerify), headers: headers, body: payload)
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 404) {
+        response = await http
+            .post(Uri.parse(ApiConstants.googlePlayVerifyAlias), headers: headers, body: payload)
+            .timeout(const Duration(seconds: 15));
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (e, st) {
+      AppLogger.error('GooglePlayVerifyError', e, st);
+      return {'status': false, 'message': 'Connection error: ${e.toString()}'};
+    }
+    return {'status': false, 'message': 'Failed to verify Google Play purchase'};
   }
 }

@@ -216,6 +216,10 @@ class ApiConstants {
   static String get deleteUserAccount => '$baseUrl/user/account';
   static String get deleteUserAccountAlias => '$baseUrl/user/account/delete';
 
+  // Google Play In-App Purchase Endpoints
+  static String get googlePlayVerify => '$baseUrl/payment/google-play/verify';
+  static String get googlePlayVerifyAlias => '$baseUrl/google-play/verify-purchase';
+
   // User Block & Moderation Report endpoints
   static String get chatBlock => '$baseUrl/chat/block';
   static String get userBlock => '$baseUrl/user/block';

@@ -43,8 +43,7 @@ class _ResellerChatScreenState extends State<ResellerChatScreen> {
   Timer? _recordTimer;
   Timer? _pollingTimer;
 
-  Map<String, dynamic>? _currentUser;
-  String _userAccountId = '266813634';
+  String _userAccountId = '';
   String? _userAvatarUrl;
 
   @override
@@ -68,10 +67,9 @@ class _ResellerChatScreenState extends State<ResellerChatScreen> {
       final user = await AuthApiService.getSavedUser();
       if (user != null && mounted) {
         setState(() {
-          _currentUser = user;
           _userAccountId = user['account_id']?.toString() ??
               user['id']?.toString() ??
-              '266813634';
+              '';
           _userAvatarUrl = user['avatar_url']?.toString() ??
               user['avatar']?.toString() ??
               user['profile_photo_url']?.toString();
@@ -81,8 +79,9 @@ class _ResellerChatScreenState extends State<ResellerChatScreen> {
 
     // Generate standard pre-fill message if input is currently empty
     final coins = widget.requestedCoins;
+    final userTag = _userAccountId.isNotEmpty ? _userAccountId : 'User';
     final defaultPrefill = widget.initialPrefillMessage ??
-        'Hello! My user ID is $_userAccountId. I want to recharge $coins gems. How much should I pay? 【GIVE THE BEST DISCOUNT 💎DIAMOND💎】';
+        'Hello! My user ID is $userTag. I want to recharge $coins gems. How much should I pay? 【GIVE THE BEST DISCOUNT 💎DIAMOND💎】';
 
     if (_messageController.text.isEmpty) {
       _messageController.text = defaultPrefill;
@@ -520,11 +519,9 @@ class _ResellerChatScreenState extends State<ResellerChatScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Reseller Title: MURAD ࿐ C🅾️INS RESELLER 💰
+          // Reseller Name from Server Database
           Text(
-            reseller.name.contains('RESELLER')
-                ? reseller.name
-                : '${reseller.name} 💰',
+            reseller.name,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 15,
@@ -534,93 +531,98 @@ class _ResellerChatScreenState extends State<ResellerChatScreen> {
           ),
           const SizedBox(height: 8),
 
-          // Badges Row: [👑 Lv5] [📍 Dhaka] [♂ 27]
+          // Badges Row: [👑 Level] [📍 Location] [♂ / ♀ Age]
           Wrap(
             spacing: 6,
             runSpacing: 4,
             children: [
-              // Lv5 Badge (Purple)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF7C3AED), Color(0xFF9333EA)],
+              // Level Badge (Purple)
+              if (reseller.level.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF7C3AED), Color(0xFF9333EA)],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.military_tech_rounded, color: Colors.white, size: 12),
-                    const SizedBox(width: 2),
-                    Text(
-                      reseller.level,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.bold,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.military_tech_rounded, color: Colors.white, size: 12),
+                      const SizedBox(width: 2),
+                      Text(
+                        reseller.level,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
-              // Dhaka Location Badge (Teal)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0D9488),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.location_on_rounded, color: Colors.white, size: 12),
-                    const SizedBox(width: 2),
-                    Text(
-                      reseller.location.split(',').first,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.bold,
+              // Location Badge (Teal)
+              if (reseller.location.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D9488),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.location_on_rounded, color: Colors.white, size: 12),
+                      const SizedBox(width: 2),
+                      Text(
+                        reseller.location.split(',').first,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
               // Gender & Age Badge (Cyan / Blue)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0284C7),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      reseller.gender == 'male' ? Icons.male_rounded : Icons.female_rounded,
-                      color: Colors.white,
-                      size: 13,
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
-                      '${reseller.age}',
-                      style: const TextStyle(
+              if (reseller.age > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0284C7),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        reseller.gender.toLowerCase() == 'female'
+                            ? Icons.female_rounded
+                            : Icons.male_rounded,
                         color: Colors.white,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.bold,
+                        size: 13,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 2),
+                      Text(
+                        '${reseller.age}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 12),
 
-          // Reseller Golden Diamond Cards
+          // Dynamic Reseller Badge & Profile Cards
           Row(
             children: [
               Container(
@@ -631,41 +633,58 @@ class _ResellerChatScreenState extends State<ResellerChatScreen> {
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: const Color(0xFFFFD54F).withValues(alpha: 0.6)),
                 ),
-                child: const Center(
-                  child: Icon(Icons.diamond_rounded, color: Color(0xFFFFD54F), size: 30),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: reseller.avatarUrl.isNotEmpty
+                      ? CachedImageLoader(
+                          imageUrl: reseller.avatarUrl,
+                          fit: BoxFit.cover,
+                        )
+                      : const Center(
+                          child: Icon(Icons.diamond_rounded, color: Color(0xFFFFD54F), size: 30),
+                        ),
                 ),
               ),
               const SizedBox(width: 8),
               Container(
-                width: 58,
+                width: 78,
                 height: 58,
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E1428),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: const Color(0xFFFFC107).withValues(alpha: 0.8)),
                 ),
-                child: const Column(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('মুরাদ', style: TextStyle(color: Color(0xFFFFD54F), fontSize: 10, fontWeight: FontWeight.bold)),
-                    Text('কয়েন সেলার', style: TextStyle(color: Colors.white, fontSize: 8)),
+                    const Icon(Icons.verified_rounded, color: Color(0xFFFFD54F), size: 18),
+                    const SizedBox(height: 2),
+                    Text(
+                      reseller.badgeTitle.isNotEmpty ? reseller.badgeTitle : 'Reseller',
+                      style: const TextStyle(color: Color(0xFFFFD54F), fontSize: 9, fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
 
-          // Reseller Bengali Bio / Terms Text (Matching Screenshot 4)
-          Text(
-            reseller.bio,
-            style: const TextStyle(
-              color: Color(0xFFE2E8F0),
-              fontSize: 12,
-              height: 1.45,
-              fontWeight: FontWeight.w400,
+          // Dynamic Reseller Bio / Terms from Server Database
+          if (reseller.bio.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              reseller.bio,
+              style: const TextStyle(
+                color: Color(0xFFE2E8F0),
+                fontSize: 12,
+                height: 1.45,
+                fontWeight: FontWeight.w400,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
