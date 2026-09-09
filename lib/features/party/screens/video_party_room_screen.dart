@@ -1,13 +1,18 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/models/group_room.dart';
 import '../../../core/models/live_gift_event.dart';
+import '../../../core/services/party_room_api_service.dart';
 import '../../../core/services/live_gift_reverb_service.dart';
 import '../../../core/widgets/live_gift_animation_overlay.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
+import '../widgets/invite_guests_modal.dart';
 import '../../chat/widgets/gift_picker_modal.dart';
-import '../../../core/data/mock_data.dart';
+import '../../auth/services/auth_api_service.dart';
+import '../../wallet/screens/wallet_screen.dart';
 
 class VideoPartyRoomScreen extends StatefulWidget {
   final GroupPartyRoom room;
@@ -23,88 +28,310 @@ class VideoPartyRoomScreen extends StatefulWidget {
 
 class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
   final GlobalKey<State<LiveGiftAnimationOverlay>> _giftOverlayKey = GlobalKey();
+  final ImagePicker _picker = ImagePicker();
+
+  late GroupPartyRoom _currentRoom;
   late List<RoomSeat> _videoSeats;
-  final List<String> _chatMessages = [];
+  final List<PartyRoomMessage> _chatMessages = [];
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+
   bool _isMyMicMuted = false;
   bool _isMyCameraOff = false;
-  Timer? _chatTimer;
+  bool _amIOnSeat = false;
+  int? _mySeatIndex;
+  bool _isHost = false;
+  String? _myUserId;
+  String? _myUserName;
+  String? _myUserAvatar;
+
+  Timer? _pollingTimer;
+  Timer? _billingTimer;
 
   @override
   void initState() {
     super.initState();
+    _currentRoom = widget.room;
     _videoSeats = List.from(widget.room.seats);
-    _chatMessages.addAll([
-      '📢 Welcome to ${widget.room.title}!',
-      '🔥 Habiba: Hey everyone! Join our live multi-guest video chat!',
-      '✨ Ruhi: Sending love to everyone watching ❤️',
-    ]);
 
-    // 1. Subscribe to Laravel Reverb WebSocket live-stream.{streamId} channel
+    while (_videoSeats.length < 6) {
+      _videoSeats.add(RoomSeat(seatIndex: _videoSeats.length));
+    }
+
+    _initUserData();
+    _joinRoom();
+    _loadMessages();
+
+    // 1. Subscribe to Live Gift Channel
     LiveGiftReverbService().subscribeToLiveRoom(
       streamId: widget.room.id,
       onGiftReceived: (giftEvent) {
         if (mounted) {
           (_giftOverlayKey.currentState as dynamic)?.playGift(giftEvent);
           setState(() {
-            _chatMessages.add('🎁 ${giftEvent.senderName} sent ${giftEvent.giftName}! (💎 ${giftEvent.coinsSpent})');
+            _chatMessages.add(PartyRoomMessage(
+              id: DateTime.now().millisecondsSinceEpoch,
+              roomId: widget.room.id,
+              type: 'gift',
+              message: '🎁 ${giftEvent.senderName} sent ${giftEvent.giftName}! (💎 ${giftEvent.coinsSpent})',
+              createdAt: DateTime.now(),
+            ));
           });
           _scrollToBottom();
         }
       },
     );
 
-    _chatTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (mounted) {
-        final messages = [
-          '🌹 Prince Alex sent 500 💎 to Host',
-          '💬 User_88: Everyone looking so beautiful today!',
-          '✨ King_BD: Hello Habiba and Ruhi!',
-          '🎁 Guest_31 sent a Fire Dragon 🐉',
-        ];
-        setState(() {
-          _chatMessages.add(messages[timer.tick % messages.length]);
-        });
-        _scrollToBottom();
-      }
+    // 2. Poll room state every 6 seconds
+    _pollingTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+      _refreshRoom();
     });
+
+    // 3. 50/50 Revenue Billing Timer
+    _billingTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      _runMinuteBilling();
+    });
+  }
+
+  Future<void> _initUserData() async {
+    final user = await AuthApiService.getSavedUser();
+    if (user != null && mounted) {
+      final uid = user['id']?.toString() ?? '';
+      setState(() {
+        _myUserId = uid;
+        _myUserName = user['name']?.toString() ?? user['nickname']?.toString() ?? 'You';
+        _myUserAvatar = user['avatar_url']?.toString() ?? user['avatar']?.toString() ?? '';
+        _isHost = (_currentRoom.hostId == uid) || (_currentRoom.seats.isNotEmpty && _currentRoom.seats.first.userId == uid);
+
+        final mySeat = _videoSeats.indexWhere((s) => s.userId == uid);
+        if (mySeat != -1) {
+          _amIOnSeat = true;
+          _mySeatIndex = mySeat;
+        }
+      });
+    }
+  }
+
+  Future<void> _joinRoom() async {
+    await PartyRoomApiService.joinRoom(widget.room.id);
+  }
+
+  Future<void> _loadMessages() async {
+    final msgs = await PartyRoomApiService.getMessages(widget.room.id);
+    if (mounted && msgs.isNotEmpty) {
+      setState(() {
+        _chatMessages.clear();
+        _chatMessages.addAll(msgs);
+      });
+      _scrollToBottom();
+    } else if (mounted && _chatMessages.isEmpty) {
+      setState(() {
+        _chatMessages.add(PartyRoomMessage(
+          id: 1,
+          roomId: widget.room.id,
+          type: 'system',
+          message: widget.room.announcement ?? '📢 Welcome to ${widget.room.title}! Live video party is on!',
+          createdAt: DateTime.now(),
+        ));
+      });
+    }
+  }
+
+  Future<void> _refreshRoom() async {
+    final updated = await PartyRoomApiService.getPartyRoomDetails(widget.room.id);
+    if (updated != null && mounted) {
+      setState(() {
+        _currentRoom = updated;
+        _videoSeats = List.from(updated.seats);
+        while (_videoSeats.length < 6) {
+          _videoSeats.add(RoomSeat(seatIndex: _videoSeats.length));
+        }
+
+        if (_myUserId != null) {
+          final mySeat = _videoSeats.indexWhere((s) => s.userId == _myUserId);
+          if (mySeat != -1) {
+            _amIOnSeat = true;
+            _mySeatIndex = mySeat;
+          } else if (!_isHost) {
+            _amIOnSeat = false;
+            _mySeatIndex = null;
+          }
+        }
+      });
+    }
+  }
+
+  Future<void> _runMinuteBilling() async {
+    if (_amIOnSeat && !_isHost) {
+      final res = await PartyRoomApiService.deductInterval(widget.room.id, minutes: 1);
+      if (res['insufficient_balance'] == true || res['evicted_from_seat'] == true) {
+        if (mounted) {
+          setState(() {
+            if (_mySeatIndex != null && _mySeatIndex! < _videoSeats.length) {
+              _videoSeats[_mySeatIndex!] = RoomSeat(seatIndex: _mySeatIndex!);
+            }
+            _amIOnSeat = false;
+            _mySeatIndex = null;
+            _chatMessages.add(PartyRoomMessage(
+              id: DateTime.now().millisecondsSinceEpoch,
+              roomId: widget.room.id,
+              type: 'system',
+              message: '⚠️ Your coin balance is low (100 coins/min). You have been moved to audience.',
+              createdAt: DateTime.now(),
+            ));
+          });
+          _scrollToBottom();
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Low balance! Moved to audience. Please top up gems.'),
+              backgroundColor: const Color(0xFFFF1744),
+              action: SnackBarAction(
+                label: 'Top Up',
+                textColor: Colors.white,
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const WalletScreen()),
+                ),
+              ),
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
   void dispose() {
     LiveGiftReverbService().unsubscribeFromLiveRoom(widget.room.id);
-    _chatTimer?.cancel();
+    _pollingTimer?.cancel();
+    _billingTimer?.cancel();
     _chatController.dispose();
     _scrollController.dispose();
+
+    if (_isHost) {
+      PartyRoomApiService.endRoom(widget.room.id);
+    } else {
+      PartyRoomApiService.leaveRoom(widget.room.id);
+    }
+
     super.dispose();
   }
 
   void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent + 60,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
-  void _sendChat() {
+  Future<void> _sendChat() async {
     final text = _chatController.text.trim();
     if (text.isEmpty) return;
 
-    setState(() {
-      _chatMessages.add('You: $text');
-      _chatController.clear();
-    });
-    _scrollToBottom();
+    _chatController.clear();
+
+    final sent = await PartyRoomApiService.sendMessage(widget.room.id, message: text);
+
+    if (mounted) {
+      setState(() {
+        _chatMessages.add(
+          sent ??
+              PartyRoomMessage(
+                id: DateTime.now().millisecondsSinceEpoch,
+                roomId: widget.room.id,
+                type: 'text',
+                message: text,
+                senderName: _myUserName ?? 'You',
+                senderAvatar: _myUserAvatar,
+                createdAt: DateTime.now(),
+              ),
+        );
+      });
+      _scrollToBottom();
+    }
   }
 
-  void _showAddVideoGuestDialog() {
+  Future<void> _pickAndSendPhoto() async {
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1080,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (file != null) {
+        final sent = await PartyRoomApiService.sendMessage(
+          widget.room.id,
+          imageFile: File(file.path),
+        );
+
+        if (mounted && sent != null) {
+          setState(() {
+            _chatMessages.add(sent);
+          });
+          _scrollToBottom();
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _handleSeatTap(int index) async {
+    final seat = _videoSeats[index];
+
+    if (seat.isEmpty) {
+      final res = await PartyRoomApiService.takeSeat(widget.room.id, seatIndex: index);
+      if (mounted) {
+        if (res['success'] == true) {
+          setState(() {
+            if (_mySeatIndex != null && _mySeatIndex! < _videoSeats.length) {
+              _videoSeats[_mySeatIndex!] = RoomSeat(seatIndex: _mySeatIndex!);
+            }
+            _videoSeats[index] = RoomSeat(
+              seatIndex: index,
+              userId: _myUserId ?? '1',
+              userName: _myUserName ?? 'You',
+              userAvatar: _myUserAvatar,
+              isSpeaking: true,
+              isMuted: _isMyMicMuted,
+              isVideoMuted: _isMyCameraOff,
+              status: 'occupied',
+              role: index == 0 ? 'host' : 'guest',
+            );
+            _amIOnSeat = true;
+            _mySeatIndex = index;
+            _chatMessages.add(PartyRoomMessage(
+              id: DateTime.now().millisecondsSinceEpoch,
+              roomId: widget.room.id,
+              type: 'system',
+              message: '📹 You joined video seat ${index + 1}!',
+              createdAt: DateTime.now(),
+            ));
+          });
+          _scrollToBottom();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(res['message'] ?? 'Unable to connect to video seat')),
+          );
+        }
+      }
+    } else {
+      _showVideoSeatOptions(seat);
+    }
+  }
+
+  void _showVideoSeatOptions(RoomSeat seat) {
+    final isSelf = seat.userId == _myUserId;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.cardDarkElevated,
+      backgroundColor: const Color(0xFF1B152E),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -112,68 +339,184 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Add Co-Host / Video Guest',
-              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+            CircleAvatar(
+              radius: 30,
+              backgroundColor: const Color(0xFF2E1F4A),
+              child: ClipOval(
+                child: (seat.userAvatar != null && seat.userAvatar!.isNotEmpty)
+                    ? CachedImageLoader(imageUrl: seat.userAvatar!, fit: BoxFit.cover)
+                    : Text(
+                        (seat.userName?.isNotEmpty == true) ? seat.userName![0].toUpperCase() : 'U',
+                        style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                      ),
+              ),
             ),
-            const SizedBox(height: 6),
-            const Text(
-              'Invite online girls or friends to join multi-screen video',
-              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  seat.userName ?? 'Video Guest',
+                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                if (seat.isVerified) ...[
+                  const SizedBox(width: 4),
+                  const Icon(Icons.verified_rounded, color: Color(0xFF00E5FF), size: 16),
+                ],
+              ],
             ),
-            const SizedBox(height: 16),
-            ...MockData.models.take(4).map((model) => ListTile(
-                  leading: CircleAvatar(backgroundImage: NetworkImage(model.avatarUrl)),
-                  title: Text(model.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: Text('Online • ${model.location}', style: const TextStyle(color: AppColors.onlineGreen, fontSize: 12)),
-                  trailing: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.neonPink,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    ),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      final emptyIndex = _videoSeats.indexWhere((s) => s.isEmpty);
-                      if (emptyIndex != -1) {
-                        setState(() {
-                          _videoSeats[emptyIndex] = RoomSeat(
-                            seatIndex: emptyIndex,
-                            userId: model.id,
-                            userName: model.name,
-                            userAvatar: model.avatarUrl,
-                            isSpeaking: true,
-                          );
-                          _chatMessages.add('📹 ${model.name} joined video seat ${emptyIndex + 1}!');
-                        });
-                        _scrollToBottom();
-                      }
-                    },
-                    child: const Text('Connect Video', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                )),
+            const SizedBox(height: 4),
+            Text(
+              'Video Seat ${seat.seatIndex + 1} ${seat.isHost ? "• Host 👑" : "• Co-Host 📹"}',
+              style: const TextStyle(color: AppColors.gemYellow, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildActionChip(Icons.card_giftcard_rounded, 'Send Gift', () {
+                  Navigator.pop(context);
+                  _openGiftModal(seat.userId ?? widget.room.hostId);
+                }),
+                if (isSelf)
+                  _buildActionChip(Icons.logout_rounded, 'Leave Grid', () async {
+                    Navigator.pop(context);
+                    await PartyRoomApiService.leaveSeat(widget.room.id);
+                    if (mounted) {
+                      setState(() {
+                        _videoSeats[seat.seatIndex] = RoomSeat(seatIndex: seat.seatIndex);
+                        _amIOnSeat = false;
+                        _mySeatIndex = null;
+                        _chatMessages.add(PartyRoomMessage(
+                          id: DateTime.now().millisecondsSinceEpoch,
+                          roomId: widget.room.id,
+                          type: 'system',
+                          message: '👋 You stepped down from video grid',
+                          createdAt: DateTime.now(),
+                        ));
+                      });
+                      _scrollToBottom();
+                    }
+                  })
+                else if (_isHost)
+                  _buildActionChip(Icons.person_remove_rounded, 'Remove', () async {
+                    Navigator.pop(context);
+                    await PartyRoomApiService.kickSeat(widget.room.id, seatIndex: seat.seatIndex, userId: seat.userId);
+                    if (mounted) {
+                      setState(() {
+                        _videoSeats[seat.seatIndex] = RoomSeat(seatIndex: seat.seatIndex);
+                        _chatMessages.add(PartyRoomMessage(
+                          id: DateTime.now().millisecondsSinceEpoch,
+                          roomId: widget.room.id,
+                          type: 'system',
+                          message: '🚫 Host removed ${seat.userName} from video seat',
+                          createdAt: DateTime.now(),
+                        ));
+                      });
+                      _scrollToBottom();
+                    }
+                  }),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  void _openGiftModal() {
+  Widget _buildActionChip(IconData icon, String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.cardDark,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.cardBorder),
+            ),
+            child: Icon(icon, color: Colors.white, size: 22),
+          ),
+          const SizedBox(height: 6),
+          Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  void _showInviteModal() {
+    final emptyIndex = _videoSeats.indexWhere((s) => s.isEmpty);
+    final targetSeat = emptyIndex != -1 ? emptyIndex : 1;
+
+    InviteGuestsModal.show(
+      context,
+      roomId: widget.room.id,
+      targetSeatIndex: targetSeat,
+      onInvited: (invitee) {
+        if (mounted) {
+          setState(() {
+            _chatMessages.add(PartyRoomMessage(
+              id: DateTime.now().millisecondsSinceEpoch,
+              roomId: widget.room.id,
+              type: 'system',
+              message: '📹 Invited ${invitee.name} to Video Seat ${targetSeat + 1}!',
+              createdAt: DateTime.now(),
+            ));
+          });
+          _scrollToBottom();
+        }
+      },
+    );
+  }
+
+  void _openGiftModal([dynamic receiverId]) {
+    final targetId = receiverId ?? widget.room.hostId;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => GiftPickerModal(
         streamId: widget.room.id,
-        receiverId: widget.room.hostId,
-        onGiftSelected: (gift) {
+        receiverId: targetId.toString(),
+        onGiftSelected: (gift) async {
+          final res = await PartyRoomApiService.sendGift(
+            widget.room.id,
+            giftId: gift.giftId > 0 ? gift.giftId : (int.tryParse(gift.id) ?? 1),
+            receiverId: targetId,
+            count: 1,
+          );
+
+          if (!mounted) return;
+          if (res['insufficient_balance'] == true) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Insufficient gems balance! Please top up to send gifts.'),
+                backgroundColor: const Color(0xFFFF1744),
+                action: SnackBarAction(
+                  label: 'Recharge',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    if (mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const WalletScreen()),
+                      );
+                    }
+                  },
+                ),
+              ),
+            );
+            return;
+          }
+
           final localEvent = LiveGiftEvent(
             streamId: widget.room.id,
-            senderId: 0,
-            senderName: 'You',
-            senderAvatar: MockData.imgLivePreview,
+            senderId: int.tryParse(_myUserId ?? '0') ?? 0,
+            senderName: _myUserName ?? 'You',
+            senderAvatar: _myUserAvatar ?? '',
             giftId: gift.giftId > 0 ? gift.giftId : (int.tryParse(gift.id) ?? 1),
             giftName: gift.name,
             iconUrl: gift.imageUrl,
@@ -182,14 +525,45 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
             format: gift.animationType,
             displayType: 'fullscreen',
           );
-          (_giftOverlayKey.currentState as dynamic)?.playGift(localEvent);
-          setState(() {
-            _chatMessages.add('🎁 You sent ${gift.name} (💎 ${gift.coins}) to Host!');
-          });
-          _scrollToBottom();
+
+          if (mounted) {
+            (_giftOverlayKey.currentState as dynamic)?.playGift(localEvent);
+            setState(() {
+              _chatMessages.add(PartyRoomMessage(
+                id: DateTime.now().millisecondsSinceEpoch,
+                roomId: widget.room.id,
+                type: 'gift',
+                message: '🎁 You sent ${gift.name} (💎 ${gift.coins}) to party room!',
+                createdAt: DateTime.now(),
+              ));
+            });
+            _scrollToBottom();
+          }
         },
       ),
     );
+  }
+
+  void _toggleMic() async {
+    final next = !_isMyMicMuted;
+    setState(() {
+      _isMyMicMuted = next;
+      if (_mySeatIndex != null && _mySeatIndex! < _videoSeats.length) {
+        _videoSeats[_mySeatIndex!] = _videoSeats[_mySeatIndex!].copyWith(isMuted: next);
+      }
+    });
+    await PartyRoomApiService.toggleMic(widget.room.id, isMuted: next);
+  }
+
+  void _toggleCamera() async {
+    final next = !_isMyCameraOff;
+    setState(() {
+      _isMyCameraOff = next;
+      if (_mySeatIndex != null && _mySeatIndex! < _videoSeats.length) {
+        _videoSeats[_mySeatIndex!] = _videoSeats[_mySeatIndex!].copyWith(isVideoMuted: next);
+      }
+    });
+    await PartyRoomApiService.toggleVideo(widget.room.id, isVideoMuted: next);
   }
 
   @override
@@ -220,19 +594,38 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
                           children: [
                             CircleAvatar(
                               radius: 14,
-                              backgroundImage: NetworkImage(widget.room.hostAvatar),
+                              backgroundColor: const Color(0xFF381F4B),
+                              child: ClipOval(
+                                child: _currentRoom.hostAvatar.isNotEmpty
+                                    ? CachedImageLoader(
+                                        imageUrl: _currentRoom.hostAvatar,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : Text(
+                                        _currentRoom.hostName.isNotEmpty ? _currentRoom.hostName[0].toUpperCase() : 'H',
+                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
+                              ),
                             ),
                             const SizedBox(width: 6),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  widget.room.hostName,
-                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                Row(
+                                  children: [
+                                    Text(
+                                      _currentRoom.hostName,
+                                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                    ),
+                                    if (_currentRoom.hostIsVerified) ...[
+                                      const SizedBox(width: 2),
+                                      const Icon(Icons.verified_rounded, color: Color(0xFF00E5FF), size: 10),
+                                    ],
+                                  ],
                                 ),
                                 Text(
-                                  '${widget.room.audienceCount} online',
+                                  '${_currentRoom.audienceCount} online',
                                   style: const TextStyle(color: AppColors.onlineGreen, fontSize: 9),
                                 ),
                               ],
@@ -242,13 +635,13 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
                       ),
                       const SizedBox(width: 8),
 
-                      // Audience Avatars
+                      // Audience Avatars Strip
                       Expanded(
                         child: SizedBox(
                           height: 30,
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
-                            itemCount: widget.room.audienceAvatars.length,
+                            itemCount: _currentRoom.audienceAvatars.length,
                             itemBuilder: (context, index) => Container(
                               margin: const EdgeInsets.only(right: 6),
                               width: 30,
@@ -259,7 +652,7 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
                               ),
                               child: ClipOval(
                                 child: CachedImageLoader(
-                                  imageUrl: widget.room.audienceAvatars[index],
+                                  imageUrl: _currentRoom.audienceAvatars[index],
                                   fit: BoxFit.cover,
                                 ),
                               ),
@@ -271,13 +664,41 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
                       // Close Room Button
                       IconButton(
                         icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: () {
+                          if (_isHost) {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                backgroundColor: const Color(0xFF1B152E),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                title: const Text('End Video Party?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                content: const Text('Ending will close video feeds for all connected guests.', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF1744)),
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      Navigator.pop(context);
+                                    },
+                                    child: const Text('End Party', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          } else {
+                            Navigator.pop(context);
+                          }
+                        },
                       ),
                     ],
                   ),
                 ),
 
-                // 2. Multi-Guest 4-Grid Video Matrix (2x2 Grid)
+                // 2. Multi-Guest Dynamic Video Matrix Grid (supports up to 6-10 feeds)
                 Expanded(
                   flex: 3,
                   child: Padding(
@@ -286,93 +707,131 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
                       physics: const NeverScrollableScrollPhysics(),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
-                        childAspectRatio: 0.95,
+                        childAspectRatio: 1.05,
                         crossAxisSpacing: 6,
                         mainAxisSpacing: 6,
                       ),
-                      itemCount: _videoSeats.length,
+                      itemCount: _videoSeats.length > 6 ? 6 : _videoSeats.length,
                       itemBuilder: (context, index) {
                         final seat = _videoSeats[index];
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E1830),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: seat.isHost
-                                  ? AppColors.gemYellow
-                                  : (seat.isSpeaking ? AppColors.neonPink : AppColors.cardBorder),
-                              width: seat.isHost || seat.isSpeaking ? 2 : 1,
+                        final displayIndex = index + 1;
+
+                        return GestureDetector(
+                          onTap: () => _handleSeatTap(index),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E1830),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: seat.isHost
+                                    ? AppColors.gemYellow
+                                    : (seat.isSpeaking ? AppColors.neonPink : AppColors.cardBorder),
+                                width: seat.isHost || seat.isSpeaking ? 2 : 1,
+                              ),
                             ),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: seat.isEmpty
-                                ? GestureDetector(
-                                    onTap: _showAddVideoGuestDialog,
-                                    child: Container(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: seat.isEmpty
+                                  ? Container(
                                       color: const Color(0xFF171324),
-                                      child: const Column(
+                                      child: Column(
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
-                                          Icon(Icons.add_circle_outline_rounded, color: AppColors.neonPink, size: 32),
-                                          SizedBox(height: 6),
+                                          const Icon(Icons.videocam_rounded, color: AppColors.neonPink, size: 28),
+                                          const SizedBox(height: 4),
                                           Text(
-                                            '+ Add Guest',
-                                            style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                                            '+ Video Seat $displayIndex',
+                                            style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
                                           ),
                                         ],
                                       ),
-                                    ),
-                                  )
-                                : Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      CachedImageLoader(
-                                        imageUrl: seat.userAvatar!,
-                                        fit: BoxFit.cover,
-                                      ),
-                                      Container(
-                                        decoration: const BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: [Colors.transparent, Color(0xBB000000)],
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
+                                    )
+                                  : Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        if (seat.isVideoMuted)
+                                          Container(
+                                            color: const Color(0xFF110D1F),
+                                            child: Center(
+                                              child: Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  const Icon(Icons.videocam_off_rounded, color: Colors.white38, size: 26),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    'Camera Off',
+                                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          )
+                                        else if (seat.userAvatar != null && seat.userAvatar!.isNotEmpty)
+                                          CachedImageLoader(
+                                            imageUrl: seat.userAvatar!,
+                                            fit: BoxFit.cover,
+                                          )
+                                        else
+                                          Container(
+                                            color: const Color(0xFF2C194D),
+                                            child: Center(
+                                              child: Text(
+                                                seat.userName?.isNotEmpty == true ? seat.userName![0].toUpperCase() : '$displayIndex',
+                                                style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                          ),
+
+                                        // Dark gradient
+                                        Container(
+                                          decoration: const BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [Colors.transparent, Color(0xBB000000)],
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      Positioned(
-                                        bottom: 6,
-                                        left: 8,
-                                        right: 8,
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              seat.userName!,
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.bold,
+
+                                        // Bottom Bar
+                                        Positioned(
+                                          bottom: 4,
+                                          left: 6,
+                                          right: 6,
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  seat.userName ?? 'Guest',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
                                               ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            if (seat.isHost)
-                                              const Icon(Icons.military_tech_rounded, color: AppColors.gemYellow, size: 14)
-                                            else
-                                              const Icon(Icons.videocam_rounded, color: AppColors.onlineGreen, size: 14),
-                                          ],
+                                              if (seat.isHost)
+                                                const Icon(Icons.military_tech_rounded, color: AppColors.gemYellow, size: 14)
+                                              else if (seat.isMuted)
+                                                const Icon(Icons.mic_off_rounded, color: Color(0xFFFF1744), size: 12)
+                                              else
+                                                const Icon(Icons.videocam_rounded, color: AppColors.onlineGreen, size: 12),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
+                                      ],
+                                    ),
+                            ),
                           ),
                         );
                       },
                     ),
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
 
                 // 3. Live Chat Messages Stream
                 Expanded(
@@ -385,23 +844,69 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
                       itemCount: _chatMessages.length,
                       itemBuilder: (context, index) {
                         final msg = _chatMessages[index];
-                        final isGift = msg.startsWith('🎁') || msg.startsWith('🌹');
+                        final isGift = msg.type == 'gift' || msg.message.startsWith('🎁') || msg.message.startsWith('🌹');
+                        final isNotice = msg.type == 'system' || msg.message.startsWith('📢') || msg.message.startsWith('⚠️');
+                        final isImage = msg.type == 'image' || (msg.imageUrl != null && msg.imageUrl!.isNotEmpty);
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 5),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
                             color: isGift
                                 ? AppColors.warmOrange.withValues(alpha: 0.25)
-                                : Colors.black.withValues(alpha: 0.45),
+                                : (isNotice ? AppColors.neonPurple.withValues(alpha: 0.22) : Colors.black.withValues(alpha: 0.45)),
                             borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            msg,
-                            style: TextStyle(
-                              color: isGift ? AppColors.gemYellow : Colors.white,
-                              fontSize: 11,
+                            border: Border.all(
+                              color: isGift
+                                  ? AppColors.gemYellow.withValues(alpha: 0.3)
+                                  : (isNotice ? AppColors.neonPurple.withValues(alpha: 0.3) : Colors.transparent),
                             ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (!isNotice && !isGift && msg.senderName != null)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      msg.senderName!,
+                                      style: const TextStyle(
+                                        color: AppColors.gemYellow,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Lv.${msg.senderLevel}',
+                                      style: const TextStyle(color: Colors.white54, fontSize: 8.5),
+                                    ),
+                                  ],
+                                ),
+                              if (msg.message.isNotEmpty)
+                                Text(
+                                  msg.message,
+                                  style: TextStyle(
+                                    color: isGift ? AppColors.gemYellow : Colors.white,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              if (isImage && msg.imageUrl != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(maxHeight: 140, maxWidth: 180),
+                                      child: CachedImageLoader(
+                                        imageUrl: msg.imageUrl!,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         );
                       },
@@ -411,13 +916,29 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
 
                 // 4. Bottom Controls Bar
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: const BoxDecoration(
                     color: Color(0xFF120E1F),
                     border: Border(top: BorderSide(color: AppColors.cardBorder, width: 0.8)),
                   ),
                   child: Row(
                     children: [
+                      // Photo Camera Button
+                      GestureDetector(
+                        onTap: _pickAndSendPhoto,
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.cardDarkElevated,
+                            border: Border.all(color: AppColors.cardBorder),
+                          ),
+                          child: const Icon(Icons.photo_camera_rounded, color: AppColors.neonPink, size: 16),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+
                       // Chat Input
                       Expanded(
                         child: Container(
@@ -440,7 +961,7 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
 
                       // Send Button
                       GestureDetector(
@@ -455,15 +976,11 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
                           child: const Icon(Icons.send_rounded, color: Colors.white, size: 16),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
 
                       // Mic Toggle
                       GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _isMyMicMuted = !_isMyMicMuted;
-                          });
-                        },
+                        onTap: _toggleMic,
                         child: Container(
                           width: 36,
                           height: 36,
@@ -478,15 +995,11 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
 
                       // Camera Toggle
                       GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _isMyCameraOff = !_isMyCameraOff;
-                          });
-                        },
+                        onTap: _toggleCamera,
                         child: Container(
                           width: 36,
                           height: 36,
@@ -501,11 +1014,11 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
 
                       // Add Guest / Invite Button
                       GestureDetector(
-                        onTap: _showAddVideoGuestDialog,
+                        onTap: _showInviteModal,
                         child: Container(
                           width: 36,
                           height: 36,
@@ -516,11 +1029,11 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
                           child: const Icon(Icons.group_add_rounded, color: Colors.white, size: 18),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
 
                       // Gift Button
                       GestureDetector(
-                        onTap: _openGiftModal,
+                        onTap: () => _openGiftModal(),
                         child: Container(
                           width: 38,
                           height: 38,

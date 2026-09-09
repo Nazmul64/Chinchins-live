@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/group_room.dart';
+import '../../../core/services/party_room_api_service.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/data/mock_data.dart';
 import 'voice_party_room_screen.dart';
 import 'video_party_room_screen.dart';
 
@@ -16,15 +16,14 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
   PartyRoomType _selectedType = PartyRoomType.audioVoice;
   final TextEditingController _titleController = TextEditingController(text: 'My Live Fun Hangout 🥳✨');
   String _selectedTag = 'Singing 🎤';
+  List<PartyRoomTopicTag> _tags = PartyRoomConfig.defaultTags;
+  bool _isCreating = false;
 
-  final List<String> _tags = [
-    'Singing 🎤',
-    'Dating 💕',
-    'Party 💃',
-    'ChitChat 💬',
-    'Gaming 🎮',
-    'Late Night 🌙',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadConfig();
+  }
 
   @override
   void dispose() {
@@ -32,79 +31,101 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
     super.dispose();
   }
 
-  void _startPartyRoom() {
-    final title = _titleController.text.trim().isEmpty ? 'Live Party Room' : _titleController.text.trim();
+  Future<void> _loadConfig() async {
+    final config = await PartyRoomApiService.getConfig();
+    if (mounted) {
+      setState(() {
+        if (config.topicTags.isNotEmpty) {
+          _tags = config.topicTags;
+          if (!_tags.any((t) => t.name == _selectedTag || t.tag == _selectedTag)) {
+            _selectedTag = _tags.first.name.isNotEmpty ? _tags.first.name : _tags.first.tag;
+          }
+        }
+      });
+    }
+  }
 
-    if (_selectedType == PartyRoomType.audioVoice) {
-      final newRoom = GroupPartyRoom(
-        id: 'room_${DateTime.now().millisecondsSinceEpoch}',
-        title: title,
-        hostId: 'my_host_id',
-        hostName: 'Guest_ddD7Su',
-        hostAvatar: MockData.imgLivePreview,
-        coverUrl: MockData.imgLivePreview,
-        roomType: PartyRoomType.audioVoice,
-        tag: _selectedTag,
-        audienceCount: 1,
-        seats: [
-          const RoomSeat(
-            seatIndex: 0,
-            userId: 'my_host_id',
-            userName: 'You (Host)',
-            userAvatar: MockData.imgLivePreview,
-            isHost: true,
-            isSpeaking: true,
+  Future<void> _startPartyRoom() async {
+    final title = _titleController.text.trim().isEmpty ? 'My Live Fun Hangout 🥳✨' : _titleController.text.trim();
+
+    setState(() => _isCreating = true);
+
+    final roomTypeStr = _selectedType == PartyRoomType.audioVoice ? 'voice' : 'video';
+
+    final result = await PartyRoomApiService.createPartyRoom(
+      roomTitle: title,
+      roomType: roomTypeStr,
+      topicTag: _selectedTag,
+      maxSeats: 10,
+      coinRatePerMinute: 100,
+    );
+
+    if (!mounted) return;
+    setState(() => _isCreating = false);
+
+    if (result['success'] == true && result['room'] is GroupPartyRoom) {
+      final GroupPartyRoom createdRoom = result['room'] as GroupPartyRoom;
+
+      if (_selectedType == PartyRoomType.audioVoice) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VoicePartyRoomScreen(room: createdRoom),
           ),
-          const RoomSeat(seatIndex: 1),
-          const RoomSeat(seatIndex: 2),
-          const RoomSeat(seatIndex: 3),
-          const RoomSeat(seatIndex: 4),
-          const RoomSeat(seatIndex: 5),
-          const RoomSeat(seatIndex: 6),
-          const RoomSeat(seatIndex: 7),
-        ],
-        audienceAvatars: [],
-      );
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VoicePartyRoomScreen(room: newRoom),
-        ),
-      );
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VideoPartyRoomScreen(room: createdRoom),
+          ),
+        );
+      }
     } else {
-      final newRoom = GroupPartyRoom(
+      // Fallback local room for offline or graceful recovery
+      final localRoom = GroupPartyRoom(
         id: 'room_${DateTime.now().millisecondsSinceEpoch}',
+        roomId: 'PR${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
         title: title,
-        hostId: 'my_host_id',
-        hostName: 'Guest_ddD7Su',
-        hostAvatar: MockData.imgLivePreview,
-        coverUrl: MockData.imgLivePreview,
-        roomType: PartyRoomType.videoParty,
+        hostId: '1',
+        hostName: 'You (Host)',
+        hostAvatar: '',
+        coverUrl: '',
+        channelName: 'party_${_selectedType == PartyRoomType.audioVoice ? "voice" : "video"}_${DateTime.now().millisecondsSinceEpoch}',
+        roomType: _selectedType,
         tag: _selectedTag,
+        maxSeats: 10,
+        occupiedSeats: 1,
         audienceCount: 1,
         seats: [
           const RoomSeat(
             seatIndex: 0,
-            userId: 'my_host_id',
+            userId: '1',
             userName: 'You (Host)',
-            userAvatar: MockData.imgLivePreview,
             isHost: true,
             isSpeaking: true,
+            status: 'occupied',
+            role: 'host',
           ),
-          const RoomSeat(seatIndex: 1),
-          const RoomSeat(seatIndex: 2),
-          const RoomSeat(seatIndex: 3),
+          ...List.generate(9, (index) => RoomSeat(seatIndex: index + 1)),
         ],
-        audienceAvatars: [],
       );
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VideoPartyRoomScreen(room: newRoom),
-        ),
-      );
+      if (_selectedType == PartyRoomType.audioVoice) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VoicePartyRoomScreen(room: localRoom),
+          ),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VideoPartyRoomScreen(room: localRoom),
+          ),
+        );
+      }
     }
   }
 
@@ -114,14 +135,15 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
       color: Colors.transparent,
       child: Container(
         decoration: const BoxDecoration(
-          color: AppColors.surfaceDark,
+          color: Color(0xFF161126),
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border(top: BorderSide(color: AppColors.cardBorder, width: 1)),
         ),
         padding: EdgeInsets.only(
           left: 20,
           right: 20,
-          top: 20,
-          bottom: 20 + MediaQuery.of(context).viewInsets.bottom,
+          top: 16,
+          bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
         ),
         child: SafeArea(
           top: false,
@@ -141,140 +163,153 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
                     ),
                   ),
                 ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              const Text(
-                'Host a Party Room 🎉',
-                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Create a multi-user audio voice or video chat room and invite 10 to 50+ members!',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-              ),
-              const SizedBox(height: 20),
-
-              // Mode Selector (Voice Party vs Video Multi-Guest)
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTypeCard(
-                      type: PartyRoomType.audioVoice,
-                      title: 'Voice Party 🎙️',
-                      subtitle: '8-12 Seats Audio Stage',
-                      icon: Icons.mic_rounded,
-                      color: AppColors.neonPurple,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildTypeCard(
-                      type: PartyRoomType.videoParty,
-                      title: 'Video Party 📹',
-                      subtitle: 'Multi-Guest Video Grid',
-                      icon: Icons.videocam_rounded,
-                      color: AppColors.neonPink,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-
-              // Room Title Input
-              const Text(
-                'Room Title',
-                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.cardDark,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.cardBorder),
-                ),
-                child: TextField(
-                  controller: _titleController,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                  decoration: const InputDecoration(
-                    hintText: 'Enter room title...',
-                    hintStyle: TextStyle(color: AppColors.textHint),
-                    border: InputBorder.none,
+                // Header Title
+                const Text(
+                  'Host a Party Room 🎉',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 6),
+                const Text(
+                  'Create a multi-user audio voice or video chat room and invite 10 to 50+ members!',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                const SizedBox(height: 20),
 
-              // Room Tags
-              const Text(
-                'Select Topic Tag',
-                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _tags.map((tag) {
-                  final isSelected = _selectedTag == tag;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedTag = tag),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        gradient: isSelected ? AppColors.primaryGradient : null,
-                        color: isSelected ? null : AppColors.cardDark,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected ? Colors.transparent : AppColors.cardBorder,
+                // Mode Selector (Voice Party vs Video Multi-Guest)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTypeCard(
+                        type: PartyRoomType.audioVoice,
+                        title: 'Voice Party 🎙️',
+                        subtitle: '8-12 Seats Audio Stage',
+                        icon: Icons.mic_rounded,
+                        color: AppColors.neonPurple,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildTypeCard(
+                        type: PartyRoomType.videoParty,
+                        title: 'Video Party 📹',
+                        subtitle: 'Multi-Guest Video Grid',
+                        icon: Icons.videocam_rounded,
+                        color: AppColors.neonPink,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+
+                // Room Title Input
+                const Text(
+                  'Room Title',
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardDark,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.cardBorder),
+                  ),
+                  child: TextField(
+                    controller: _titleController,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'Enter room title...',
+                      hintStyle: TextStyle(color: AppColors.textHint),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Room Tags
+                const Text(
+                  'Select Topic Tag',
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _tags.map((topic) {
+                    final isSelected = _selectedTag == topic.name || _selectedTag == topic.tag;
+                    final displayLabel = topic.name.isNotEmpty ? topic.name : topic.tag;
+
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedTag = displayLabel),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          gradient: isSelected ? AppColors.primaryGradient : null,
+                          color: isSelected ? null : AppColors.cardDark,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isSelected ? Colors.transparent : AppColors.cardBorder,
+                          ),
+                        ),
+                        child: Text(
+                          displayLabel,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          ),
                         ),
                       ),
-                      child: Text(
-                        tag,
-                        style: TextStyle(
-                          color: isSelected ? Colors.white : AppColors.textSecondary,
-                          fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
 
-              // Start Party Room Button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.neonPink,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    elevation: 8,
-                  ),
-                  onPressed: _startPartyRoom,
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Start Party Room Now',
-                        style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                // Start Party Room Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.neonPink,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
                       ),
-                    ],
+                      elevation: 8,
+                    ),
+                    onPressed: _isCreating ? null : _startPartyRoom,
+                    child: _isCreating
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'Start Party Room Now',
+                                style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildTypeCard({
     required PartyRoomType type,

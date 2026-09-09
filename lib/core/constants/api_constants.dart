@@ -234,6 +234,28 @@ class ApiConstants {
   static String get supportSend => '$baseUrl/support/send';
   static String get supportUpload => '$baseUrl/support/upload';
   static String get supportUnreadCount => '$baseUrl/support/unread-count';
+
+  // Party Room (Voice & Video Multi-Guest) Endpoints
+  static String get partyRoomsConfig => '$baseUrl/party-rooms/config';
+  static String get partyRooms => '$baseUrl/party-rooms';
+  static String get partyRoomsCreate => '$baseUrl/party-rooms/create';
+  static String partyRoomById(dynamic id) => '$baseUrl/party-rooms/$id';
+  static String partyRoomJoin(dynamic id) => '$baseUrl/party-rooms/$id/join';
+  static String partyRoomLeave(dynamic id) => '$baseUrl/party-rooms/$id/leave';
+  static String partyRoomEnd(dynamic id) => '$baseUrl/party-rooms/$id/end';
+  static String partyRoomSearchInvitees(dynamic id, [String? query]) =>
+      '$baseUrl/party-rooms/$id/search-invitees${query != null && query.trim().isNotEmpty ? '?query=${Uri.encodeComponent(query.trim())}' : ''}';
+  static String partyRoomInviteGuest(dynamic id) => '$baseUrl/party-rooms/$id/invite-guest';
+  static String partyRoomRespondInvite(dynamic id) => '$baseUrl/party-rooms/$id/respond-invite';
+  static String partyRoomTakeSeat(dynamic id) => '$baseUrl/party-rooms/$id/take-seat';
+  static String partyRoomLeaveSeat(dynamic id) => '$baseUrl/party-rooms/$id/leave-seat';
+  static String partyRoomKickSeat(dynamic id) => '$baseUrl/party-rooms/$id/kick-seat';
+  static String partyRoomToggleMic(dynamic id) => '$baseUrl/party-rooms/$id/toggle-mic';
+  static String partyRoomToggleVideo(dynamic id) => '$baseUrl/party-rooms/$id/toggle-video';
+  static String partyRoomMessages(dynamic id) => '$baseUrl/party-rooms/$id/messages';
+  static String partyRoomSendMessage(dynamic id) => '$baseUrl/party-rooms/$id/messages/send';
+  static String partyRoomSendGift(dynamic id) => '$baseUrl/party-rooms/$id/send-gift';
+  static String partyRoomDeductInterval(dynamic id) => '$baseUrl/party-rooms/$id/deduct-interval';
 }
 
 
