@@ -4,7 +4,7 @@ import '../../../core/models/model_profile.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../auth/services/auth_api_service.dart';
-import '../screens/deposit_screen.dart';
+import '../screens/payment_options_screen.dart';
 import '../services/wallet_api_service.dart';
 
 class RechargeGemsSheet extends StatefulWidget {
@@ -276,9 +276,9 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => DepositScreen(
+        builder: (context) => PaymentOptionsScreen(
           selectedPackage: selectedPkg,
-          onDepositSuccess: () {
+          onRechargeSuccess: () {
             _fetchUserGems();
             widget.onRechargeSuccess?.call();
           },

@@ -202,6 +202,15 @@ class ApiConstants {
   static String get rechargeModalData => '$baseUrl/recharge/modal-data';
   static String get coinPackagesRechargeModal => '$baseUrl/coin-packages/recharge-modal';
 
+  // Payment Options & Reseller System Endpoints
+  static String get paymentOptions => '$baseUrl/payment-options';
+  static String get resellers => '$baseUrl/resellers';
+  static String resellerMessages(dynamic resellerId) => '$baseUrl/resellers/$resellerId/messages';
+  static String get resellerChatSend => '$baseUrl/reseller/chat/send';
+  static String get resellerChatUpload => '$baseUrl/reseller/chat/upload';
+  static String get resellerValidateUser => '$baseUrl/reseller/validate-user';
+  static String get resellerTransferCoins => '$baseUrl/reseller/transfer-coins';
+
   // User Block & Moderation Report endpoints
   static String get chatBlock => '$baseUrl/chat/block';
   static String get userBlock => '$baseUrl/user/block';

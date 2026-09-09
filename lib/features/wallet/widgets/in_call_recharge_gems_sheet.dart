@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/widgets/cached_image_loader.dart';
-import '../screens/deposit_screen.dart';
+import '../screens/payment_options_screen.dart';
 import '../services/wallet_api_service.dart';
 
 class InCallRechargeGemsSheet extends StatefulWidget {
@@ -109,9 +109,9 @@ class _InCallRechargeGemsSheetState extends State<InCallRechargeGemsSheet> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => DepositScreen(
+        builder: (context) => PaymentOptionsScreen(
           selectedPackage: selectedPackage,
-          onDepositSuccess: () {
+          onRechargeSuccess: () {
             widget.onRechargeSuccess?.call(_promoCoins);
             Navigator.pop(context); // close recharge modal
           },
