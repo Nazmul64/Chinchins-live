@@ -54,19 +54,10 @@ class ExploreHeader extends StatelessWidget {
 
           const Spacer(),
 
-          // Right Actions: Debug Icon, Search Icon & Country Pill (🔴 BGD ⌄)
+          // Right Actions: Search Icon & Country Pill (🔴 BGD ⌄)
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // WebRTC Diagnostics Button
-              if (onDebugTap != null)
-                IconButton(
-                  tooltip: 'WebRTC লাইভ স্ট্যাটাস',
-                  icon: const Icon(Icons.network_check_rounded, color: AppColors.neonPink, size: 20),
-                  onPressed: onDebugTap,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                ),
               // Search Icon
               IconButton(
                 icon: const Icon(Icons.search_rounded, color: Colors.white, size: 24),

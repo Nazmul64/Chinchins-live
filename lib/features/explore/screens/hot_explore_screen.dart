@@ -14,7 +14,6 @@ import '../../wallet/services/wallet_api_service.dart';
 import '../../call/screens/random_match_screen.dart';
 import '../../call/services/call_api_service.dart';
 import '../../call/services/streaming_service.dart';
-import '../../call/widgets/home_webrtc_test_dialog.dart';
 
 class HotExploreScreen extends StatefulWidget {
   final VoidCallback? onMenuTap;
@@ -460,7 +459,6 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
                   onTabSelected: _onTabSelected,
                   onSearchTap: _showSearchDialog,
                   onCountryTap: _showCountrySelector,
-                  onDebugTap: () => HomeWebRTCTestDialog.show(context),
                   onMenuTap: widget.onMenuTap ?? () {
                     Scaffold.maybeOf(context)?.openDrawer();
                   },

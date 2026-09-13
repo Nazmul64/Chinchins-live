@@ -8,29 +8,17 @@ class ScreenProtectionService {
   static final ScreenProtectionService instance = ScreenProtectionService._();
 
   bool get isScreenshotProtectionEnabled {
-    final cfg = RemoteConfigService.instance.remoteConfig;
-    if (cfg != null) {
-      if (cfg['screenshot_protection_enabled'] != null) {
-        return cfg['screenshot_protection_enabled'] == true;
-      }
-      final flags = cfg['remote_flags'];
-      if (flags is Map && flags['screenshot_protection_enabled'] != null) {
-        return flags['screenshot_protection_enabled'] == true;
-      }
+    final flags = RemoteConfigService.instance.config.remoteFlags;
+    if (flags['screenshot_protection_enabled'] != null) {
+      return flags['screenshot_protection_enabled'] == true;
     }
     return true; // Default to secure
   }
 
   bool get isScreenRecordingProtectionEnabled {
-    final cfg = RemoteConfigService.instance.remoteConfig;
-    if (cfg != null) {
-      if (cfg['screen_recording_protection_enabled'] != null) {
-        return cfg['screen_recording_protection_enabled'] == true;
-      }
-      final flags = cfg['remote_flags'];
-      if (flags is Map && flags['screen_recording_protection_enabled'] != null) {
-        return flags['screen_recording_protection_enabled'] == true;
-      }
+    final flags = RemoteConfigService.instance.config.remoteFlags;
+    if (flags['screen_recording_protection_enabled'] != null) {
+      return flags['screen_recording_protection_enabled'] == true;
     }
     return true; // Default to secure
   }
