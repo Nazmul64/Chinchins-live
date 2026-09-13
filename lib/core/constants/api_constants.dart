@@ -123,6 +123,35 @@ class ApiConstants {
   static String get callRechargeSheet => '$baseUrl/call/recharge-sheet';
   static String get callQuickMessages => '$baseUrl/call/quick-messages';
   static String get callSendQuickMessage => '$baseUrl/call/send-quick-message';
+  static String get callFilters => '$baseUrl/call/filters';
+  static String get filters => '$baseUrl/filters';
+  static String get callMinimize => '$baseUrl/call/minimize';
+  static String get callRestore => '$baseUrl/call/restore';
+  static String get callUploadImage => '$baseUrl/call/upload-image';
+  static String get callChatSend => '$baseUrl/call/chat/send';
+  static String get callSendMessage => '$baseUrl/call/send-message';
+  static String callMessages(dynamic id) => '$baseUrl/call/$id/messages';
+  static String get callChatMessages => '$baseUrl/call/chat/messages';
+
+  // User Follow / Unfollow System
+  static String get userFollow => '$baseUrl/user/follow';
+  static String get follow => '$baseUrl/follow';
+  static String get userUnfollow => '$baseUrl/user/unfollow';
+  static String get unfollow => '$baseUrl/unfollow';
+  static String userFollowStatus(dynamic id) => '$baseUrl/user/$id/follow-status';
+
+  // Live Broadcast & Live Streaming Endpoints
+  static String get liveStreams => '$baseUrl/live/streams';
+  static String get liveCreate => '$baseUrl/live/create';
+  static String liveRoom(dynamic id) => '$baseUrl/live/$id';
+  static String liveJoin(dynamic id) => '$baseUrl/live/$id/join';
+  static String liveLeave(dynamic id) => '$baseUrl/live/$id/leave';
+  static String liveEnd(dynamic id) => '$baseUrl/live/$id/end';
+  static String liveMessages(dynamic id) => '$baseUrl/live/$id/messages';
+  static String liveSendMessage(dynamic id) => '$baseUrl/live/$id/send-message';
+  static String liveSendGift(dynamic id) => '$baseUrl/live/$id/send-gift';
+  static String liveConnectGuest(dynamic id) => '$baseUrl/live/$id/connect-guest';
+  static String liveDisconnectGuest(dynamic id) => '$baseUrl/live/$id/disconnect-guest';
 
   // User Presence & Heartbeat endpoints
   static String get userHeartbeat => '$baseUrl/user/heartbeat';

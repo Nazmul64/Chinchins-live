@@ -13,7 +13,14 @@ import '../../wallet/widgets/in_call_recharge_gems_sheet.dart';
 import '../services/call_api_service.dart';
 import '../services/call_sound_manager.dart';
 import '../services/streaming_service.dart';
+import '../services/beauty_filter_engine.dart';
+import '../services/pip_call_overlay.dart';
 import '../widgets/call_end_confirmation_dialog.dart';
+import '../widgets/camera_filter_tray.dart';
+import '../widgets/in_call_profile_sheet.dart';
+import '../widgets/in_call_chat_overlay.dart';
+import '../widgets/in_call_gift_sheet.dart';
+import '../widgets/gift_animation_overlay.dart';
 
 class AgoraCallScreen extends StatefulWidget {
   final ModelProfile model;
@@ -47,7 +54,7 @@ class AgoraCallScreen extends StatefulWidget {
     this.isIncoming = false,
     this.dialToneUrl,
     this.isVideo = true,
-    this.debugMode = true,
+    this.debugMode = false,
     this.logLevel = 'info',
   });
 
@@ -56,6 +63,10 @@ class AgoraCallScreen extends StatefulWidget {
 }
 
 class _AgoraCallScreenState extends State<AgoraCallScreen> {
+  final GlobalKey<InCallChatOverlayState> _chatKey = GlobalKey<InCallChatOverlayState>();
+  final GlobalKey<GiftAnimationOverlayState> _giftAnimKey = GlobalKey<GiftAnimationOverlayState>();
+  FilterPreset _currentFilter = BeautyFilterEngine.presets[1]; // Beauty Glow
+
   RtcEngine? _engine;
   int? _remoteUid;
   bool _localUserJoined = false;
@@ -572,7 +583,10 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
 
   Future<void> _handleUserHangup() async {
     if (!_isConnecting && _callSeconds > 0) {
-      final shouldEnd = await showCallEndConfirmationDialog(context);
+      final shouldEnd = await showCallEndConfirmationDialog(
+        context,
+        peerName: widget.model.name,
+      );
       if (shouldEnd != true) return;
     }
     _endCall();
@@ -601,12 +615,38 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     return '$mins:$secs';
   }
 
+  void _minimizeToPiP() {
+    PiPCallOverlay.showMiniWindow(
+      context,
+      remoteVideoView: RepaintBoundary(
+        child: _remoteUid != null && widget.isVideo && _engine != null
+            ? _buildVideoView(isMain: true)
+            : _buildVoiceAudioState(),
+      ),
+      peerName: widget.model.name,
+      callDurationText: _formatDuration(_callSeconds),
+      callSessionId: widget.callId ?? widget.channelName,
+      onTapRestore: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => this),
+        );
+      },
+      onEndCall: () {
+        _handleUserHangup();
+      },
+    );
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        await _handleUserHangup();
-        return false;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          _minimizeToPiP();
+        }
       },
       child: Scaffold(
         backgroundColor: Colors.black,
@@ -632,45 +672,50 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
                     icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 34),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                    onPressed: _handleUserHangup,
+                    onPressed: _minimizeToPiP,
                   ),
                   const SizedBox(width: 4),
                   // Host Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.65),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: Row(
-                      children: [
-                        AvatarWithFrame(
-                          avatarUrl: widget.model.avatarUrl,
-                          frameUrl: widget.model.avatarFrameUrl,
-                          size: 32,
-                        ),
-                        const SizedBox(width: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.model.name,
-                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                            ),
-                            Row(
-                              children: [
-                                const Icon(Icons.fiber_manual_record, color: Color(0xFF00E676), size: 10),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _formatDuration(_callSeconds),
-                                  style: const TextStyle(color: Colors.white70, fontSize: 11),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
+                  GestureDetector(
+                    onTap: () {
+                      InCallProfileSheet.show(context, model: widget.model);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Row(
+                        children: [
+                          AvatarWithFrame(
+                            avatarUrl: widget.model.avatarUrl,
+                            frameUrl: widget.model.avatarFrameUrl,
+                            size: 32,
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.model.name,
+                                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                              ),
+                              Row(
+                                children: [
+                                  const Icon(Icons.fiber_manual_record, color: Color(0xFF00E676), size: 10),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _formatDuration(_callSeconds),
+                                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const Spacer(),
@@ -741,32 +786,102 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    // Dev Mode Button for Agora
-                    GestureDetector(
-                      onTap: _showAgoraDevModeModal,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.8), width: 1.2),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.bug_report_rounded, color: AppColors.neonPink, size: 13),
-                            SizedBox(width: 4),
-                            Text('Dev mode', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                          ],
+                    // Dev Mode Button for Agora (Only visible if debugMode is explicitly true)
+                    if (widget.debugMode)
+                      GestureDetector(
+                        onTap: _showAgoraDevModeModal,
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.8), width: 1.2),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.bug_report_rounded, color: AppColors.neonPink, size: 13),
+                              SizedBox(width: 4),
+                              Text('Dev mode', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
 
-            // 4. In-call Sent Quick Message Overlay
+            // 4. Right Sidebar: In-Call Actions (Beauty Filter, Live Chat, Gifts)
+            Positioned(
+              right: 14,
+              bottom: 160,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ✨ TikTok-Style Beauty Filters Button
+                  _buildFloatingActionButton(
+                    icon: Icons.auto_fix_high_rounded,
+                    label: 'Beauty',
+                    color: AppColors.neonPink,
+                    onTap: () {
+                      CameraFilterTray.show(
+                        context,
+                        currentFilter: _currentFilter,
+                        onFilterSelected: (preset) {
+                          setState(() => _currentFilter = preset);
+                        },
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 💬 In-Call Live Chat Drawer Toggle (Text & Image Sharing)
+                  _buildFloatingActionButton(
+                    icon: Icons.chat_bubble_rounded,
+                    label: 'Chat',
+                    color: const Color(0xFF00E5FF),
+                    onTap: () {
+                      _chatKey.currentState?.toggleChatDrawer();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 🎁 Virtual Luxury Gifts Button
+                  _buildFloatingActionButton(
+                    icon: Icons.card_giftcard_rounded,
+                    label: 'Gift',
+                    color: const Color(0xFFFFD54F),
+                    onTap: () {
+                      InCallGiftSheet.show(
+                        context,
+                        receiverId: widget.model.id,
+                        receiverName: widget.model.name,
+                        callSessionId: widget.callId,
+                        onGiftSent: (anim) {
+                          _giftAnimKey.currentState?.playGiftAnimation(anim);
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            // 5. In-Call Live Chat Overlay (Floating Message Bubbles & Image Sharing)
+            Positioned(
+              left: 12,
+              bottom: 120,
+              right: 80,
+              child: InCallChatOverlay(
+                key: _chatKey,
+                callSessionId: widget.callId ?? widget.channelName,
+                receiverId: widget.model.id,
+                receiverName: widget.model.name,
+              ),
+            ),
+
+            // 6. In-call Sent Quick Message Toast
             if (_sentMessageFeedback != null)
               Positioned(
                 left: 20,
@@ -791,7 +906,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
                 ),
               ),
 
-            // 5. In-call Quick Messages Bar
+            // 7. In-call Quick Messages Bar
             Positioned(
               left: 14,
               right: 14,
@@ -825,7 +940,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
               ),
             ),
 
-            // 6. Bottom Toolbar Controls (Mute, Camera, Flip, Hangup, Recharge)
+            // 8. Bottom Toolbar Controls (Mute, Camera, Flip, Hangup, Recharge)
             Positioned(
               left: 0,
               right: 0,
@@ -894,6 +1009,13 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
                 ],
               ),
             ),
+
+            // 9. Luxury Full-Screen Gift Animation Overlay
+            Positioned.fill(
+              child: GiftAnimationOverlay(
+                key: _giftAnimKey,
+              ),
+            ),
           ],
         ),
       ),
@@ -920,6 +1042,49 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     );
   }
 
+  Widget _buildFloatingActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.65),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withValues(alpha: 0.8), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.35),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildVideoView({required bool isMain}) {
     if (_engine == null) return const SizedBox.shrink();
 
@@ -928,10 +1093,13 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     final bool showLocal = isMain ? _isSwappedVideo : !_isSwappedVideo;
 
     if (showLocal) {
-      return AgoraVideoView(
-        controller: VideoViewController(
-          rtcEngine: _engine!,
-          canvas: const VideoCanvas(uid: 0),
+      return ColorFiltered(
+        colorFilter: ColorFilter.matrix(_currentFilter.matrix),
+        child: AgoraVideoView(
+          controller: VideoViewController(
+            rtcEngine: _engine!,
+            canvas: const VideoCanvas(uid: 0),
+          ),
         ),
       );
     } else {

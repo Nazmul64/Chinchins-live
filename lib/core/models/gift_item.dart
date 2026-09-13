@@ -47,6 +47,9 @@ class GiftItem {
     this.sortOrder = 0,
   });
 
+  /// Computed icon / image URL
+  String get iconUrl => imageUrl.isNotEmpty ? imageUrl : (pngUrl ?? svgUrl ?? '');
+
   /// Helper to format raw integer coins into K/M strings (e.g. 17700 -> 17.70K, 10000 -> 10K, 500 -> 500)
   static String formatCoinValue(int coinAmount) {
     if (coinAmount >= 1000000) {

@@ -103,6 +103,12 @@ class ModelProfile {
   /// Computed active user level
   int get currentLevel => (levelInfo?['current_level'] as int?) ?? level;
 
+  /// Followers count (derived from likeMeCount)
+  int get followersCount => likeMeCount;
+
+  /// Following count (derived from iLikeCount)
+  int get followingCount => iLikeCount;
+
   /// Computed full name
   String get fullName {
     if (firstName != null && firstName!.trim().isNotEmpty) {

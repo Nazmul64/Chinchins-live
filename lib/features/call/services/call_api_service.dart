@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/constants/api_constants.dart';
 import '../../../core/utils/app_logger.dart';
@@ -1036,5 +1038,321 @@ class CallApiService {
       AppLogger.error('EndCallError', e, st);
     }
     return null;
+  }
+
+  // ==========================================
+  // V2.0 CALL MINIMIZE & RESTORE SYNCHRONIZATION
+  // ==========================================
+
+  static Future<bool> minimizeCall({required dynamic callSessionId}) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.callMinimize);
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final payload = {'call_session_id': callSessionId?.toString() ?? ''};
+      final response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 5));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> restoreCall({required dynamic callSessionId}) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.callRestore);
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final payload = {'call_session_id': callSessionId?.toString() ?? ''};
+      final response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 5));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ==========================================
+  // V2.0 CAMERA & BEAUTY FILTERS
+  // ==========================================
+
+  static Future<Map<String, dynamic>?> getFilters() async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.callFilters);
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return decoded['data'] is Map<String, dynamic> ? decoded['data'] : decoded;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // ==========================================
+  // V2.0 IN-CALL CHAT & LIVE IMAGE SHARING
+  // ==========================================
+
+  static Future<Map<String, dynamic>?> sendCallChatMessage({
+    required dynamic callSessionId,
+    required dynamic receiverId,
+    required String message,
+    String type = 'text',
+    String? imageUrl,
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.callChatSend);
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final payload = {
+        'call_session_id': callSessionId?.toString(),
+        'receiver_id': int.tryParse(receiverId.toString()) ?? receiverId,
+        'type': type,
+        'message': message,
+        if (imageUrl != null) 'image_url': imageUrl,
+      };
+      final response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body);
+        return decoded is Map<String, dynamic> ? decoded : null;
+      }
+    } catch (e) {
+      debugPrint('Error sending in-call chat: $e');
+    }
+    return null;
+  }
+
+  static Future<List<Map<String, dynamic>>> getCallChatMessages({
+    required dynamic callId,
+    dynamic callSessionId,
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(
+        callSessionId != null
+            ? '${ApiConstants.callChatMessages}?call_session_id=$callSessionId'
+            : ApiConstants.callMessages(callId),
+      );
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final dynamic rawList = decoded['data'] is Map ? decoded['data']['messages'] : decoded['data'];
+        if (rawList is List) {
+          return rawList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  static Future<String?> uploadLiveImage(File imageFile) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final uri = Uri.parse(ApiConstants.callUploadImage);
+      final request = http.MultipartRequest('POST', uri);
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      request.headers['Accept'] = 'application/json';
+
+      final multipartFile = await http.MultipartFile.fromPath('image', imageFile.path);
+      request.files.add(multipartFile);
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 20));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map) {
+          final dynamic data = decoded['data'] ?? decoded;
+          return data['image_url']?.toString() ?? data['file_url']?.toString() ?? data['url']?.toString();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error uploading live image: $e');
+    }
+    return null;
+  }
+
+  // ==========================================
+  // V2.0 USER FOLLOW / UNFOLLOW SYSTEM
+  // ==========================================
+
+  static Future<Map<String, dynamic>> followUser(dynamic userId, {String source = 'call'}) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.userFollow);
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final payload = {
+        'user_id': int.tryParse(userId.toString()) ?? userId,
+        'source': source,
+      };
+      final response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body);
+        return {
+          'success': true,
+          'is_following': decoded['is_following'] ?? true,
+          'message': decoded['message'] ?? 'Followed successfully',
+          'data': decoded['data'] ?? decoded,
+        };
+      }
+    } catch (_) {}
+    return {'success': false, 'is_following': false};
+  }
+
+  static Future<Map<String, dynamic>> unfollowUser(dynamic userId) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.userUnfollow);
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final payload = {
+        'user_id': int.tryParse(userId.toString()) ?? userId,
+      };
+      final response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        return {
+          'success': true,
+          'is_following': decoded['is_following'] ?? false,
+          'message': decoded['message'] ?? 'Unfollowed successfully',
+          'data': decoded['data'] ?? decoded,
+        };
+      }
+    } catch (_) {}
+    return {'success': false, 'is_following': true};
+  }
+
+  static Future<Map<String, dynamic>> getFollowStatus(dynamic userId) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.userFollowStatus(userId));
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final dynamic data = decoded['data'] ?? decoded;
+        if (data is Map) {
+          return {
+            'is_following': data['is_following'] == true,
+            'is_followed_by': data['is_followed_by'] == true,
+            'followers_count': data['followers_count'] ?? data['target_followers_count'] ?? 0,
+            'following_count': data['following_count'] ?? data['my_following_count'] ?? 0,
+          };
+        }
+      }
+    } catch (_) {}
+    return {'is_following': false, 'is_followed_by': false, 'followers_count': 0, 'following_count': 0};
+  }
+
+  // ==========================================
+  // V2.0 LIVE BROADCAST & STREAMING ROOM
+  // ==========================================
+
+  static Future<List<Map<String, dynamic>>> getLiveStreams() async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.liveStreams);
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final dynamic list = decoded['data'] is List ? decoded['data'] : (decoded['streams'] is List ? decoded['streams'] : null);
+        if (list is List) {
+          return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  static Future<Map<String, dynamic>?> createLiveStream({required String title, String? coverUrl}) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.liveCreate);
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final payload = {
+        'title': title,
+        if (coverUrl != null) 'cover_url': coverUrl,
+      };
+      final response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body);
+        return decoded['data'] is Map ? decoded['data'] as Map<String, dynamic> : decoded as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static Future<bool> sendLiveMessage(dynamic liveId, String message) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.liveSendMessage(liveId));
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final payload = {'message': message};
+      final response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 6));
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> sendLiveGift(dynamic liveId, dynamic giftId, int quantity) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.liveSendGift(liveId));
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final payload = {'gift_id': giftId, 'quantity': quantity};
+      final response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 6));
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (_) {
+      return false;
+    }
   }
 }

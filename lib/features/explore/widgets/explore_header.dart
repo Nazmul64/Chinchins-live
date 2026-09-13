@@ -40,13 +40,15 @@ class ExploreHeader extends StatelessWidget {
             const SizedBox(width: 6),
           ],
 
-          // Left Tabs: Hot & Match
+          // Left Tabs: Hot, Match & Live (Broadcasting)
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildTabItem(title: 'Hot', index: 0),
               const SizedBox(width: 14),
               _buildTabItem(title: 'Match', index: 1),
+              const SizedBox(width: 14),
+              _buildTabItem(title: 'Live', index: 2, isLiveTab: true),
             ],
           ),
 
@@ -121,7 +123,7 @@ class ExploreHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildTabItem({required String title, required int index}) {
+  Widget _buildTabItem({required String title, required int index, bool isLiveTab = false}) {
     final isSelected = selectedTabIndex == index;
     return GestureDetector(
       onTap: () => onTabSelected(index),
@@ -129,19 +131,65 @@ class ExploreHeader extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: isSelected ? Colors.white : AppColors.textMuted,
-              fontSize: isSelected ? 22 : 18,
-              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.textMuted,
+                  fontSize: isSelected ? 22 : 18,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                ),
+              ),
+              if (isLiveTab) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF007F), Color(0xFFFF5252)],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF007F).withValues(alpha: 0.6),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 5,
+                        height: 5,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      const Text(
+                        'LIVE',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 3),
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             height: 2.5,
-            width: isSelected ? 20 : 0,
+            width: isSelected ? 24 : 0,
             decoration: BoxDecoration(
               gradient: AppColors.primaryGradient,
               borderRadius: BorderRadius.circular(2),
@@ -152,3 +200,4 @@ class ExploreHeader extends StatelessWidget {
     );
   }
 }
+

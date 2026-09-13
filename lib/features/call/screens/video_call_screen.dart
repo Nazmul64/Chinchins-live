@@ -11,7 +11,15 @@ import '../../wallet/widgets/in_call_recharge_gems_sheet.dart';
 import '../services/call_api_service.dart';
 import '../services/call_sound_manager.dart';
 import '../services/webrtc_call_service.dart';
+import '../services/beauty_filter_engine.dart';
+import '../services/pip_call_overlay.dart';
 import '../widgets/webrtc_debug_modal.dart';
+import '../widgets/camera_filter_tray.dart';
+import '../widgets/in_call_profile_sheet.dart';
+import '../widgets/in_call_chat_overlay.dart';
+import '../widgets/in_call_gift_sheet.dart';
+import '../widgets/gift_animation_overlay.dart';
+import '../widgets/call_end_confirmation_dialog.dart';
 
 class VideoCallScreen extends StatefulWidget {
   final ModelProfile model;
@@ -41,6 +49,11 @@ class VideoCallScreen extends StatefulWidget {
 
 class _VideoCallScreenState extends State<VideoCallScreen> {
   final WebRTCCallService _webrtcService = WebRTCCallService();
+  final GlobalKey<GiftAnimationOverlayState> _giftAnimKey = GlobalKey<GiftAnimationOverlayState>();
+  final GlobalKey<InCallChatOverlayState> _chatKey = GlobalKey<InCallChatOverlayState>();
+
+  FilterPreset _currentFilter = BeautyFilterEngine.presets[1]; // Default to Beauty Glow (HD radiant skin)
+
   bool _isCameraReady = false;
   bool _isConnectingCall = true;
   bool _isSwappedVideo = false;
@@ -496,430 +509,540 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     });
   }
 
+  Future<void> _handleUserHangup() async {
+    if (!_isConnectingCall && _callSeconds > 0) {
+      final shouldEnd = await showCallEndConfirmationDialog(
+        context,
+        peerName: widget.model.name,
+      );
+      if (shouldEnd != true) return;
+    }
+    _endCall();
+  }
+
+  void _minimizeToPiP() {
+    PiPCallOverlay.showMiniWindow(
+      context,
+      remoteVideoView: RepaintBoundary(child: _buildMainVideoView()),
+      peerName: widget.model.name,
+      callDurationText: _formatDuration(_callSeconds),
+      callSessionId: widget.callId ?? widget.channelName,
+      onTapRestore: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => this),
+        );
+      },
+      onEndCall: () {
+        _handleUserHangup();
+      },
+    );
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          // ১. মূল ফুলস্ক্রিন ভিডিও ভিউ (ঝাপসা/Blur সাপোর্টসহ)
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _isSwappedVideo = !_isSwappedVideo;
-              });
-            },
-            child: _isVideoBlurred
-                ? ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        _buildMainVideoView(),
-                        Container(color: Colors.black.withValues(alpha: 0.65)),
-                      ],
-                    ),
-                  )
-                : _buildMainVideoView(),
-          ),
-
-          // শ্যাডো গ্রেডিয়েন্ট ওভারলে
-          IgnorePointer(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0x99000000),
-                    Colors.transparent,
-                    Color(0xDD000000),
-                  ],
-                  stops: [0.0, 0.35, 1.0],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          _minimizeToPiP();
+        }
+      },
+      child: GiftAnimationOverlay(
+        key: _giftAnimKey,
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              // ১. মূল ফুলস্ক্রিন ভিডিও ভিউ (ঝাপসা/Blur ও বিউটি ফিল্টার সাপোর্টসহ)
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _isSwappedVideo = !_isSwappedVideo;
+                  });
+                },
+                child: _isVideoBlurred
+                    ? ImageFiltered(
+                        imageFilter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            _buildMainVideoView(),
+                            Container(color: Colors.black.withValues(alpha: 0.65)),
+                          ],
+                        ),
+                      )
+                    : _buildMainVideoView(),
               ),
-            ),
-          ),
 
-          // ২. Ringing / Calling ইন্ডিকেটর
-          if (_isConnectingCall && !_webrtcService.hasRemoteStream)
-            Positioned(
-              top: MediaQuery.of(context).size.height * 0.4,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: GestureDetector(
-                  onTap: () {
-                    WebRTCDebugModal.show(
-                      context,
-                      webrtcService: _webrtcService,
-                      callId: widget.callId,
-                      isIncoming: widget.isIncoming,
-                      callerOrReceiverName: widget.model.name,
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.85),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.9), width: 1.8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.neonPink.withValues(alpha: 0.3),
-                          blurRadius: 16,
-                          spreadRadius: 2,
-                        ),
+              // শ্যাডো গ্রেডিয়েন্ট ওভারলে
+              IgnorePointer(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(0x99000000),
+                        Colors.transparent,
+                        Color(0xDD000000),
                       ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPink),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          widget.model.isOnline ? 'Ringing...' : 'Calling...',
-                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.neonPink.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            '🛠️ ডিবাগ লগ',
-                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
+                      stops: [0.0, 0.35, 1.0],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
                     ),
                   ),
                 ),
               ),
-            ),
 
-          // ৩. টপ হেডার বার: ব্যাক/ডাউন অ্যারো + হোস্ট প্রোফাইল ক্যাপসুল (টপ-লেফটে) এবং PiP উইন্ডো (টপ-রাইটে)
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left: Down Arrow (⌄) + Host Profile Capsule
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 34),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
-                      ),
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              // ২. Ringing / Calling ইন্ডিকেটর
+              if (_isConnectingCall && !_webrtcService.hasRemoteStream)
+                Positioned(
+                  top: MediaQuery.of(context).size.height * 0.4,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: () {
+                        WebRTCDebugModal.show(
+                          context,
+                          webrtcService: _webrtcService,
+                          callId: widget.callId,
+                          isIncoming: widget.isIncoming,
+                          callerOrReceiverName: widget.model.name,
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.65),
+                          color: Colors.black.withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: Colors.white24, width: 1),
+                          border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.9), width: 1.8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.neonPink.withValues(alpha: 0.3),
+                              blurRadius: 16,
+                              spreadRadius: 2,
+                            ),
+                          ],
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            AvatarWithFrame(
-                              avatarUrl: widget.model.avatarUrl,
-                              frameUrl: widget.model.avatarFrameUrl,
-                              level: widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level,
-                              badgeColor: widget.model.badgeColor,
-                              glowColor: widget.model.glowColor,
-                              size: 32,
-                              showLevelBadge: false,
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPink),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              widget.model.isOnline ? 'Ringing...' : 'Calling...',
+                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(width: 8),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.neonPink.withValues(alpha: 0.25),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                '🛠️ ডিবাগ লগ',
+                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // ৩. টপ হেডার বার: ব্যাক/ডাউন অ্যারো + হোস্ট প্রোফাইল ক্যাপসুল (টপ-লেফটে) এবং PiP উইন্ডো (টপ-রাইটে)
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left: Down Arrow (⌄) [Minimizes to PiP without dropping call] + Host Profile Capsule
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 34),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                            onPressed: _minimizeToPiP,
+                          ),
+                          const SizedBox(width: 4),
+                          GestureDetector(
+                            onTap: () {
+                              InCallProfileSheet.show(context, model: widget.model);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.65),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: Colors.white24, width: 1),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  AvatarWithFrame(
+                                    avatarUrl: widget.model.avatarUrl,
+                                    frameUrl: widget.model.avatarFrameUrl,
+                                    level: widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level,
+                                    badgeColor: widget.model.badgeColor,
+                                    glowColor: widget.model.glowColor,
+                                    size: 32,
+                                    showLevelBadge: false,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        widget.model.name,
+                                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        'Lv.${widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level}',
+                                        style: TextStyle(
+                                          color: HexColor.fromHex(widget.model.badgeColor, defaultColor: AppColors.gemYellow),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 16),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Right: PiP Window (Single Clean Instance with Timer) + Dev Mode Button
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _isSwappedVideo = !_isSwappedVideo;
+                              });
+                            },
+                            child: Container(
+                              width: 100,
+                              height: 140,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.8), width: 1.5),
+                                boxShadow: const [
+                                  BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4)),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    _buildPipVideoView(),
+                                    // Call Duration Timer Label
+                                    Positioned(
+                                      bottom: 6,
+                                      right: 6,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(alpha: 0.75),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          _formatDuration(_callSeconds),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // ৪. রাইট সাইডবারে ইন-কল কুইক অ্যাকশন বোতাম (ফিল্টার, লাইভ চ্যাট ও গিফট)
+              Positioned(
+                right: 14,
+                bottom: 180,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ✨ TikTok-Style Beauty Filters Button
+                    _buildFloatingActionButton(
+                      icon: Icons.auto_fix_high_rounded,
+                      label: 'Beauty',
+                      color: AppColors.neonPink,
+                      onTap: () {
+                        CameraFilterTray.show(
+                          context,
+                          currentFilter: _currentFilter,
+                          onFilterSelected: (preset) {
+                            setState(() => _currentFilter = preset);
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 💬 In-Call Live Chat Drawer Toggle Button
+                    _buildFloatingActionButton(
+                      icon: Icons.chat_bubble_rounded,
+                      label: 'Chat',
+                      color: const Color(0xFF00E5FF),
+                      onTap: () {
+                        _chatKey.currentState?.toggleChatDrawer();
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 🎁 Virtual Luxury Gifts Button
+                    _buildFloatingActionButton(
+                      icon: Icons.card_giftcard_rounded,
+                      label: 'Gift',
+                      color: const Color(0xFFFFD54F),
+                      onTap: () {
+                        InCallGiftSheet.show(
+                          context,
+                          receiverId: widget.model.id,
+                          receiverName: widget.model.name,
+                          callSessionId: widget.callId,
+                          onGiftSent: (anim) {
+                            _giftAnimKey.currentState?.playGiftAnimation(anim);
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // ফ্লোটিং মিনি জেম প্যাকেজ উইজেট
+                    GestureDetector(
+                      onTap: _showInCallRechargeSheet,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF281056), Color(0xFF6A1B9A)],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFFFD54F), width: 1.5),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                const Icon(Icons.diamond_rounded, color: Color(0xFFFFD54F), size: 12),
+                                const SizedBox(width: 3),
                                 Text(
-                                  widget.model.name,
-                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Text(
-                                  'Lv.${widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level}',
-                                  style: TextStyle(
-                                    color: HexColor.fromHex(widget.model.badgeColor, defaultColor: AppColors.gemYellow),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                                  '${_featuredPackage?['coins'] ?? _featuredPackage?['amount'] ?? 32000}',
+                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                               ],
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-
-                  // Right: PiP Window (Single Clean Instance with Timer) + Dev Mode Button
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _isSwappedVideo = !_isSwappedVideo;
-                          });
-                        },
-                        child: Container(
-                          width: 100,
-                          height: 140,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.8), width: 1.5),
-                            boxShadow: const [
-                              BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4)),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                _buildPipVideoView(),
-                                // Call Duration Timer Label
-                                Positioned(
-                                  bottom: 6,
-                                  right: 6,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: 0.75),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      _formatDuration(_callSeconds),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Dev Mode Button
-                      GestureDetector(
-                        onTap: () {
-                          WebRTCDebugModal.show(
-                            context,
-                            webrtcService: _webrtcService,
-                            callId: widget.callId,
-                            isIncoming: widget.isIncoming,
-                            callerOrReceiverName: widget.model.name,
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.6),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.8), width: 1.2),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.bug_report_rounded, color: AppColors.neonPink, size: 13),
-                              SizedBox(width: 4),
-                              Text('Dev mode', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // ৪. ফ্লোটিং মিনি জেম প্যাকেজ উইজেট (Dynamic Database Package from Admin Panel)
-          Positioned(
-            right: 16,
-            bottom: 150,
-            child: GestureDetector(
-              onTap: _showInCallRechargeSheet,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF281056), Color(0xFF6A1B9A)],
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFFFFD54F), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFFD54F).withValues(alpha: 0.35),
-                      blurRadius: 12,
-                      spreadRadius: 1,
                     ),
                   ],
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
+              ),
+
+              // ৫. ইন-কল লাইভ চ্যাট ওভারলে (বাম পাশে)
+              Positioned(
+                left: 12,
+                bottom: 120,
+                right: 80,
+                child: InCallChatOverlay(
+                  key: _chatKey,
+                  callSessionId: widget.callId ?? widget.channelName,
+                  receiverId: widget.model.id,
+                  receiverName: widget.model.name,
+                ),
+              ),
+
+              // ৬. সেন্ড করা কুইক মেসেজের ফ্লোটিং টোস্ট
+              if (_sentMessageFeedback != null)
+                Positioned(
+                  bottom: 125,
+                  left: 20,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.neonPink, width: 1),
+                    ),
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.diamond_rounded, color: Color(0xFFFFD54F), size: 14),
-                        const SizedBox(width: 4),
+                        const Icon(Icons.check_circle_rounded, color: AppColors.onlineGreen, size: 14),
+                        const SizedBox(width: 6),
                         Text(
-                          '${_featuredPackage?['coins'] ?? _featuredPackage?['amount'] ?? 32000}${(_featuredPackage?['bonus_coins'] is int && _featuredPackage!['bonus_coins'] > 0) ? ' + ${_featuredPackage!['bonus_coins']}' : ''}',
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          'Sent: "$_sentMessageFeedback"',
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _featuredPackage?['price_formatted']?.toString() ?? (_featuredPackage?['price'] != null ? 'BDT ${_featuredPackage!['price']}' : 'BDT 550.00'),
-                      style: const TextStyle(color: Color(0xFFFFD54F), fontSize: 9, fontWeight: FontWeight.bold),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ),
 
-          // ৭. সেন্ড করা কুইক মেসেজের ফ্লোটিং টোস্ট
-          if (_sentMessageFeedback != null)
-            Positioned(
-              bottom: 125,
-              left: 20,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.neonPink, width: 1),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.check_circle_rounded, color: AppColors.onlineGreen, size: 14),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Sent: "$_sentMessageFeedback"',
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-          // ৮. বটম কুইক মেসেজ চিপস ও সুইচ অফ পাওয়ার বাটন (Screenshot 2 & 3)
-          Positioned(
-            bottom: 24,
-            left: 16,
-            right: 16,
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // কুইক চ্যাট চিপস রো
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    child: Row(
-                      children: _quickMessages.map((msg) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: GestureDetector(
-                            onTap: () => _sendQuickMessage(msg),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.55),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1),
-                              ),
-                              child: Text(
-                                msg,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+              // ৭. বটম কুইক মেসেজ চিপস ও সুইচ অফ পাওয়ার বাটন
+              Positioned(
+                bottom: 24,
+                left: 16,
+                right: 16,
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // কুইক চ্যাট চিপস রো
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        child: Row(
+                          children: _quickMessages.map((msg) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: GestureDetector(
+                                onTap: () => _sendQuickMessage(msg),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.55),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1),
+                                  ),
+                                  child: Text(
+                                    msg,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // ফ্রি মেসেজ চান্স লেবেল এবং কাট/পাওয়ার সুইচ বাটন (⏻)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'You have $_freeMessageChances free message chances',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+
+                          // পাওয়ার/কাট সুইচ বাটন (⏻)
+                          GestureDetector(
+                            onTap: _handleUserHangup,
+                            child: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.black.withValues(alpha: 0.65),
+                                border: Border.all(color: Colors.white70, width: 1.5),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Colors.black45,
+                                    blurRadius: 8,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.power_settings_new_rounded,
+                                color: Colors.white,
+                                size: 22,
                               ),
                             ),
                           ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // ফ্রি মেসেজ চান্স লেবেল এবং কাট/পাওয়ার সুইচ বাটন (⏻)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'You have $_freeMessageChances free message chances',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-
-                      // পাওয়ার/কাট সুইচ বাটন (⏻)
-                      GestureDetector(
-                        onTap: _endCall,
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.black.withValues(alpha: 0.65),
-                            border: Border.all(color: Colors.white70, width: 1.5),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.4),
-                                blurRadius: 8,
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.power_settings_new_rounded,
-                            color: Colors.white,
-                            size: 22,
-                          ),
-                        ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFloatingActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.65),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withValues(alpha: 0.8), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                ),
+              ],
             ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
           ),
         ],
       ),
@@ -927,58 +1050,74 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   }
 
   Widget _buildMainVideoView() {
+    Widget videoWidget;
     if (!_isSwappedVideo) {
       if (_webrtcService.hasRemoteStream) {
-        return RTCVideoView(
+        videoWidget = RTCVideoView(
           _webrtcService.remoteRenderer,
           objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
         );
       } else {
-        return CachedImageLoader(
+        videoWidget = CachedImageLoader(
           imageUrl: widget.model.avatarUrl,
           fit: BoxFit.cover,
         );
       }
     } else {
       if (_isCameraReady) {
-        return RTCVideoView(
+        videoWidget = RTCVideoView(
           _webrtcService.localRenderer,
           mirror: true,
           objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
         );
       } else {
-        return const Center(
+        videoWidget = const Center(
           child: CircularProgressIndicator(color: AppColors.neonPink),
         );
       }
     }
+
+    return RepaintBoundary(
+      child: BeautyFilterEngine.applyFilterToWidget(
+        child: videoWidget,
+        filter: _currentFilter,
+      ),
+    );
   }
 
   Widget _buildPipVideoView() {
+    Widget pipWidget;
     if (!_isSwappedVideo) {
       if (_isCameraReady) {
-        return RTCVideoView(
+        pipWidget = RTCVideoView(
           _webrtcService.localRenderer,
           mirror: true,
           objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
         );
       } else {
-        return const Center(
+        pipWidget = const Center(
           child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPink),
         );
       }
     } else {
       if (_webrtcService.hasRemoteStream) {
-        return RTCVideoView(
+        pipWidget = RTCVideoView(
           _webrtcService.remoteRenderer,
           objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
         );
       } else {
-        return CachedImageLoader(
+        pipWidget = CachedImageLoader(
           imageUrl: widget.model.avatarUrl,
           fit: BoxFit.cover,
         );
       }
     }
+
+    return RepaintBoundary(
+      child: BeautyFilterEngine.applyFilterToWidget(
+        child: pipWidget,
+        filter: _currentFilter,
+      ),
+    );
   }
 }

@@ -6,6 +6,7 @@ import '../../auth/services/auth_api_service.dart';
 import '../widgets/explore_header.dart';
 import '../widgets/model_grid_card.dart';
 import '../widgets/match_tab_view.dart';
+import '../widgets/live_feed_view.dart';
 import '../widgets/draggable_extra_gems_widget.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
@@ -466,78 +467,9 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
                   selectedCountryCode: _selectedCountryCode,
                 ),
 
-                // User Cards 2-Column Grid OR Match Tab View
+                // User Cards 2-Column Grid, Match Tab View, OR Live Broadcast Tab View
                 Expanded(
-                  child: _selectedTabIndex == 1
-                      ? MatchTabView(
-                          onStartMatching: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const RandomMatchScreen(),
-                              ),
-                            );
-                          },
-                        )
-                      : (_isLoading && _models.isEmpty
-                          ? const Center(
-                              child: CircularProgressIndicator(color: AppColors.neonPink),
-                            )
-                          : _models.isEmpty
-                              ? RefreshIndicator(
-                                  color: AppColors.neonPink,
-                                  backgroundColor: AppColors.cardDark,
-                                  onRefresh: _loadHomeFeed,
-                                  child: ListView(
-                                    physics: const AlwaysScrollableScrollPhysics(),
-                                    children: [
-                                      SizedBox(height: MediaQuery.of(context).size.height * 0.25),
-                                      const Center(
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(Icons.wifi_tethering_off_rounded, color: AppColors.textMuted, size: 54),
-                                            SizedBox(height: 14),
-                                            Text(
-                                              'No Streamers Found',
-                                              style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
-                                            ),
-                                            SizedBox(height: 6),
-                                            Text(
-                                              'Pull down to refresh or check back soon',
-                                              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : RefreshIndicator(
-                                  color: AppColors.neonPink,
-                                  backgroundColor: AppColors.cardDark,
-                                  onRefresh: _loadHomeFeed,
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    child: GridView.builder(
-                                      itemCount: _models.length,
-                                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 2,
-                                        childAspectRatio: 0.68, // Exact portrait proportion
-                                        crossAxisSpacing: 10,
-                                        mainAxisSpacing: 10,
-                                      ),
-                                      itemBuilder: (context, index) {
-                                        final model = _models[index];
-                                        return ModelGridCard(
-                                          model: model,
-                                          onTap: () => _openHostProfile(model),
-                                          onVideoCallTap: () => _startVideoCall(model),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                )),
+                  child: _buildCurrentTabBody(),
                 ),
               ],
             ),
@@ -552,4 +484,92 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
       ),
     );
   }
+
+  Widget _buildCurrentTabBody() {
+    if (_selectedTabIndex == 2) {
+      return LiveFeedView(
+        models: _models,
+        onRefresh: _loadHomeFeed,
+      );
+    }
+
+    if (_selectedTabIndex == 1) {
+      return MatchTabView(
+        onStartMatching: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const RandomMatchScreen(),
+            ),
+          );
+        },
+      );
+    }
+
+    // Tab 0: Hot Explore Grid Feed
+    if (_isLoading && _models.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.neonPink),
+      );
+    }
+
+    if (_models.isEmpty) {
+      return RefreshIndicator(
+        color: AppColors.neonPink,
+        backgroundColor: AppColors.cardDark,
+        onRefresh: _loadHomeFeed,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.25),
+            const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.wifi_tethering_off_rounded, color: AppColors.textMuted, size: 54),
+                  SizedBox(height: 14),
+                  Text(
+                    'No Streamers Found',
+                    style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    'Pull down to refresh or check back soon',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      color: AppColors.neonPink,
+      backgroundColor: AppColors.cardDark,
+      onRefresh: _loadHomeFeed,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: GridView.builder(
+          itemCount: _models.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 0.68, // Exact portrait proportion
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+          ),
+          itemBuilder: (context, index) {
+            final model = _models[index];
+            return ModelGridCard(
+              model: model,
+              onTap: () => _openHostProfile(model),
+              onVideoCallTap: () => _startVideoCall(model),
+            );
+          },
+        ),
+      ),
+    );
+  }
 }
+
