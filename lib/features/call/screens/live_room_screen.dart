@@ -187,7 +187,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       onTapRestore: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => this),
+          MaterialPageRoute(builder: (_) => widget),
         );
       },
       onEndCall: () {

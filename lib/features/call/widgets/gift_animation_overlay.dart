@@ -22,9 +22,9 @@ class ActiveGiftAnimation {
 }
 
 class GiftAnimationOverlay extends StatefulWidget {
-  final Widget child;
+  final Widget? child;
 
-  const GiftAnimationOverlay({super.key, required this.child});
+  const GiftAnimationOverlay({super.key, this.child});
 
   static GiftAnimationOverlayState? of(BuildContext context) {
     return context.findAncestorStateOfType<GiftAnimationOverlayState>();
@@ -102,7 +102,7 @@ class GiftAnimationOverlayState extends State<GiftAnimationOverlay> with TickerP
     return Stack(
       fit: StackFit.passthrough,
       children: [
-        widget.child,
+        if (widget.child != null) widget.child!,
         if (_currentGift != null)
           Positioned.fill(
             child: IgnorePointer(

@@ -530,7 +530,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       onTapRestore: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => this),
+          MaterialPageRoute(builder: (_) => widget),
         );
       },
       onEndCall: () {
@@ -782,7 +782,6 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                 ),
                               ),
                             ),
-                          ),
                           ),
                         ],
                       ),

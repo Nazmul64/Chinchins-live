@@ -56,6 +56,9 @@ class FilterPreset {
       0, 0, 0, 1, 0,
     ];
   }
+
+  /// Convenience getter for matrix
+  List<double> get matrix => toColorMatrix();
 }
 
 class BeautyFilterEngine {

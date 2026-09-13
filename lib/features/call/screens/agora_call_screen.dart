@@ -629,7 +629,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       onTapRestore: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => this),
+          MaterialPageRoute(builder: (_) => widget),
         );
       },
       onEndCall: () {
