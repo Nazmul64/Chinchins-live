@@ -8,6 +8,7 @@ import '../../../core/widgets/cached_image_loader.dart';
 import '../../../core/widgets/avatar_with_frame.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../../wallet/widgets/in_call_recharge_gems_sheet.dart';
+import '../../../core/services/signaling_service.dart';
 import '../services/call_api_service.dart';
 import '../services/call_sound_manager.dart';
 import '../services/webrtc_call_service.dart';
@@ -72,6 +73,11 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   bool _isPulseInProgress = false;
   bool _hasStartedTimer = false;
 
+  StreamSubscription? _wsEndedSub;
+  StreamSubscription? _wsRejectedSub;
+  StreamSubscription? _wsCancelledSub;
+  StreamSubscription? _wsInCallMsgSub;
+
   // In-call Quick Messages & Free Chances
   int _freeMessageChances = 2;
   String? _sentMessageFeedback;
@@ -111,6 +117,33 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _loadUserBalance();
     _loadFeaturedPackage();
     _loadCallConfig();
+    _subscribeSignalingEvents();
+  }
+
+  void _subscribeSignalingEvents() {
+    _wsEndedSub = SignalingService().onCallEnded.listen((data) {
+      CallSoundManager.stopRingtone();
+      if (mounted && !_isEndingCall) {
+        _endCall();
+      }
+    });
+    _wsRejectedSub = SignalingService().onCallRejected.listen((data) {
+      CallSoundManager.stopRingtone();
+      if (mounted && !_isEndingCall) {
+        _endCall();
+      }
+    });
+    _wsCancelledSub = SignalingService().onCallCancelled.listen((data) {
+      CallSoundManager.stopRingtone();
+      if (mounted && !_isEndingCall) {
+        _endCall();
+      }
+    });
+    _wsInCallMsgSub = SignalingService().onInCallMessage.listen((data) {
+      if (mounted) {
+        _chatKey.currentState?.addIncomingMessage(data);
+      }
+    });
   }
 
   Future<void> _loadCallConfig() async {
@@ -337,6 +370,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
     _timer?.cancel();
     _pollingTimer?.cancel();
+    _wsEndedSub?.cancel();
+    _wsRejectedSub?.cancel();
+    _wsCancelledSub?.cancel();
+    _wsInCallMsgSub?.cancel();
     await CallSoundManager.stopRingtone();
 
     if (widget.callId != null) {
@@ -356,8 +393,13 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   @override
   void dispose() {
+    _isEndingCall = true;
     _timer?.cancel();
     _pollingTimer?.cancel();
+    _wsEndedSub?.cancel();
+    _wsRejectedSub?.cancel();
+    _wsCancelledSub?.cancel();
+    _wsInCallMsgSub?.cancel();
     CallSoundManager.stopRingtone();
     _webrtcService.dispose();
     super.dispose();

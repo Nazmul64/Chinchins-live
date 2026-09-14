@@ -187,6 +187,20 @@ class CallApiService {
       }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        // 1. Check Offline Defense
+        final bool isOffline = decoded['code'] == 'USER_OFFLINE' ||
+            decoded['is_online'] == false ||
+            (decoded['receiver'] is Map && (decoded['receiver'] as Map)['is_online'] == false);
+        if (isOffline) {
+          return {
+            'success': false,
+            'is_offline': true,
+            'code': 'USER_OFFLINE',
+            'message': decoded['message'] ?? 'Host is currently offline.',
+          };
+        }
+
+        // 2. Check Busy Defense (In-call or In-live)
         final bool isBusy = decoded['code'] == 'USER_BUSY' ||
             decoded['is_busy'] == true ||
             (decoded['receiver'] is Map && (decoded['receiver'] as Map)['is_busy'] == true);
@@ -195,7 +209,7 @@ class CallApiService {
             'success': false,
             'is_busy': true,
             'code': 'USER_BUSY',
-            'message': decoded['message'] ?? 'Host is currently busy in another call. Please try again in a few moments.',
+            'message': decoded['message'] ?? 'Host is currently busy in another call or live broadcast.',
           };
         }
 
@@ -243,6 +257,20 @@ class CallApiService {
           'message': decoded['message'] ?? 'Call initiated successfully.',
         };
       } else {
+        // 1. Check Offline Defense on Error response (e.g. 400 Bad Request)
+        final bool isOffline = decoded['code'] == 'USER_OFFLINE' ||
+            decoded['is_online'] == false ||
+            (decoded['receiver'] is Map && (decoded['receiver'] as Map)['is_online'] == false);
+        if (isOffline) {
+          return {
+            'success': false,
+            'is_offline': true,
+            'code': 'USER_OFFLINE',
+            'message': decoded['message'] ?? 'Host is currently offline.',
+          };
+        }
+
+        // 2. Check Busy Defense on Error response
         final bool isBusy = decoded['code'] == 'USER_BUSY' ||
             decoded['is_busy'] == true ||
             (decoded['receiver'] is Map && (decoded['receiver'] as Map)['is_busy'] == true);
@@ -251,7 +279,7 @@ class CallApiService {
             'success': false,
             'is_busy': true,
             'code': 'USER_BUSY',
-            'message': decoded['message'] ?? 'Host is currently busy in another call. Please try again in a few moments.',
+            'message': decoded['message'] ?? 'Host is currently busy in another call or live broadcast.',
           };
         }
 

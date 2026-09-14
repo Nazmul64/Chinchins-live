@@ -87,6 +87,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   StreamSubscription? _wsEndedSub;
   StreamSubscription? _wsRejectedSub;
   StreamSubscription? _wsCancelledSub;
+  StreamSubscription? _wsInCallMsgSub;
   int _userGems = 0;
   bool _isRechargeSheetOpen = false;
   bool _isFreeTrialActive = true;
@@ -152,6 +153,12 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       CallSoundManager.stopRingtone();
       if (mounted && !_isEndingCall) {
         _endCall();
+      }
+    });
+    _wsInCallMsgSub = SignalingService().onInCallMessage.listen((data) {
+      debugPrint('[AgoraCallScreen] Received InCallMessage via WebSocket: $data');
+      if (mounted) {
+        _chatKey.currentState?.addIncomingMessage(data);
       }
     });
   }
@@ -556,6 +563,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     _wsEndedSub?.cancel();
     _wsRejectedSub?.cancel();
     _wsCancelledSub?.cancel();
+    _wsInCallMsgSub?.cancel();
 
     if (widget.callId != null) {
       if (_isConnecting || _callSeconds <= 0) {
@@ -601,6 +609,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     _wsEndedSub?.cancel();
     _wsRejectedSub?.cancel();
     _wsCancelledSub?.cancel();
+    _wsInCallMsgSub?.cancel();
     if (_engine != null) {
       _engine!.leaveChannel();
       _engine!.release();
@@ -917,7 +926,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
                   scrollDirection: Axis.horizontal,
                   physics: const BouncingScrollPhysics(),
                   itemCount: _quickMessages.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, idx) {
                     final msg = _quickMessages[idx];
                     return GestureDetector(

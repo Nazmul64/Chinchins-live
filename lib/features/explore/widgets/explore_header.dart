@@ -24,7 +24,7 @@ class ExploreHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       color: AppColors.backgroundDark,
       child: Row(
         children: [
@@ -40,19 +40,25 @@ class ExploreHeader extends StatelessWidget {
             const SizedBox(width: 6),
           ],
 
-          // Left Tabs: Hot, Match & Live (Broadcasting)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildTabItem(title: 'Hot', index: 0),
-              const SizedBox(width: 14),
-              _buildTabItem(title: 'Match', index: 1),
-              const SizedBox(width: 14),
-              _buildTabItem(title: 'Live', index: 2, isLiveTab: true),
-            ],
+          // Left Tabs: Hot, Match & [🔴 LIVE] (Broadcasting)
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildTabItem(title: 'Hot', index: 0),
+                  const SizedBox(width: 14),
+                  _buildTabItem(title: 'Match', index: 1),
+                  const SizedBox(width: 14),
+                  _buildTabItem(title: 'Live', index: 2, isLiveTab: true),
+                ],
+              ),
+            ),
           ),
 
-          const Spacer(),
+          const SizedBox(width: 4),
 
           // Right Actions: Search Icon & Country Pill (🔴 BGD ⌄)
           Row(
@@ -60,18 +66,18 @@ class ExploreHeader extends StatelessWidget {
             children: [
               // Search Icon
               IconButton(
-                icon: const Icon(Icons.search_rounded, color: Colors.white, size: 24),
+                icon: const Icon(Icons.search_rounded, color: Colors.white, size: 22),
                 onPressed: onSearchTap,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               ),
               // Country Pill (🔴 BGD ⌄) matching Screenshot (Shown on Hot tab)
               if (selectedTabIndex == 0) ...[
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 GestureDetector(
                   onTap: onCountryTap,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
                     decoration: BoxDecoration(
                       color: const Color(0xFF5B1066),
                       borderRadius: BorderRadius.circular(14),
@@ -80,8 +86,8 @@ class ExploreHeader extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          width: 8,
-                          height: 8,
+                          width: 7,
+                          height: 7,
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
                             color: Color(0xFFFF2A6D),
@@ -92,15 +98,15 @@ class ExploreHeader extends StatelessWidget {
                           selectedCountryCode,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 11.5,
+                            fontSize: 11,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(width: 2),
+                        const SizedBox(width: 1),
                         const Icon(
                           Icons.keyboard_arrow_down_rounded,
                           color: Colors.white,
-                          size: 15,
+                          size: 14,
                         ),
                       ],
                     ),
@@ -122,65 +128,62 @@ class ExploreHeader extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : AppColors.textMuted,
-                  fontSize: isSelected ? 22 : 18,
-                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                ),
+          if (!isLiveTab)
+            Text(
+              title,
+              style: TextStyle(
+                color: isSelected ? Colors.white : AppColors.textMuted,
+                fontSize: isSelected ? 20 : 17,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
               ),
-              if (isLiveTab) ...[
-                const SizedBox(width: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFFF007F), Color(0xFFFF5252)],
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFFF007F).withValues(alpha: 0.6),
-                        blurRadius: 6,
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 5,
-                        height: 5,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Text(
-                        'LIVE',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                    ],
-                  ),
+            )
+          else
+            // Clean [🔴 LIVE] pill badge without duplicate 'Live' text
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF007F), Color(0xFFFF5252)],
                 ),
-              ],
-            ],
-          ),
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFFFF007F).withValues(alpha: 0.6),
+                          blurRadius: 6,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 3.5),
+                  const Text(
+                    'LIVE',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 3),
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             height: 2.5,
-            width: isSelected ? 24 : 0,
+            width: isSelected ? (isLiveTab ? 26 : 22) : 0,
             decoration: BoxDecoration(
               gradient: AppColors.primaryGradient,
               borderRadius: BorderRadius.circular(2),

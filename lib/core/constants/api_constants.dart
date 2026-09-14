@@ -140,13 +140,30 @@ class ApiConstants {
   static String get unfollow => '$baseUrl/unfollow';
   static String userFollowStatus(dynamic id) => '$baseUrl/user/$id/follow-status';
 
-  // Live Broadcast & Live Streaming Endpoints
+  // Live Broadcast & Live Streaming Endpoints (v3.0 RESTful Specification)
+  static String get liveActive => '$baseUrl/lives/active';
+  static String get liveActiveAlt => '$baseUrl/live/active';
+  static String get liveList => '$baseUrl/live/list';
+  static String get liveStart => '$baseUrl/live/start';
+  static String get liveEnd => '$baseUrl/live/end';
+  static String get liveJoin => '$baseUrl/live/join';
+  static String get liveMessage => '$baseUrl/live/message';
+  static String get liveGift => '$baseUrl/live/gift';
+  static String get liveJoinRequest => '$baseUrl/live/join-request';
+  static String get liveAcceptRequest => '$baseUrl/live/accept-request';
+  static String get liveKickGuest => '$baseUrl/live/kick-guest';
+
+  // Agora Token Refresh Endpoints
+  static String get agoraTokenRefresh => '$baseUrl/agora/token/refresh';
+  static String get streamTokenRefresh => '$baseUrl/stream/token/refresh';
+
+  // Legacy Live Endpoints
   static String get liveStreams => '$baseUrl/live/streams';
   static String get liveCreate => '$baseUrl/live/create';
   static String liveRoom(dynamic id) => '$baseUrl/live/$id';
-  static String liveJoin(dynamic id) => '$baseUrl/live/$id/join';
+  static String liveJoinLegacy(dynamic id) => '$baseUrl/live/$id/join';
   static String liveLeave(dynamic id) => '$baseUrl/live/$id/leave';
-  static String liveEnd(dynamic id) => '$baseUrl/live/$id/end';
+  static String liveEndLegacy(dynamic id) => '$baseUrl/live/$id/end';
   static String liveMessages(dynamic id) => '$baseUrl/live/$id/messages';
   static String liveSendMessage(dynamic id) => '$baseUrl/live/$id/send-message';
   static String liveSendGift(dynamic id) => '$baseUrl/live/$id/send-gift';

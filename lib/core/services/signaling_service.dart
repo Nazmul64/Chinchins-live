@@ -37,6 +37,21 @@ class SignalingService {
   final StreamController<Map<String, dynamic>> _iceCandidateController =
       StreamController<Map<String, dynamic>>.broadcast();
 
+  final StreamController<Map<String, dynamic>> _inCallMessageController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _liveMessageController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _liveGiftController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _liveJoinRequestController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _liveJoinResponseController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _liveGuestKickedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _liveStreamEndedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
   Stream<Map<String, dynamic>> get onIncomingCall => _incomingCallController.stream;
   Stream<Map<String, dynamic>> get onCallAccepted => _callAcceptedController.stream;
   Stream<Map<String, dynamic>> get onCallRejected => _callRejectedController.stream;
@@ -45,6 +60,13 @@ class SignalingService {
   Stream<Map<String, dynamic>> get onWebRTCOffer => _offerController.stream;
   Stream<Map<String, dynamic>> get onWebRTCAnswer => _answerController.stream;
   Stream<Map<String, dynamic>> get onWebRTCICECandidate => _iceCandidateController.stream;
+  Stream<Map<String, dynamic>> get onInCallMessage => _inCallMessageController.stream;
+  Stream<Map<String, dynamic>> get onLiveMessage => _liveMessageController.stream;
+  Stream<Map<String, dynamic>> get onLiveGift => _liveGiftController.stream;
+  Stream<Map<String, dynamic>> get onLiveJoinRequest => _liveJoinRequestController.stream;
+  Stream<Map<String, dynamic>> get onLiveJoinResponse => _liveJoinResponseController.stream;
+  Stream<Map<String, dynamic>> get onLiveGuestKicked => _liveGuestKickedController.stream;
+  Stream<Map<String, dynamic>> get onLiveStreamEnded => _liveStreamEndedController.stream;
 
   EndpointAuthorizableChannelTokenAuthorizationDelegate<PrivateChannelAuthorizationData>
       _getAuthDelegate() {
@@ -153,12 +175,36 @@ class SignalingService {
 
   Future<void> subscribeToCallRoom(String roomId) async {
     if (_pusherClient == null || roomId.isEmpty) return;
+    await _subscribeToChannel('presence-call.$roomId', isPrivate: true);
     await _subscribeToChannel('private-call.$roomId', isPrivate: true);
     await _subscribeToChannel('call.$roomId', isPrivate: false);
+    await _subscribeToChannel('call_chat.$roomId', isPrivate: false);
   }
 
   Future<void> leaveCallRoom() async {
-    final toRemove = _activeChannels.keys.where((k) => k.contains('call.')).toList();
+    final toRemove = _activeChannels.keys.where((k) => k.contains('call.') || k.contains('call_chat.')).toList();
+    for (final chName in toRemove) {
+      try {
+        _activeSubscriptions[chName]?.cancel();
+        _activeSubscriptions.remove(chName);
+        _activeChannels[chName]?.unsubscribe();
+        _activeChannels.remove(chName);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> subscribeToLiveRoom(dynamic liveId) async {
+    if (_pusherClient == null || liveId == null) return;
+    final idStr = liveId.toString().trim();
+    if (idStr.isEmpty) return;
+    await _subscribeToChannel('presence-live.$idStr', isPrivate: true);
+    await _subscribeToChannel('private-live.$idStr', isPrivate: true);
+    await _subscribeToChannel('live.$idStr', isPrivate: false);
+  }
+
+  Future<void> leaveLiveRoom(dynamic liveId) async {
+    final idStr = liveId?.toString().trim() ?? '';
+    final toRemove = _activeChannels.keys.where((k) => k.contains('live.$idStr') || (idStr.isEmpty && k.contains('live.'))).toList();
     for (final chName in toRemove) {
       try {
         _activeSubscriptions[chName]?.cancel();
@@ -206,6 +252,66 @@ class SignalingService {
         lowerName.contains('incoming') ||
         (data.containsKey('caller') && (data.containsKey('call_id') || data.containsKey('channel_name')))) {
       _incomingCallController.add(data);
+      return;
+    }
+
+    // Check for In-Call Real-Time Chat messages
+    if (cleanName == 'InCallMessageSent' ||
+        cleanName == 'CallMessageSent' ||
+        cleanName == 'call.message.sent' ||
+        cleanName == 'call.message' ||
+        cleanName == 'chat_message' ||
+        lowerName.contains('callmessage') ||
+        lowerName.contains('incallmessage')) {
+      _inCallMessageController.add(data);
+      return;
+    }
+
+    // Check for Live Broadcast Events
+    if (cleanName == 'LiveMessageSent' ||
+        cleanName == 'live.message.sent' ||
+        cleanName == 'live.message' ||
+        lowerName.contains('livemessage')) {
+      _liveMessageController.add(data);
+      return;
+    }
+
+    if (cleanName == 'LiveGiftSent' ||
+        cleanName == 'live.gift.sent' ||
+        cleanName == 'live.gift' ||
+        lowerName.contains('livegift')) {
+      _liveGiftController.add(data);
+      return;
+    }
+
+    if (cleanName == 'LiveJoinRequested' ||
+        cleanName == 'live.join.requested' ||
+        cleanName == 'live.cohost.request' ||
+        lowerName.contains('joinrequest')) {
+      _liveJoinRequestController.add(data);
+      return;
+    }
+
+    if (cleanName == 'LiveJoinResponded' ||
+        cleanName == 'live.join.responded' ||
+        cleanName == 'live.cohost.response' ||
+        lowerName.contains('joinrespond')) {
+      _liveJoinResponseController.add(data);
+      return;
+    }
+
+    if (cleanName == 'LiveGuestKicked' ||
+        cleanName == 'live.guest.kicked' ||
+        lowerName.contains('guestkicked')) {
+      _liveGuestKickedController.add(data);
+      return;
+    }
+
+    if (cleanName == 'LiveStreamEnded' ||
+        cleanName == 'live.stream.ended' ||
+        cleanName == 'live.ended' ||
+        lowerName.contains('streamended')) {
+      _liveStreamEndedController.add(data);
       return;
     }
 

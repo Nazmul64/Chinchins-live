@@ -1,14 +1,20 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:ui';
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../core/models/model_profile.dart';
+import '../../../core/services/signaling_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/app_logger.dart';
 import '../../../core/widgets/avatar_with_frame.dart';
 import '../../../core/widgets/cached_image_loader.dart';
+import '../../auth/services/auth_api_service.dart';
 import '../services/beauty_filter_engine.dart';
 import '../services/call_api_service.dart';
+import '../services/live_streaming_api_service.dart';
 import '../services/pip_call_overlay.dart';
+import '../services/streaming_service.dart';
 import '../widgets/camera_filter_tray.dart';
 import '../widgets/in_call_profile_sheet.dart';
 import '../widgets/in_call_gift_sheet.dart';
@@ -25,15 +31,19 @@ class LiveHeart {
 class LiveRoomScreen extends StatefulWidget {
   final ModelProfile host;
   final dynamic liveId;
+  final String? channelName;
   final String? title;
   final bool isHost;
+  final Map<String, dynamic>? initialSessionData;
 
   const LiveRoomScreen({
     super.key,
     required this.host,
     this.liveId,
+    this.channelName,
     this.title,
     this.isHost = false,
+    this.initialSessionData,
   });
 
   @override
@@ -48,32 +58,436 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   final List<LiveHeart> _hearts = [];
   final Random _rnd = Random();
 
-  FilterPreset _currentFilter = BeautyFilterEngine.presets[1]; // Beauty Glow by default
+  FilterPreset _currentFilter = BeautyFilterEngine.presets[1]; // Beauty Glow
   bool _isFollowing = false;
-  int _viewerCount = 124;
+  int _viewerCount = 120;
   int _likeCount = 1580;
+  int _diamondsEarned = 0;
+  dynamic _activeLiveId;
+  String _activeChannelName = '';
+  
+  // Agora RTC Engine state
+  RtcEngine? _rtcEngine;
+  bool _isEngineReady = false;
+  int? _hostUid;
+  int? _guestUid;
+  int _myUid = 0;
   bool _isGuestConnected = false;
   bool _isGuestConnecting = false;
-  bool _isMicMuted = false;
-  bool _isVideoOff = false;
+
+  // Real-time Stream Subscriptions
+  StreamSubscription? _msgSub;
+  StreamSubscription? _giftSub;
+  StreamSubscription? _joinReqSub;
+  StreamSubscription? _joinRespSub;
+  StreamSubscription? _guestKickedSub;
+  StreamSubscription? _streamEndedSub;
 
   @override
   void initState() {
     super.initState();
-    _viewerCount = 100 + _rnd.nextInt(250);
+    _activeLiveId = widget.liveId;
+    _activeChannelName = widget.channelName ?? 'live_${widget.host.id}_${DateTime.now().millisecondsSinceEpoch}';
+    _viewerCount = 100 + _rnd.nextInt(150);
+
     _liveComments.addAll([
       {'user': 'Sara', 'text': 'Hello gorgeous! ❤️', 'color': Colors.pinkAccent},
       {'user': 'Alex', 'text': 'Welcome to live stream! 🔥', 'color': Colors.amberAccent},
       {'user': 'Rohan', 'text': 'You look stunning! ✨', 'color': Colors.cyanAccent},
     ]);
+
+    _initLiveRoom();
     _checkFollowStatus();
   }
 
   @override
   void dispose() {
+    _msgSub?.cancel();
+    _giftSub?.cancel();
+    _joinReqSub?.cancel();
+    _joinRespSub?.cancel();
+    _guestKickedSub?.cancel();
+    _streamEndedSub?.cancel();
+
+    if (_activeLiveId != null) {
+      SignalingService().leaveLiveRoom(_activeLiveId);
+    }
+    _destroyAgoraEngine();
     _commentController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _destroyAgoraEngine() async {
+    try {
+      if (_rtcEngine != null) {
+        await _rtcEngine!.leaveChannel();
+        await _rtcEngine!.release();
+        _rtcEngine = null;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _initLiveRoom() async {
+    try {
+      final savedUser = await AuthApiService.getSavedUser();
+      final myIdRaw = savedUser?['id'] ?? savedUser?['account_id'];
+      _myUid = myIdRaw is int ? myIdRaw : (int.tryParse(myIdRaw?.toString() ?? '0') ?? _rnd.nextInt(999999));
+
+      String agoraAppId = 'aab8b8f39d24490b8f4a13d7d792b95b'; // Default fallback or dynamically loaded
+      String rtcToken = '';
+
+      if (widget.isHost) {
+        // 1. Host starts live broadcast
+        final session = widget.initialSessionData ??
+            await LiveStreamingApiService.startLiveStream(
+              title: widget.title ?? 'Welcome to my official live stream! 🌟',
+              coverImageUrl: widget.host.avatarUrl,
+            );
+
+        if (session != null) {
+          _activeLiveId = session['live_stream_id'] ?? session['id'] ?? _activeLiveId;
+          _activeChannelName = session['channel_name']?.toString() ?? _activeChannelName;
+
+          final agoraData = session['session']?['agora'] ?? session['agora'];
+          if (agoraData is Map) {
+            agoraAppId = agoraData['app_id']?.toString() ?? agoraAppId;
+            rtcToken = agoraData['token']?.toString() ?? '';
+            _myUid = agoraData['uid'] is int ? agoraData['uid'] : (int.tryParse(agoraData['uid']?.toString() ?? '') ?? _myUid);
+          }
+        }
+      } else {
+        // 2. Audience joins live broadcast
+        if (_activeLiveId != null) {
+          final joinData = await LiveStreamingApiService.joinLiveStream(liveStreamId: _activeLiveId);
+          if (joinData != null) {
+            _activeChannelName = joinData['channel_name']?.toString() ?? _activeChannelName;
+            _viewerCount = joinData['viewer_count'] is int ? joinData['viewer_count'] as int : _viewerCount;
+
+            final agoraData = joinData['session']?['agora'] ?? joinData['agora'];
+            if (agoraData is Map) {
+              agoraAppId = agoraData['app_id']?.toString() ?? agoraAppId;
+              rtcToken = agoraData['token']?.toString() ?? '';
+              _myUid = agoraData['uid'] is int ? agoraData['uid'] : (int.tryParse(agoraData['uid']?.toString() ?? '') ?? _myUid);
+            }
+          }
+        }
+      }
+
+      // 3. Initialize Agora RTC Engine
+      await _setupAgoraRTC(
+        appId: agoraAppId,
+        token: rtcToken,
+        channelName: _activeChannelName,
+        uid: _myUid,
+        isBroadcaster: widget.isHost,
+      );
+
+      // 4. Subscribe to Reverb WebSocket Channel
+      if (_activeLiveId != null) {
+        await SignalingService().subscribeToLiveRoom(_activeLiveId);
+        _subscribeWebSocketEvents();
+      }
+    } catch (e, st) {
+      AppLogger.error('InitLiveRoomError', e, st);
+    }
+  }
+
+  Future<void> _setupAgoraRTC({
+    required String appId,
+    required String token,
+    required String channelName,
+    required int uid,
+    required bool isBroadcaster,
+  }) async {
+    try {
+      await [Permission.camera, Permission.microphone].request();
+
+      _rtcEngine = createAgoraRtcEngine();
+      await _rtcEngine!.initialize(RtcEngineContext(
+        appId: appId,
+        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+      ));
+
+      _rtcEngine!.registerEventHandler(
+        RtcEngineEventHandler(
+          onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+            debugPrint('[LiveRoomScreen] Joined Agora Channel: ${connection.channelId} as UID: ${connection.localUid}');
+            if (mounted) {
+              setState(() => _isEngineReady = true);
+            }
+          },
+          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+            debugPrint('[LiveRoomScreen] Remote User Joined UID: $remoteUid');
+            if (mounted) {
+              setState(() {
+                if (widget.isHost) {
+                  _guestUid = remoteUid;
+                  _isGuestConnected = true;
+                } else {
+                  _hostUid = remoteUid;
+                }
+              });
+            }
+          },
+          onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
+            debugPrint('[LiveRoomScreen] Remote User Offline UID: $remoteUid ($reason)');
+            if (mounted) {
+              setState(() {
+                if (_guestUid == remoteUid) {
+                  _guestUid = null;
+                  _isGuestConnected = false;
+                }
+                if (_hostUid == remoteUid && !widget.isHost) {
+                  _hostUid = null;
+                }
+              });
+            }
+          },
+          onTokenPrivilegeWillExpire: (RtcConnection connection, String token) async {
+            final newToken = await StreamingService.refreshAgoraToken(
+              channelName: channelName,
+              uid: uid,
+              role: isBroadcaster ? 'publisher' : 'subscriber',
+            );
+            if (newToken.isNotEmpty && _rtcEngine != null) {
+              await _rtcEngine!.renewToken(newToken);
+            }
+          },
+        ),
+      );
+
+      await _rtcEngine!.enableVideo();
+      await _rtcEngine!.setClientRole(
+        role: isBroadcaster ? ClientRoleType.clientRoleBroadcaster : ClientRoleType.clientRoleAudience,
+      );
+
+      if (isBroadcaster) {
+        await _rtcEngine!.setVideoEncoderConfiguration(
+          const VideoEncoderConfiguration(
+            dimensions: VideoDimensions(width: 1280, height: 720),
+            frameRate: 30,
+            bitrate: 2000,
+            orientationMode: OrientationMode.orientationModeAdaptive,
+          ),
+        );
+        await _rtcEngine!.startPreview();
+      }
+
+      await _rtcEngine!.joinChannel(
+        token: token,
+        channelId: channelName,
+        uid: uid,
+        options: ChannelMediaOptions(
+          publishCameraTrack: isBroadcaster,
+          publishMicrophoneTrack: isBroadcaster,
+          autoSubscribeAudio: true,
+          autoSubscribeVideo: true,
+          clientRoleType: isBroadcaster ? ClientRoleType.clientRoleBroadcaster : ClientRoleType.clientRoleAudience,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[LiveRoomScreen] Agora setup error: $e');
+    }
+  }
+
+  void _subscribeWebSocketEvents() {
+    final signaling = SignalingService();
+
+    // 1. Live Comments
+    _msgSub = signaling.onLiveMessage.listen((data) {
+      if (mounted) {
+        setState(() {
+          _liveComments.add({
+            'user': data['sender_name'] ?? data['user_name'] ?? 'Viewer',
+            'text': data['message'] ?? '',
+            'color': const Color(0xFF00E5FF),
+          });
+        });
+        _scrollToBottom();
+      }
+    });
+
+    // 2. Live Gifts
+    _giftSub = signaling.onLiveGift.listen((data) {
+      if (mounted) {
+        final giftName = data['gift_name'] ?? 'Gift';
+        final senderName = data['sender_name'] ?? 'Viewer';
+        final coins = data['total_coins'] ?? data['coins'] ?? 100;
+
+        setState(() {
+          _diamondsEarned += (coins is int ? coins : 100);
+          _liveComments.add({
+            'user': 'System',
+            'text': '🎁 $senderName sent a $giftName ($coins 💎)!',
+            'color': const Color(0xFFFFD54F),
+          });
+        });
+        _scrollToBottom();
+
+        // Trigger animation
+        final animUrl = data['animation_url']?.toString();
+        _giftAnimKey.currentState?.playGiftAnimation(animUrl ?? giftName);
+      }
+    });
+
+    // 3. Co-Host Join Request (For Host)
+    if (widget.isHost) {
+      _joinReqSub = signaling.onLiveJoinRequest.listen((data) {
+        if (mounted) {
+          final reqId = data['request_id'] ?? data['id'];
+          final guestName = data['user_name'] ?? data['sender_name'] ?? 'Viewer';
+          _showCoHostRequestDialog(requestId: reqId, guestName: guestName);
+        }
+      });
+    }
+
+    // 4. Co-Host Join Response (For Viewer / Guest)
+    _joinRespSub = signaling.onLiveJoinResponse.listen((data) async {
+      final guestId = data['guest_user_id'] ?? data['user_id'];
+      final action = data['action']?.toString();
+
+      if (guestId != null && guestId.toString() == _myUid.toString()) {
+        if (action == 'accept') {
+          // Upgrade role to Broadcaster on the fly!
+          if (_rtcEngine != null) {
+            await _rtcEngine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+            await _rtcEngine!.startPreview();
+            await _rtcEngine!.updateChannelMediaOptions(
+              const ChannelMediaOptions(
+                publishCameraTrack: true,
+                publishMicrophoneTrack: true,
+                clientRoleType: ClientRoleType.clientRoleBroadcaster,
+              ),
+            );
+          }
+          if (mounted) {
+            setState(() {
+              _isGuestConnected = true;
+              _isGuestConnecting = false;
+              _liveComments.add({
+                'user': 'System',
+                'text': '🎉 Your co-host request was accepted! You are now live on video grid! 🎙️📹',
+                'color': const Color(0xFF00E5FF),
+              });
+            });
+            _scrollToBottom();
+          }
+        } else {
+          if (mounted) {
+            setState(() => _isGuestConnecting = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Host declined your co-host request.'), backgroundColor: Colors.orange),
+            );
+          }
+        }
+      }
+    });
+
+    // 5. Guest Kicked
+    _guestKickedSub = signaling.onLiveGuestKicked.listen((data) async {
+      final guestId = data['guest_user_id'] ?? data['user_id'];
+      if (guestId != null && guestId.toString() == _myUid.toString()) {
+        if (_rtcEngine != null) {
+          await _rtcEngine!.setClientRole(role: ClientRoleType.clientRoleAudience);
+          await _rtcEngine!.stopPreview();
+          await _rtcEngine!.updateChannelMediaOptions(
+            const ChannelMediaOptions(
+              publishCameraTrack: false,
+              publishMicrophoneTrack: false,
+              clientRoleType: ClientRoleType.clientRoleAudience,
+            ),
+          );
+        }
+        if (mounted) {
+          setState(() {
+            _isGuestConnected = false;
+            _isGuestConnecting = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('You were removed from the live co-host grid.'), backgroundColor: Colors.redAccent),
+          );
+        }
+      }
+    });
+
+    // 6. Live Stream Ended
+    _streamEndedSub = signaling.onLiveStreamEnded.listen((data) {
+      if (mounted && !widget.isHost) {
+        _showStreamEndedDialog(data);
+      }
+    });
+  }
+
+  void _showCoHostRequestDialog({required dynamic requestId, required String guestName}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1435),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.video_call_rounded, color: Color(0xFF00E5FF)),
+            SizedBox(width: 8),
+            Text('Co-Host Request', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          '$guestName wants to join your live broadcast as a video co-host.',
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              LiveStreamingApiService.respondJoinCoHost(requestId: requestId, action: 'reject');
+            },
+            child: const Text('Decline', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00E5FF),
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              LiveStreamingApiService.respondJoinCoHost(requestId: requestId, action: 'accept');
+            },
+            child: const Text('Accept & Connect', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showStreamEndedDialog(Map<String, dynamic> data) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1435),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Live Stream Ended', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: const Text(
+          'The host has concluded this live broadcast. Thank you for watching!',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.neonPink,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pop(context);
+            },
+            child: const Text('Exit', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _checkFollowStatus() async {
@@ -141,7 +555,14 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         'isMe': true,
       });
     });
+    _scrollToBottom();
 
+    if (_activeLiveId != null) {
+      LiveStreamingApiService.sendLiveMessage(liveStreamId: _activeLiveId, message: text);
+    }
+  }
+
+  void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -151,28 +572,40 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         );
       }
     });
-
-    if (widget.liveId != null) {
-      CallApiService.sendLiveMessage(widget.liveId, text);
-    }
   }
 
-  void _toggleMultiGuestConnect() async {
-    if (_isGuestConnected) {
-      setState(() => _isGuestConnected = false);
-    } else {
-      setState(() => _isGuestConnecting = true);
-      await Future.delayed(const Duration(milliseconds: 1200));
-      if (mounted) {
+  void _handleCoHostAction() async {
+    if (widget.isHost) {
+      // Host kicking connected guest
+      if (_isGuestConnected && _guestUid != null) {
+        await LiveStreamingApiService.kickGuest(liveStreamId: _activeLiveId, guestUserId: _guestUid!);
         setState(() {
-          _isGuestConnecting = false;
-          _isGuestConnected = true;
-          _liveComments.add({
-            'user': 'System',
-            'text': 'Connected to Video Live Guest Seat! 🎙️📹',
-            'color': const Color(0xFF00E5FF),
-          });
+          _isGuestConnected = false;
+          _guestUid = null;
         });
+      }
+    } else {
+      // Viewer requesting Co-Host
+      if (_isGuestConnected) {
+        // Disconnect self from co-host
+        if (_rtcEngine != null) {
+          await _rtcEngine!.setClientRole(role: ClientRoleType.clientRoleAudience);
+          await _rtcEngine!.stopPreview();
+        }
+        setState(() => _isGuestConnected = false);
+      } else {
+        setState(() => _isGuestConnecting = true);
+        final res = await LiveStreamingApiService.requestJoinCoHost(liveStreamId: _activeLiveId);
+        if (res != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Co-Host request sent! Waiting for host approval...'),
+              backgroundColor: Color(0xFF00E5FF),
+            ),
+          );
+        } else if (mounted) {
+          setState(() => _isGuestConnecting = false);
+        }
       }
     }
   }
@@ -180,10 +613,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   void _minimizeToPiP() {
     PiPCallOverlay.showMiniWindow(
       context,
-      remoteVideoView: RepaintBoundary(child: _buildLiveStreamView()),
+      remoteVideoView: RepaintBoundary(child: _buildLiveVideoContent()),
       peerName: widget.host.name,
       callDurationText: 'LIVE',
-      callSessionId: widget.liveId ?? 'live_${widget.host.id}',
+      callSessionId: _activeLiveId ?? 'live_${widget.host.id}',
       onTapRestore: () {
         Navigator.push(
           context,
@@ -191,10 +624,19 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         );
       },
       onEndCall: () {
-        Navigator.of(context).pop();
+        _handleExitLive();
       },
     );
     Navigator.of(context).pop();
+  }
+
+  void _handleExitLive() async {
+    if (widget.isHost && _activeLiveId != null) {
+      await LiveStreamingApiService.endLiveStream(liveStreamId: _activeLiveId);
+    }
+    if (mounted) {
+      Navigator.pop(context);
+    }
   }
 
   @override
@@ -215,10 +657,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // 1. Live Video Player / Broadcast View
-                _buildLiveStreamView(),
+                // 1. Live Video Broadcaster / Viewer Surface
+                _buildLiveVideoContent(),
 
-                // 2. Gradient Overlays
+                // 2. Subtle Gradient Overlay
                 IgnorePointer(
                   child: Container(
                     decoration: const BoxDecoration(
@@ -236,14 +678,14 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                   ),
                 ),
 
-                // 3. Multi-Guest Floating Video Box (When connected as Guest)
+                // 3. Multi-Guest Floating Video Box (Co-Hosting Grid)
                 if (_isGuestConnected)
                   Positioned(
                     right: 14,
                     top: 140,
                     child: Container(
-                      width: 110,
-                      height: 155,
+                      width: 115,
+                      height: 160,
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E1435),
                         borderRadius: BorderRadius.circular(16),
@@ -260,10 +702,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            CachedImageLoader(
-                              imageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb',
-                              fit: BoxFit.cover,
-                            ),
+                            // Guest Camera Preview (Agora or Avatar)
+                            _buildGuestVideoContent(),
+
+                            // Guest Tag
                             Positioned(
                               top: 6,
                               left: 6,
@@ -282,11 +724,13 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                                 ),
                               ),
                             ),
+
+                            // Kick / Disconnect Button
                             Positioned(
                               bottom: 4,
                               right: 4,
                               child: GestureDetector(
-                                onTap: _toggleMultiGuestConnect,
+                                onTap: _handleCoHostAction,
                                 child: Container(
                                   padding: const EdgeInsets.all(4),
                                   decoration: const BoxDecoration(
@@ -352,6 +796,15 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                                           '$_viewerCount',
                                           style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
                                         ),
+                                        if (_diamondsEarned > 0) ...[
+                                          const SizedBox(width: 6),
+                                          const Icon(Icons.diamond_rounded, color: Color(0xFF00E5FF), size: 11),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            '$_diamondsEarned',
+                                            style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 10, fontWeight: FontWeight.bold),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ],
@@ -359,22 +812,23 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                                 const SizedBox(width: 8),
 
                                 // Follow Host Button
-                                GestureDetector(
-                                  onTap: _toggleFollow,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      gradient: _isFollowing
-                                          ? const LinearGradient(colors: [Color(0xFF455A64), Color(0xFF37474F)])
-                                          : AppColors.primaryGradient,
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    child: Text(
-                                      _isFollowing ? 'Joined' : '+ Follow',
-                                      style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                if (!widget.isHost)
+                                  GestureDetector(
+                                    onTap: _toggleFollow,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        gradient: _isFollowing
+                                            ? const LinearGradient(colors: [Color(0xFF455A64), Color(0xFF37474F)])
+                                            : AppColors.primaryGradient,
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      child: Text(
+                                        _isFollowing ? 'Joined' : '+ Follow',
+                                        style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                      ),
                                     ),
                                   ),
-                                ),
                               ],
                             ),
                           ),
@@ -389,10 +843,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                               icon: const Icon(Icons.picture_in_picture_alt_rounded, color: Colors.white, size: 22),
                               onPressed: _minimizeToPiP,
                             ),
-                            // Close Button
+                            // Close / End Button
                             IconButton(
                               icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
-                              onPressed: () => Navigator.pop(context),
+                              onPressed: _handleExitLive,
                             ),
                           ],
                         ),
@@ -469,20 +923,22 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                   ),
                 ),
 
-                // 7. Right Action Column: Multi-Guest Connect, Beauty Filters, Gift, Likes
+                // 7. Right Action Column: Co-Host Connect, Beauty Filters, Gift, Likes
                 Positioned(
                   right: 14,
                   bottom: 80,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Multi-Guest Connect Video Call Button (Requested in Voice: একাধিক মানুষ কানেক্ট হইতে পারতেছে)
+                      // Multi-Guest Co-Host Button
                       _buildLiveActionButton(
                         icon: _isGuestConnected ? Icons.phone_disabled_rounded : Icons.video_call_rounded,
-                        label: _isGuestConnected ? 'Disconnect' : 'Connect',
+                        label: widget.isHost
+                            ? (_isGuestConnected ? 'Kick Guest' : 'Co-Host')
+                            : (_isGuestConnected ? 'Disconnect' : 'Connect'),
                         color: _isGuestConnected ? Colors.redAccent : const Color(0xFF00E5FF),
                         isLoading: _isGuestConnecting,
-                        onTap: _toggleMultiGuestConnect,
+                        onTap: _handleCoHostAction,
                       ),
                       const SizedBox(height: 12),
 
@@ -504,23 +960,24 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                       const SizedBox(height: 12),
 
                       // Gift Button
-                      _buildLiveActionButton(
-                        icon: Icons.card_giftcard_rounded,
-                        label: 'Gift',
-                        color: const Color(0xFFFFD54F),
-                        onTap: () {
-                          InCallGiftSheet.show(
-                            context,
-                            receiverId: widget.host.id,
-                            receiverName: widget.host.name,
-                            callSessionId: widget.liveId,
-                            onGiftSent: (anim) {
-                              _giftAnimKey.currentState?.playGiftAnimation(anim);
-                            },
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 12),
+                      if (!widget.isHost)
+                        _buildLiveActionButton(
+                          icon: Icons.card_giftcard_rounded,
+                          label: 'Gift',
+                          color: const Color(0xFFFFD54F),
+                          onTap: () {
+                            InCallGiftSheet.show(
+                              context,
+                              receiverId: widget.host.id,
+                              receiverName: widget.host.name,
+                              callSessionId: _activeLiveId,
+                              onGiftSent: (anim) {
+                                _giftAnimKey.currentState?.playGiftAnimation(anim);
+                              },
+                            );
+                          },
+                        ),
+                      if (!widget.isHost) const SizedBox(height: 12),
 
                       // Heart Like Tap Button
                       _buildLiveActionButton(
@@ -586,7 +1043,35 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildLiveStreamView() {
+  Widget _buildLiveVideoContent() {
+    if (_rtcEngine != null && _isEngineReady) {
+      if (widget.isHost) {
+        // Local Host Camera Preview
+        return BeautyFilterEngine.applyFilterToWidget(
+          filter: _currentFilter,
+          child: AgoraVideoView(
+            controller: VideoViewController(
+              rtcEngine: _rtcEngine!,
+              canvas: const VideoCanvas(uid: 0),
+            ),
+          ),
+        );
+      } else if (_hostUid != null) {
+        // Remote Host Stream for Viewers
+        return BeautyFilterEngine.applyFilterToWidget(
+          filter: _currentFilter,
+          child: AgoraVideoView(
+            controller: VideoViewController.remote(
+              rtcEngine: _rtcEngine!,
+              canvas: VideoCanvas(uid: _hostUid!),
+              connection: RtcConnection(channelId: _activeChannelName),
+            ),
+          ),
+        );
+      }
+    }
+
+    // High Quality Stream Cover / Fallback
     return RepaintBoundary(
       child: BeautyFilterEngine.applyFilterToWidget(
         filter: _currentFilter,
@@ -595,6 +1080,34 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
           fit: BoxFit.cover,
         ),
       ),
+    );
+  }
+
+  Widget _buildGuestVideoContent() {
+    if (_rtcEngine != null && _isEngineReady) {
+      if (!widget.isHost && _isGuestConnected) {
+        // Local guest preview
+        return AgoraVideoView(
+          controller: VideoViewController(
+            rtcEngine: _rtcEngine!,
+            canvas: const VideoCanvas(uid: 0),
+          ),
+        );
+      } else if (widget.isHost && _guestUid != null) {
+        // Remote guest stream for host
+        return AgoraVideoView(
+          controller: VideoViewController.remote(
+            rtcEngine: _rtcEngine!,
+            canvas: VideoCanvas(uid: _guestUid!),
+            connection: RtcConnection(channelId: _activeChannelName),
+          ),
+        );
+      }
+    }
+
+    return CachedImageLoader(
+      imageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb',
+      fit: BoxFit.cover,
     );
   }
 
