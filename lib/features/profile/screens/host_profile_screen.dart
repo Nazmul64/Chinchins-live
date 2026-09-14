@@ -182,42 +182,8 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     }
 
     CallSoundManager.playOutgoingRingtone();
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: Material(
-          color: Colors.transparent,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(color: AppColors.neonPink),
-              SizedBox(height: 14),
-              Text(
-                'Connecting Video Call...',
-                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
 
     try {
-      // 1. Check call permission & user balance via POST /api/call/check-permission
-      final permRes = await CallApiService.checkCallPermission(
-        receiverId: _currentModel.id,
-        callType: 'video',
-      );
-
-      if (permRes['can_call'] == false || permRes['show_recharge_modal'] == true || permRes['status'] == false) {
-        CallSoundManager.stopRingtone();
-        if (!mounted) return;
-        Navigator.pop(context); // Close progress dialog
-        _showRechargeSheet(modalData: permRes['recharge_modal_data'] as Map<String, dynamic>?);
-        return;
-      }
-
       final res = await CallApiService.initiateCall(
         receiverId: _currentModel.id,
         receiverAccountId: _currentModel.accountId,
@@ -225,7 +191,6 @@ class _HostProfileScreenState extends State<HostProfileScreen>
       );
 
       if (!mounted) return;
-      Navigator.pop(context); // Close progress dialog
 
       if (res['success'] == true) {
         final int? callId = res['call_id'] is int
@@ -245,6 +210,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
           freeDurationSeconds: freeSecs,
           ratePerMinute: ratePerMin,
           dialToneUrl: res['dial_tone_url']?.toString(),
+          initialSessionData: res,
         );
       } else if (res['is_low_balance'] == true ||
                  res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
@@ -264,7 +230,6 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     } catch (e) {
       CallSoundManager.stopRingtone();
       if (mounted) {
-        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Call error: $e'),
@@ -312,42 +277,8 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     }
 
     CallSoundManager.playOutgoingRingtone();
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: Material(
-          color: Colors.transparent,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(color: Colors.purpleAccent),
-              SizedBox(height: 14),
-              Text(
-                'Connecting Audio Call...',
-                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
 
     try {
-      // 1. Check call permission & user balance via POST /api/call/check-permission
-      final permRes = await CallApiService.checkCallPermission(
-        receiverId: _currentModel.id,
-        callType: 'audio',
-      );
-
-      if (permRes['can_call'] == false || permRes['show_recharge_modal'] == true || permRes['status'] == false) {
-        CallSoundManager.stopRingtone();
-        if (!mounted) return;
-        Navigator.pop(context); // Close progress dialog
-        _showRechargeSheet(modalData: permRes['recharge_modal_data'] as Map<String, dynamic>?);
-        return;
-      }
-
       final res = await CallApiService.initiateCall(
         receiverId: _currentModel.id,
         receiverAccountId: _currentModel.accountId,
@@ -355,7 +286,6 @@ class _HostProfileScreenState extends State<HostProfileScreen>
       );
 
       if (!mounted) return;
-      Navigator.pop(context); // Close progress dialog
 
       if (res['success'] == true) {
         final int? callId = res['call_id'] is int
@@ -376,6 +306,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
           freeDurationSeconds: freeSecs,
           ratePerMinute: ratePerMin,
           dialToneUrl: res['dial_tone_url']?.toString(),
+          initialSessionData: res,
         );
       } else if (res['is_low_balance'] == true ||
                  res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
@@ -395,7 +326,6 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     } catch (e) {
       CallSoundManager.stopRingtone();
       if (mounted) {
-        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Call error: $e'),

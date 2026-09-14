@@ -160,28 +160,35 @@ class StreamingService {
     int ratePerMinute = 100,
     bool isIncoming = false,
     String? dialToneUrl,
+    Map<String, dynamic>? initialSessionData,
   }) async {
     // 1. Request Camera and Microphone permissions
     try {
       await [Permission.camera, Permission.microphone].request();
     } catch (_) {}
 
-    // 2. Fetch Session Token & Driver with targetUserId
-    final sessionData = await fetchSessionToken(
+    // 2. Use initial session data if already provided by initiateCall, or fetch dynamically
+    final sessionData = initialSessionData ?? await fetchSessionToken(
       channelName: channelName,
       callType: callType,
       targetUserId: model.id.isNotEmpty ? model.id : model.accountId,
     );
 
-    final String driver = sessionData['driver']?.toString().toLowerCase() ?? 'vps_webrtc';
-    final String? agoraAppId = sessionData['app_id']?.toString() ?? sessionData['agora_app_id']?.toString();
+    final String driver = (sessionData['driver'] ?? sessionData['data']?['driver'])?.toString().toLowerCase() ?? 
+        (sessionData['agora_app_id'] != null || sessionData['app_id'] != null ? 'agora' : 'vps_webrtc');
+    final String? agoraAppId = sessionData['app_id']?.toString() ?? 
+        sessionData['agora_app_id']?.toString() ?? 
+        sessionData['data']?['agora_app_id']?.toString() ??
+        sessionData['data']?['app_id']?.toString();
     final String? agoraToken = sessionData['token']?.toString() ??
         sessionData['rtc_token']?.toString() ??
-        sessionData['agora_token']?.toString();
-    final bool isTempToken = sessionData['is_temp_token'] == true;
-    final String activeChannelName = sessionData['channel_name']?.toString() ?? channelName;
-    final bool debugMode = sessionData['debug_mode'] == true || sessionData['sdk_logging'] == true;
-    final String logLevel = sessionData['log_level']?.toString() ?? 'info';
+        sessionData['agora_token']?.toString() ??
+        sessionData['data']?['agora_token']?.toString() ??
+        sessionData['data']?['token']?.toString();
+    final bool isTempToken = sessionData['is_temp_token'] == true || sessionData['data']?['is_temp_token'] == true;
+    final String activeChannelName = sessionData['channel_name']?.toString() ?? sessionData['data']?['channel_name']?.toString() ?? channelName;
+    final bool debugMode = sessionData['debug_mode'] == true || sessionData['sdk_logging'] == true || sessionData['data']?['debug_mode'] == true;
+    final String logLevel = sessionData['log_level']?.toString() ?? sessionData['data']?['log_level']?.toString() ?? 'info';
 
     if (!context.mounted) return;
 

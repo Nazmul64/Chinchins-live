@@ -143,6 +143,7 @@ class _RandomMatchScreenState extends State<RandomMatchScreen>
         freeDurationSeconds: freeSecs,
         ratePerMinute: ratePerMin,
         dialToneUrl: res['dial_tone_url']?.toString(),
+        initialSessionData: res,
       );
     } else if (res['is_low_balance'] == true || res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED') {
       CallSoundManager.stopRingtone();

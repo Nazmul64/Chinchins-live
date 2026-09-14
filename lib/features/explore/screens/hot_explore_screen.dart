@@ -321,56 +321,7 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
       return;
     }
 
-    // Only if user has enough coins locally, show the connecting dialog and verify with backend:
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: Card(
-          color: Color(0xFF1E1B2E),
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: Colors.pinkAccent),
-                SizedBox(height: 14),
-                Text(
-                  'Connecting Video Call...',
-                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
     try {
-      // 1. Check call permission & user balance via POST /api/call/check-permission
-      final permRes = await CallApiService.checkCallPermission(
-        receiverId: model.id,
-        callType: 'video',
-      );
-
-      if (permRes['can_call'] == false || permRes['show_recharge_modal'] == true || permRes['status'] == false) {
-        if (!mounted) return;
-        Navigator.pop(context); // close progress dialog
-        RechargeGemsSheet.show(
-          context,
-          model: model,
-          receiverId: model.id,
-          receiverName: model.name,
-          receiverAvatarUrl: model.avatarUrl,
-          modalData: permRes['recharge_modal_data'] as Map<String, dynamic>?,
-          onRechargeSuccess: () {
-            _startVideoCall(model);
-          },
-        );
-        return;
-      }
-
-      // 2. Initiate Call session
       final initiateRes = await CallApiService.initiateCall(
         receiverId: model.id,
         receiverAccountId: model.accountId,
@@ -378,7 +329,6 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
       );
 
       if (!mounted) return;
-      Navigator.pop(context); // close progress dialog
 
       if (initiateRes['success'] == true) {
         final dynamic rawCallId = initiateRes['call_id'] ?? initiateRes['id'];
@@ -404,6 +354,7 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
           ratePerMinute: ratePerMin,
           isIncoming: false,
           dialToneUrl: initiateRes['dial_tone_url']?.toString(),
+          initialSessionData: initiateRes,
         );
       } else if (initiateRes['is_low_balance'] == true ||
                  initiateRes['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||

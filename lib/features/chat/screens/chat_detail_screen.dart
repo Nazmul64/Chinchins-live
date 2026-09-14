@@ -659,52 +659,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     CallSoundManager.playOutgoingRingtone();
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: Material(
-          color: Colors.transparent,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(color: AppColors.neonPink),
-              SizedBox(height: 14),
-              Text(
-                'Connecting Video Call...',
-                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
     try {
-      // 1. Check call permission & user balance via POST /api/call/check-permission
-      final permRes = await CallApiService.checkCallPermission(
-        receiverId: model.id,
-        callType: 'video',
-      );
-
-      if (permRes['can_call'] == false || permRes['show_recharge_modal'] == true || permRes['status'] == false) {
-        CallSoundManager.stopRingtone();
-        if (!mounted) return;
-        Navigator.pop(context); // Close progress dialog
-        RechargeGemsSheet.show(
-          context,
-          model: model,
-          receiverId: widget.thread.modelId,
-          receiverName: widget.thread.name,
-          receiverAvatarUrl: widget.thread.avatarUrl,
-          modalData: permRes['recharge_modal_data'] as Map<String, dynamic>?,
-          onRechargeSuccess: () {
-            _openVideoCall();
-          },
-        );
-        return;
-      }
-
       final res = await CallApiService.initiateCall(
         receiverId: model.id,
         receiverAccountId: model.accountId,
@@ -715,7 +670,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         CallSoundManager.stopRingtone();
         return;
       }
-      Navigator.pop(context); // Close progress dialog
 
       if (res['success'] == true) {
         final int? callId = res['call_id'] is int
@@ -735,6 +689,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           freeDurationSeconds: freeSecs,
           ratePerMinute: ratePerMin,
           dialToneUrl: res['dial_tone_url']?.toString(),
+          initialSessionData: res,
         );
       } else if (res['is_low_balance'] == true ||
                  res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
