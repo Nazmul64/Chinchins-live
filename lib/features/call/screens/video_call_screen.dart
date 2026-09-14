@@ -49,7 +49,7 @@ class VideoCallScreen extends StatefulWidget {
 }
 
 class ActiveWebRTCSession {
-  final String channelName;
+  final String? channelName;
   final WebRTCCallService webrtcService;
   final int callSeconds;
   final bool isConnectingCall;
@@ -57,7 +57,7 @@ class ActiveWebRTCSession {
   final bool isVideoBlurred;
 
   ActiveWebRTCSession({
-    required this.channelName,
+    this.channelName,
     required this.webrtcService,
     required this.callSeconds,
     required this.isConnectingCall,
@@ -647,7 +647,6 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               freeDurationSeconds: widget.freeDurationSeconds,
               ratePerMinute: widget.ratePerMinute,
               isFreeTrial: widget.isFreeTrial,
-              debugMode: widget.debugMode,
             ),
           ),
         );

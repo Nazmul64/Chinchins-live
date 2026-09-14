@@ -156,7 +156,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       _isVideoBlurred = _activeSession!.isVideoBlurred;
       _localUserJoined = true;
       _activeSession = null;
-      _startTimer();
+      _startCallTimer();
     } else {
       if (!widget.isIncoming) {
         _isConnecting = true;
