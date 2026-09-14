@@ -104,6 +104,20 @@ class GiftsApiService {
     String? category,
     bool forceRefresh = false,
   }) async {
+    if (!forceRefresh && (category == null || category.isEmpty || category == 'all') && _catalogMemCache != null && _catalogMemCache!.isNotEmpty) {
+      final effectiveCoins = _userCoinBalance ?? WalletApiService.getCachedCoins();
+      return {
+        'user_balance': {
+          'coins': effectiveCoins,
+          'formatted_coins': GiftItem.formatCoinValue(effectiveCoins),
+        },
+        'categories_list': getPredefinedGiftCategories(),
+        'gifts': _catalogMemCache!,
+        'multipliers': [1, 10, 66, 99, 520, 1314],
+        'default_multiplier': 1,
+      };
+    }
+
     try {
       final token = await AuthApiService.getToken();
       final headers = {

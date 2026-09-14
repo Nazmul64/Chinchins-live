@@ -6,6 +6,7 @@ import '../../features/kyc/services/kyc_api_service.dart';
 import '../../features/wallet/services/vip_cards_api_service.dart';
 import '../../features/wallet/services/wallet_api_service.dart';
 import 'fast_api_client.dart';
+import 'gifts_api_service.dart';
 import 'notification_api_service.dart';
 import 'profile_api_service.dart';
 import 'remote_config_service.dart';
@@ -40,11 +41,13 @@ class PreloaderService {
             WalletApiService.getWalletBalance().catchError((_) => null),
             WalletApiService.getPaymentMethods().catchError((_) => <Map<String, dynamic>>[]),
             WalletApiService.getCoinPackages().catchError((_) => <Map<String, dynamic>>[]),
-            // 6. Messages & Inbox Conversations
+            // 6. Strong-Motion Gifts Catalog
+            GiftsApiService.getGiftsCatalogFull().catchError((_) => <String, dynamic>{}),
+            // 7. Messages & Inbox Conversations
             ChatApiService.getConversations().catchError((_) => <dynamic>[]),
-            // 7. Notification Unread Alerts
+            // 8. Notification Unread Alerts
             NotificationApiService.instance.fetchNotifications().catchError((_) => null),
-            // 8. Remote Config & Feature Toggles
+            // 9. Remote Config & Feature Toggles
             RemoteConfigService.instance.fetchRemoteConfig().catchError((_) => null),
           ], eagerError: false).timeout(const Duration(seconds: 8), onTimeout: () => []);
         }
