@@ -20,33 +20,33 @@ class PreloaderService {
     if (_hasPreloaded) return;
     _hasPreloaded = true;
 
-    scheduleMicrotask(() async {
+    Future.microtask(() async {
       try {
         await FastApiClient.init();
         final token = await AuthApiService.getToken();
 
         if (token != null && token.isNotEmpty) {
-          // Parallel background pre-fetching
+          // Parallel background pre-fetching with isolated error shields
           await Future.wait([
             // 1. Home Feed Streamers
-            ProfileApiService.preloadHomeFeedInBackground(),
+            ProfileApiService.preloadHomeFeedInBackground().catchError((_) => null),
             // 2. Spend Less / VIP Monthly Cards
-            VipCardsApiService.getVipCards(),
+            VipCardsApiService.getVipCards().catchError((_) => <String, dynamic>{}),
             // 3. User Bag & Backpack Inventory
-            BagApiService.getBagInventory(),
+            BagApiService.getBagInventory().catchError((_) => <String, dynamic>{}),
             // 4. KYC Status & Verification Badge
-            KycApiService.getKycStatus(),
+            KycApiService.getKycStatus().catchError((_) => <String, dynamic>{}),
             // 5. Wallet Balance, Payment Methods & Coin Packages
-            WalletApiService.getWalletBalance(),
-            WalletApiService.getPaymentMethods(),
-            WalletApiService.getCoinPackages(),
+            WalletApiService.getWalletBalance().catchError((_) => null),
+            WalletApiService.getPaymentMethods().catchError((_) => <Map<String, dynamic>>[]),
+            WalletApiService.getCoinPackages().catchError((_) => <Map<String, dynamic>>[]),
             // 6. Messages & Inbox Conversations
-            ChatApiService.getConversations(),
+            ChatApiService.getConversations().catchError((_) => <dynamic>[]),
             // 7. Notification Unread Alerts
-            NotificationApiService.instance.fetchNotifications(),
+            NotificationApiService.instance.fetchNotifications().catchError((_) => null),
             // 8. Remote Config & Feature Toggles
-            RemoteConfigService.instance.fetchRemoteConfig(),
-          ]).timeout(const Duration(seconds: 12), onTimeout: () => []);
+            RemoteConfigService.instance.fetchRemoteConfig().catchError((_) => null),
+          ], eagerError: false).timeout(const Duration(seconds: 8), onTimeout: () => []);
         }
       } catch (_) {}
     });
