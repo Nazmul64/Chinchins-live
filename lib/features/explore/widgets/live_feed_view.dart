@@ -153,41 +153,124 @@ class _LiveFeedViewState extends State<LiveFeedView> {
           child: RefreshIndicator(
             color: AppColors.neonPink,
             onRefresh: _handleRefresh,
-            child: _isLoadingStreams && _activeStreams.isEmpty && widget.models.isEmpty
+            child: _isLoadingStreams && _activeStreams.isEmpty
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.neonPink),
                   )
                 : _activeStreams.isNotEmpty
                     ? GridView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.72,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                    ),
-                    itemCount: _activeStreams.length,
-                    itemBuilder: (context, index) {
-                      final stream = _activeStreams[index];
-                      return _buildActiveStreamCard(context, stream, index);
-                    },
-                  )
-                : GridView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.72,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                    ),
-                    itemCount: widget.models.length,
-                    itemBuilder: (context, index) {
-                      final model = widget.models[index];
-                      return _buildModelLiveCard(context, model, index);
-                    },
-                  ),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 0.72,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                        ),
+                        itemCount: _activeStreams.length,
+                        itemBuilder: (context, index) {
+                          final stream = _activeStreams[index];
+                          return _buildActiveStreamCard(context, stream, index);
+                        },
+                      )
+                    : ListView(
+                        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                        children: [
+                          SizedBox(height: MediaQuery.of(context).size.height * 0.12),
+                          Center(
+                            child: Container(
+                              width: 86,
+                              height: 86,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    const Color(0xFFFF007F).withValues(alpha: 0.2),
+                                    const Color(0xFF8E2DE2).withValues(alpha: 0.2),
+                                  ],
+                                ),
+                                border: Border.all(
+                                  color: const Color(0xFFFF007F).withValues(alpha: 0.5),
+                                  width: 2,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.sensors_off_rounded,
+                                color: Color(0xFFFF007F),
+                                size: 40,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          const Center(
+                            child: Text(
+                              'No Live Streamers Right Now',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 36),
+                            child: Text(
+                              'Nobody is broadcasting live at the moment. Pull down to refresh or start your own stream!',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white60,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Center(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                final defaultModel = widget.models.isNotEmpty
+                                    ? widget.models.first
+                                    : ModelProfile.fromJson(const {
+                                        'id': 'me',
+                                        'account_id': 'me',
+                                        'name': 'My Broadcast',
+                                        'avatar_url': 'https://chinchins.live/uploads/app/logo.png',
+                                        'price_per_min': 100,
+                                      });
+
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => LiveRoomScreen(
+                                      host: defaultModel,
+                                      title: 'Welcome to my official live stream! 🌟',
+                                      isHost: true,
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.videocam_rounded, color: Colors.white, size: 20),
+                              label: const Text(
+                                'Start Broadcasting Now',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFF007F),
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                elevation: 6,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 40),
+                        ],
+                      ),
           ),
         ),
       ],
@@ -351,187 +434,6 @@ class _LiveFeedViewState extends State<LiveFeedView> {
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(7),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.neonPink.withValues(alpha: 0.5),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 16),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildModelLiveCard(BuildContext context, ModelProfile model, int index) {
-    final viewerCount = 80 + (index * 47) % 400;
-
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => LiveRoomScreen(
-              host: model,
-              title: '${model.name}\'s Live Room',
-            ),
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white10),
-          boxShadow: const [
-            BoxShadow(color: Colors.black45, blurRadius: 8, offset: Offset(0, 4)),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              CachedImageLoader(
-                imageUrl: model.avatarUrl,
-                fit: BoxFit.cover,
-              ),
-              Positioned.fill(
-                child: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.black54,
-                        Colors.transparent,
-                        Colors.black87,
-                      ],
-                      stops: [0.0, 0.4, 1.0],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 8,
-                left: 8,
-                right: 8,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF007F), Color(0xFFFF5252)],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF007F).withValues(alpha: 0.6),
-                            blurRadius: 6,
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 3),
-                          const Text(
-                            'LIVE',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.remove_red_eye_rounded, color: Colors.white, size: 11),
-                          const SizedBox(width: 3),
-                          Text(
-                            '$viewerCount',
-                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Positioned(
-                bottom: 10,
-                left: 10,
-                right: 10,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  model.name,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (model.countryFlag.isNotEmpty) ...[
-                                const SizedBox(width: 4),
-                                Text(model.countryFlag, style: const TextStyle(fontSize: 12)),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Lv.${model.currentLevel > 0 ? model.currentLevel : model.level}',
-                            style: const TextStyle(
-                              color: Color(0xFFFFD54F),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                            ),
                           ),
                         ],
                       ),
