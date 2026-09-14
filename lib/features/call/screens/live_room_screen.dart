@@ -340,6 +340,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
   void _subscribeWebSocketEvents() {
     final signaling = SignalingService();
+    final liveRoomKey = _activeLiveId?.toString() ?? widget.host.id;
+    signaling.subscribeToLiveRoom(liveRoomKey);
+    if (_activeChannelName.isNotEmpty && _activeChannelName != liveRoomKey) {
+      signaling.subscribeToLiveRoom(_activeChannelName);
+    }
 
     // 1. Live Comments
     _msgSub = signaling.onLiveMessage.listen((data) {
@@ -361,9 +366,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         final giftName = data['gift_name'] ?? 'Gift';
         final senderName = data['sender_name'] ?? 'Viewer';
         final coins = data['total_coins'] ?? data['coins'] ?? 100;
+        final animUrl = data['animation_url']?.toString() ?? data['animation_asset_url']?.toString() ?? data['image_url']?.toString();
 
         setState(() {
-          _diamondsEarned += (coins is int ? coins : 100);
+          _diamondsEarned += (coins is int ? coins : (int.tryParse('$coins') ?? 100));
           _liveComments.add({
             'user': 'System',
             'text': '🎁 $senderName sent a $giftName ($coins 💎)!',
@@ -372,9 +378,13 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         });
         _scrollToBottom();
 
-        // Trigger animation
-        final animUrl = data['animation_url']?.toString();
-        _giftAnimKey.currentState?.playGiftAnimation(animUrl ?? giftName);
+        // Trigger dynamic high-motion gift animation overlay
+        _giftAnimKey.currentState?.playGiftAnimationDynamic(
+          giftName: giftName,
+          animationUrl: animUrl,
+          senderName: senderName,
+          coins: coins is int ? coins : (int.tryParse('$coins') ?? 100),
+        );
       }
     });
 

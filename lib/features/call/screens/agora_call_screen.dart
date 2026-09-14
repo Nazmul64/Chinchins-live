@@ -177,28 +177,36 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   }
 
   void _subscribeSignalingEvents() {
-    _wsEndedSub = SignalingService().onCallEnded.listen((data) {
+    final signaling = SignalingService();
+    if (widget.callId != null) {
+      signaling.subscribeToCallRoom(widget.callId.toString());
+    }
+    if (widget.channelName.isNotEmpty && widget.channelName != widget.callId?.toString()) {
+      signaling.subscribeToCallRoom(widget.channelName);
+    }
+
+    _wsEndedSub = signaling.onCallEnded.listen((data) {
       debugPrint('[AgoraCallScreen] Received onCallEnded via WebSocket: $data');
       CallSoundManager.stopRingtone();
       if (mounted && !_isEndingCall) {
         _endCall();
       }
     });
-    _wsRejectedSub = SignalingService().onCallRejected.listen((data) {
+    _wsRejectedSub = signaling.onCallRejected.listen((data) {
       debugPrint('[AgoraCallScreen] Received onCallRejected via WebSocket: $data');
       CallSoundManager.stopRingtone();
       if (mounted && !_isEndingCall) {
         _endCall();
       }
     });
-    _wsCancelledSub = SignalingService().onCallCancelled.listen((data) {
+    _wsCancelledSub = signaling.onCallCancelled.listen((data) {
       debugPrint('[AgoraCallScreen] Received onCallCancelled via WebSocket: $data');
       CallSoundManager.stopRingtone();
       if (mounted && !_isEndingCall) {
         _endCall();
       }
     });
-    _wsInCallMsgSub = SignalingService().onInCallMessage.listen((data) {
+    _wsInCallMsgSub = signaling.onInCallMessage.listen((data) {
       debugPrint('[AgoraCallScreen] Received InCallMessage via WebSocket: $data');
       if (mounted) {
         _chatKey.currentState?.addIncomingMessage(data);

@@ -175,14 +175,18 @@ class SignalingService {
 
   Future<void> subscribeToCallRoom(String roomId) async {
     if (_pusherClient == null || roomId.isEmpty) return;
-    await _subscribeToChannel('presence-call.$roomId', isPrivate: true);
-    await _subscribeToChannel('private-call.$roomId', isPrivate: true);
-    await _subscribeToChannel('call.$roomId', isPrivate: false);
-    await _subscribeToChannel('call_chat.$roomId', isPrivate: false);
+    final rId = roomId.trim();
+    await _subscribeToChannel('presence-call.$rId', isPrivate: true);
+    await _subscribeToChannel('private-call.$rId', isPrivate: true);
+    await _subscribeToChannel('call.$rId', isPrivate: false);
+    await _subscribeToChannel('call_chat.$rId', isPrivate: false);
   }
 
-  Future<void> leaveCallRoom() async {
-    final toRemove = _activeChannels.keys.where((k) => k.contains('call.') || k.contains('call_chat.')).toList();
+  Future<void> leaveCallRoom([String? roomId]) async {
+    final rId = roomId?.trim() ?? '';
+    final toRemove = _activeChannels.keys.where((k) => 
+      k.contains('call.$rId') || k.contains('call_chat.$rId') || (rId.isEmpty && (k.contains('call.') || k.contains('call_chat.')))
+    ).toList();
     for (final chName in toRemove) {
       try {
         _activeSubscriptions[chName]?.cancel();
@@ -197,14 +201,19 @@ class SignalingService {
     if (_pusherClient == null || liveId == null) return;
     final idStr = liveId.toString().trim();
     if (idStr.isEmpty) return;
+    await _subscribeToChannel('presence-live-stream.$idStr', isPrivate: true);
     await _subscribeToChannel('presence-live.$idStr', isPrivate: true);
+    await _subscribeToChannel('private-live-stream.$idStr', isPrivate: true);
     await _subscribeToChannel('private-live.$idStr', isPrivate: true);
+    await _subscribeToChannel('live-stream.$idStr', isPrivate: false);
     await _subscribeToChannel('live.$idStr', isPrivate: false);
   }
 
   Future<void> leaveLiveRoom(dynamic liveId) async {
     final idStr = liveId?.toString().trim() ?? '';
-    final toRemove = _activeChannels.keys.where((k) => k.contains('live.$idStr') || (idStr.isEmpty && k.contains('live.'))).toList();
+    final toRemove = _activeChannels.keys.where((k) => 
+      k.contains('live-stream.$idStr') || k.contains('live.$idStr') || (idStr.isEmpty && (k.contains('live-stream.') || k.contains('live.')))
+    ).toList();
     for (final chName in toRemove) {
       try {
         _activeSubscriptions[chName]?.cancel();
@@ -255,39 +264,58 @@ class SignalingService {
       return;
     }
 
-    // Check for In-Call Real-Time Chat messages
-    if (cleanName == 'InCallMessageSent' ||
+    // Check for In-Call Real-Time Chat messages & Photos
+    if (cleanName == 'CallMessageEvent' ||
+        cleanName.endsWith('CallMessageEvent') ||
+        cleanName == 'InCallMessageSent' ||
         cleanName == 'CallMessageSent' ||
         cleanName == 'call.message.sent' ||
         cleanName == 'call.message' ||
         cleanName == 'chat_message' ||
+        cleanName == 'chat.message' ||
         lowerName.contains('callmessage') ||
-        lowerName.contains('incallmessage')) {
+        lowerName.contains('incallmessage') ||
+        lowerName.contains('call_message')) {
       _inCallMessageController.add(data);
       return;
     }
 
-    // Check for Live Broadcast Events
-    if (cleanName == 'LiveMessageSent' ||
+    // Check for Live Broadcast Comments
+    if (cleanName == 'LiveChatMessageEvent' ||
+        cleanName.endsWith('LiveChatMessageEvent') ||
+        cleanName == 'LiveMessageSent' ||
         cleanName == 'live.message.sent' ||
         cleanName == 'live.message' ||
+        cleanName == 'chat.message' ||
+        cleanName == 'LiveCommentEvent' ||
+        lowerName.contains('livechat') ||
         lowerName.contains('livemessage')) {
       _liveMessageController.add(data);
       return;
     }
 
-    if (cleanName == 'LiveGiftSent' ||
+    // Check for Live Gifts Sent
+    if (cleanName == 'LiveGiftSentEvent' ||
+        cleanName.endsWith('LiveGiftSentEvent') ||
+        cleanName == 'LiveGiftSent' ||
         cleanName == 'live.gift.sent' ||
         cleanName == 'live.gift' ||
-        lowerName.contains('livegift')) {
+        cleanName == 'gift.received' ||
+        lowerName.contains('livegift') ||
+        lowerName.contains('giftsent') ||
+        lowerName.contains('gift.received')) {
       _liveGiftController.add(data);
       return;
     }
 
-    if (cleanName == 'LiveJoinRequested' ||
+    // Check for Live Multi-Host / Co-Host Status
+    if (cleanName == 'CoHostStatusEvent' ||
+        cleanName.endsWith('CoHostStatusEvent') ||
+        cleanName == 'LiveJoinRequested' ||
         cleanName == 'live.join.requested' ||
         cleanName == 'live.cohost.request' ||
-        lowerName.contains('joinrequest')) {
+        lowerName.contains('joinrequest') ||
+        lowerName.contains('cohost')) {
       _liveJoinRequestController.add(data);
       return;
     }

@@ -157,25 +157,33 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   }
 
   void _subscribeSignalingEvents() {
-    _wsEndedSub = SignalingService().onCallEnded.listen((data) {
+    final signaling = SignalingService();
+    if (widget.callId != null) {
+      signaling.subscribeToCallRoom(widget.callId.toString());
+    }
+    if (widget.channelName != null && widget.channelName!.isNotEmpty && widget.channelName != widget.callId?.toString()) {
+      signaling.subscribeToCallRoom(widget.channelName!);
+    }
+
+    _wsEndedSub = signaling.onCallEnded.listen((data) {
       CallSoundManager.stopRingtone();
       if (mounted && !_isEndingCall) {
         _endCall();
       }
     });
-    _wsRejectedSub = SignalingService().onCallRejected.listen((data) {
+    _wsRejectedSub = signaling.onCallRejected.listen((data) {
       CallSoundManager.stopRingtone();
       if (mounted && !_isEndingCall) {
         _endCall();
       }
     });
-    _wsCancelledSub = SignalingService().onCallCancelled.listen((data) {
+    _wsCancelledSub = signaling.onCallCancelled.listen((data) {
       CallSoundManager.stopRingtone();
       if (mounted && !_isEndingCall) {
         _endCall();
       }
     });
-    _wsInCallMsgSub = SignalingService().onInCallMessage.listen((data) {
+    _wsInCallMsgSub = signaling.onInCallMessage.listen((data) {
       if (mounted) {
         _chatKey.currentState?.addIncomingMessage(data);
       }

@@ -89,6 +89,26 @@ class GiftAnimationOverlayState extends State<GiftAnimationOverlay> with TickerP
     }
   }
 
+  void playGiftAnimationDynamic({
+    required String giftName,
+    String? animationUrl,
+    String? senderName,
+    int? coins,
+    int combo = 1,
+  }) {
+    playGiftAnimation(
+      ActiveGiftAnimation(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        giftName: giftName,
+        giftEmoji: '🎁',
+        giftIconUrl: animationUrl,
+        senderName: senderName ?? 'Viewer',
+        coins: coins ?? 100,
+        combo: combo,
+      ),
+    );
+  }
+
   void _playNextGift() {
     if (_activeGifts.isEmpty) return;
     setState(() {
@@ -130,9 +150,38 @@ class GiftAnimationOverlayState extends State<GiftAnimationOverlay> with TickerP
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Huge High-Motion Visual Icon (Tiger, Sports Car, Dragon, Palace, Crown)
+        if (gift.giftIconUrl != null && gift.giftIconUrl!.isNotEmpty)
+          Container(
+            width: 170,
+            height: 170,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF007F).withValues(alpha: 0.6),
+                  blurRadius: 40,
+                  spreadRadius: 8,
+                ),
+                BoxShadow(
+                  color: const Color(0xFFFFD700).withValues(alpha: 0.5),
+                  blurRadius: 30,
+                  spreadRadius: 4,
+                ),
+              ],
+            ),
+            child: CachedImageLoader(
+              imageUrl: gift.giftIconUrl!,
+              width: 170,
+              height: 170,
+              fit: BoxFit.contain,
+            ),
+          ),
+
         // Luxury Particle Glow Container
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0), Color(0xFFFF007F)],
@@ -157,20 +206,13 @@ class GiftAnimationOverlayState extends State<GiftAnimationOverlay> with TickerP
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Gift Icon or Emoji
-              if (gift.giftIconUrl != null && gift.giftIconUrl!.isNotEmpty)
-                CachedImageLoader(
-                  imageUrl: gift.giftIconUrl!,
-                  width: 64,
-                  height: 64,
-                  fit: BoxFit.contain,
-                )
-              else
+              if (gift.giftIconUrl == null || gift.giftIconUrl!.isEmpty) ...[
                 Text(
                   gift.giftEmoji,
-                  style: const TextStyle(fontSize: 52),
+                  style: const TextStyle(fontSize: 48),
                 ),
-              const SizedBox(width: 14),
+                const SizedBox(width: 12),
+              ],
 
               // Sender and Gift Info
               Column(
@@ -202,7 +244,7 @@ class GiftAnimationOverlayState extends State<GiftAnimationOverlay> with TickerP
                     ),
                   ),
                   Text(
-                    '${gift.coins} Coins',
+                    '${gift.coins} Coins 💎',
                     style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 12,
