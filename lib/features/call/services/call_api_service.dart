@@ -1142,26 +1142,55 @@ class CallApiService {
   }) async {
     try {
       final token = await AuthApiService.getToken();
-      final url = Uri.parse(ApiConstants.callChatSend);
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString() ?? savedUser?['account_id']?.toString();
+      final senderName = savedUser?['name'] ?? savedUser?['display_name'] ?? 'User';
+      final senderAvatar = savedUser?['avatar'] ?? savedUser?['avatar_url'];
+
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
+        if (userId != null) 'X-User-Id': userId,
       };
+
       final payload = {
-        'call_session_id': callSessionId?.toString(),
-        'receiver_id': int.tryParse(receiverId.toString()) ?? receiverId,
-        'type': type,
+        'call_id': callSessionId,
+        'callSessionId': callSessionId,
+        'receiver_id': receiverId,
+        'sender_id': userId,
+        'sender_name': senderName,
+        'sender_avatar': senderAvatar,
         'message': message,
+        'type': type,
+        'is_in_call': true,
+        'in_call': true,
+        'context': 'in_call',
         if (imageUrl != null) 'image_url': imageUrl,
+        if (imageUrl != null) 'media_url': imageUrl,
       };
-      final response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
+
+      var url = Uri.parse(ApiConstants.callSendMessage);
+      var response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 404) {
+        url = Uri.parse(ApiConstants.callChatSend);
+        response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
+      }
+
+      if (response.statusCode == 404) {
+        url = Uri.parse('${ApiConstants.baseUrl}/v1/call/send-message');
+        response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
+      }
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         final decoded = jsonDecode(response.body);
-        return decoded is Map<String, dynamic> ? decoded : null;
+        if (decoded is Map) {
+          return Map<String, dynamic>.from(decoded['data'] is Map ? decoded['data'] : decoded);
+        }
       }
-    } catch (e) {
-      debugPrint('Error sending in-call chat: $e');
+    } catch (e, st) {
+      AppLogger.error('sendCallChatMessage error', e, st);
     }
     return null;
   }
@@ -1350,67 +1379,6 @@ class CallApiService {
     return null;
   }
 
-  static Future<Map<String, dynamic>?> sendCallChatMessage({
-    required dynamic callSessionId,
-    required dynamic receiverId,
-    required String message,
-    String type = 'text',
-    String? imageUrl,
-  }) async {
-    try {
-      final token = await AuthApiService.getToken();
-      final savedUser = await AuthApiService.getSavedUser();
-      final userId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString() ?? savedUser?['account_id']?.toString();
-      final senderName = savedUser?['name'] ?? savedUser?['display_name'] ?? 'User';
-      final senderAvatar = savedUser?['avatar'] ?? savedUser?['avatar_url'];
-
-      final headers = <String, String>{
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-        if (userId != null) 'X-User-Id': userId,
-      };
-
-      final payload = {
-        'call_id': callSessionId,
-        'callSessionId': callSessionId,
-        'receiver_id': receiverId,
-        'sender_id': userId,
-        'sender_name': senderName,
-        'sender_avatar': senderAvatar,
-        'message': message,
-        'type': type,
-        'is_in_call': true,
-        'in_call': true,
-        'context': 'in_call',
-        if (imageUrl != null) 'image_url': imageUrl,
-        if (imageUrl != null) 'media_url': imageUrl,
-      };
-
-      var url = Uri.parse(ApiConstants.callSendMessage);
-      var response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
-
-      if (response.statusCode == 404) {
-        url = Uri.parse(ApiConstants.callChatSend);
-        response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
-      }
-
-      if (response.statusCode == 404) {
-        url = Uri.parse('${ApiConstants.baseUrl}/v1/call/send-message');
-        response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
-      }
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map) {
-          return Map<String, dynamic>.from(decoded['data'] is Map ? decoded['data'] : decoded);
-        }
-      }
-    } catch (e, st) {
-      AppLogger.error('sendCallChatMessage error', e, st);
-    }
-    return null;
-  }
 
 
 
