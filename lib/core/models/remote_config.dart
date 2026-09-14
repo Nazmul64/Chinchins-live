@@ -38,20 +38,78 @@ class RemoteConfig {
       'enable_profile_view_alert': true,
       'enable_auto_chat_greetings': true,
       'maintenance_mode': false,
+      'in_app_debug_hud': false,
+      'screenshot_protection': false,
+      'screen_recording_shield': false,
+      'tiktok_camera_filters': false,
+      'back_button_call_minimize': true,
+      'show_offline_users': false,
     },
     this.supportEmail = 'support@chinchins.live',
     this.supportWhatsapp = '+8801700000000',
   });
 
-  bool get isVideoCallingEnabled => remoteFlags['enable_video_calling'] != false;
-  bool get isAudioCallingEnabled => remoteFlags['enable_audio_calling'] != false;
-  bool get isRandomMatchingEnabled => remoteFlags['enable_random_matching'] != false;
-  bool get isInstantCallWakeEnabled => remoteFlags['enable_instant_call_wake'] != false;
-  bool get isPushNotificationsEnabled => remoteFlags['enable_push_notifications'] != false;
-  bool get isInAppUpdatesEnabled => remoteFlags['enable_in_app_updates'] != false;
-  bool get isProfileViewAlertEnabled => remoteFlags['enable_profile_view_alert'] != false;
-  bool get isAutoChatGreetingsEnabled => remoteFlags['enable_auto_chat_greetings'] != false;
-  bool get isMaintenanceMode => remoteFlags['maintenance_mode'] == true;
+  static bool _parseBoolFlag(dynamic value, bool defaultValue) {
+    if (value == null) return defaultValue;
+    if (value is bool) return value;
+    final str = value.toString().trim().toLowerCase();
+    if (str == '1' || str == 'true' || str == 'yes' || str == 'on') return true;
+    if (str == '0' || str == 'false' || str == 'no' || str == 'off') return false;
+    return defaultValue;
+  }
+
+  bool get isVideoCallingEnabled => _parseBoolFlag(remoteFlags['enable_video_calling'], true);
+  bool get isAudioCallingEnabled => _parseBoolFlag(remoteFlags['enable_audio_calling'], true);
+  bool get isRandomMatchingEnabled => _parseBoolFlag(remoteFlags['enable_random_matching'], true);
+  bool get isInstantCallWakeEnabled => _parseBoolFlag(remoteFlags['enable_instant_call_wake'], true);
+  bool get isPushNotificationsEnabled => _parseBoolFlag(remoteFlags['enable_push_notifications'], true);
+  bool get isInAppUpdatesEnabled => _parseBoolFlag(remoteFlags['enable_in_app_updates'], true);
+  bool get isProfileViewAlertEnabled => _parseBoolFlag(remoteFlags['enable_profile_view_alert'], true);
+  bool get isAutoChatGreetingsEnabled => _parseBoolFlag(remoteFlags['enable_auto_chat_greetings'], true);
+  bool get isMaintenanceMode => _parseBoolFlag(remoteFlags['maintenance_mode'], false);
+
+  // Admin Remote Feature Switches (Instant Sync)
+  bool get isDebugHudEnabled => _parseBoolFlag(
+        remoteFlags['in_app_debug_hud'] ??
+            remoteFlags['debug_hud_enabled'] ??
+            remoteFlags['enable_debug_hud'],
+        false,
+      );
+
+  bool get isScreenshotProtectionEnabled => _parseBoolFlag(
+        remoteFlags['screenshot_protection'] ??
+            remoteFlags['screenshot_protection_enabled'] ??
+            remoteFlags['flag_secure'],
+        false,
+      );
+
+  bool get isScreenRecordingProtectionEnabled => _parseBoolFlag(
+        remoteFlags['screen_recording_shield'] ??
+            remoteFlags['screen_recording_protection_enabled'] ??
+            remoteFlags['screen_recording_shield_enabled'],
+        false,
+      );
+
+  bool get isCameraFiltersEnabled => _parseBoolFlag(
+        remoteFlags['tiktok_camera_filters'] ??
+            remoteFlags['camera_filters_enabled'] ??
+            remoteFlags['enable_camera_filters'],
+        false,
+      );
+
+  bool get isPipEnabled => _parseBoolFlag(
+        remoteFlags['back_button_call_minimize'] ??
+            remoteFlags['back_button_pip_enabled'] ??
+            remoteFlags['enable_pip'] ??
+            remoteFlags['pip_enabled'],
+        true,
+      );
+
+  bool get isShowOfflineUsersEnabled => _parseBoolFlag(
+        remoteFlags['show_offline_users'],
+        false,
+      );
+
   String get maintenanceMessage =>
       remoteFlags['maintenance_message']?.toString() ??
       'Server is currently undergoing scheduled maintenance.';

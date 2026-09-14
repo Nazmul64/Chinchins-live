@@ -7,21 +7,11 @@ class ScreenProtectionService {
   ScreenProtectionService._();
   static final ScreenProtectionService instance = ScreenProtectionService._();
 
-  bool get isScreenshotProtectionEnabled {
-    final flags = RemoteConfigService.instance.config.remoteFlags;
-    if (flags['screenshot_protection_enabled'] != null) {
-      return flags['screenshot_protection_enabled'] == true;
-    }
-    return true; // Default to secure
-  }
+  bool get isScreenshotProtectionEnabled =>
+      RemoteConfigService.instance.config.isScreenshotProtectionEnabled;
 
-  bool get isScreenRecordingProtectionEnabled {
-    final flags = RemoteConfigService.instance.config.remoteFlags;
-    if (flags['screen_recording_protection_enabled'] != null) {
-      return flags['screen_recording_protection_enabled'] == true;
-    }
-    return true; // Default to secure
-  }
+  bool get isScreenRecordingProtectionEnabled =>
+      RemoteConfigService.instance.config.isScreenRecordingProtectionEnabled;
 
   void logProtectionStatus() {
     debugPrint(

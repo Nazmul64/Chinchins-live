@@ -22,6 +22,30 @@ import '../widgets/in_call_chat_overlay.dart';
 import '../widgets/in_call_gift_sheet.dart';
 import '../widgets/gift_animation_overlay.dart';
 
+class ActiveAgoraCallSession {
+  final String channelName;
+  final RtcEngine engine;
+  final int? remoteUid;
+  final int callSeconds;
+  final bool isConnecting;
+  final bool isAudioMuted;
+  final bool isVideoOff;
+  final bool isSwappedVideo;
+  final bool isVideoBlurred;
+
+  ActiveAgoraCallSession({
+    required this.channelName,
+    required this.engine,
+    this.remoteUid,
+    required this.callSeconds,
+    required this.isConnecting,
+    required this.isAudioMuted,
+    required this.isVideoOff,
+    required this.isSwappedVideo,
+    required this.isVideoBlurred,
+  });
+}
+
 class AgoraCallScreen extends StatefulWidget {
   final ModelProfile model;
   final int? callId;
@@ -63,6 +87,8 @@ class AgoraCallScreen extends StatefulWidget {
 }
 
 class _AgoraCallScreenState extends State<AgoraCallScreen> {
+  static ActiveAgoraCallSession? _activeSession;
+
   final GlobalKey<InCallChatOverlayState> _chatKey = GlobalKey<InCallChatOverlayState>();
   final GlobalKey<GiftAnimationOverlayState> _giftAnimKey = GlobalKey<GiftAnimationOverlayState>();
   FilterPreset _currentFilter = BeautyFilterEngine.presets[1]; // Beauty Glow
@@ -118,14 +144,29 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
         ? widget.ratePerMinute
         : (widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100);
 
-    if (!widget.isIncoming) {
-      _isConnecting = true;
-      CallSoundManager.playOutgoingRingtone(widget.dialToneUrl);
+    if (_activeSession != null && _activeSession!.channelName == widget.channelName) {
+      // Reattach to running active session smoothly
+      _engine = _activeSession!.engine;
+      _remoteUid = _activeSession!.remoteUid;
+      _callSeconds = _activeSession!.callSeconds;
+      _isConnecting = _activeSession!.isConnecting;
+      _isAudioMuted = _activeSession!.isAudioMuted;
+      _isVideoOff = _activeSession!.isVideoOff;
+      _isSwappedVideo = _activeSession!.isSwappedVideo;
+      _isVideoBlurred = _activeSession!.isVideoBlurred;
+      _localUserJoined = true;
+      _activeSession = null;
+      _startTimer();
     } else {
-      _isConnecting = false;
+      if (!widget.isIncoming) {
+        _isConnecting = true;
+        CallSoundManager.playOutgoingRingtone(widget.dialToneUrl);
+      } else {
+        _isConnecting = false;
+      }
+      _initAgoraEngine();
     }
 
-    _initAgoraEngine();
     _loadUserBalance();
     _loadFeaturedPackage();
     _loadCallConfig();
@@ -553,10 +594,27 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     });
   }
 
+  static void _endActiveSession({int? callId, int? durationSeconds}) async {
+    if (_activeSession != null) {
+      try {
+        await _activeSession!.engine.leaveChannel();
+        await _activeSession!.engine.release();
+      } catch (_) {}
+      _activeSession = null;
+    }
+    if (callId != null) {
+      try {
+        await CallApiService.endCall(callId: callId, durationSeconds: durationSeconds ?? 0);
+      } catch (_) {}
+    }
+  }
+
   Future<void> _endCall() async {
     if (_isEndingCall) return;
     _isEndingCall = true;
 
+    PiPCallOverlay.hideMiniWindow();
+    _activeSession = null;
     CallSoundManager.stopRingtone();
     _timer?.cancel();
     _pollingTimer?.cancel();
@@ -602,18 +660,25 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
 
   @override
   void dispose() {
-    _isEndingCall = true;
-    CallSoundManager.stopRingtone();
     _timer?.cancel();
     _pollingTimer?.cancel();
     _wsEndedSub?.cancel();
     _wsRejectedSub?.cancel();
     _wsCancelledSub?.cancel();
     _wsInCallMsgSub?.cancel();
-    if (_engine != null) {
-      _engine!.leaveChannel();
-      _engine!.release();
-      _engine = null;
+    CallSoundManager.stopRingtone();
+
+    // If minimized, preserve engine for PiP window restoration
+    if (PiPCallOverlay.isMinimized && _activeSession != null) {
+      debugPrint('[AgoraCallScreen] Preserving active session for PiP overlay');
+    } else {
+      _isEndingCall = true;
+      if (_engine != null) {
+        _engine!.leaveChannel();
+        _engine!.release();
+        _engine = null;
+      }
+      _activeSession = null;
     }
     super.dispose();
   }
@@ -625,6 +690,19 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   }
 
   void _minimizeToPiP() {
+    if (_engine == null) return;
+    _activeSession = ActiveAgoraCallSession(
+      channelName: widget.channelName,
+      engine: _engine!,
+      remoteUid: _remoteUid,
+      callSeconds: _callSeconds,
+      isConnecting: _isConnecting,
+      isAudioMuted: _isAudioMuted,
+      isVideoOff: _isVideoOff,
+      isSwappedVideo: _isSwappedVideo,
+      isVideoBlurred: _isVideoBlurred,
+    );
+
     PiPCallOverlay.showMiniWindow(
       context,
       remoteVideoView: RepaintBoundary(
@@ -638,11 +716,29 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       onTapRestore: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => widget),
+          MaterialPageRoute(
+            builder: (_) => AgoraCallScreen(
+              model: widget.model,
+              callId: widget.callId,
+              channelName: widget.channelName,
+              appId: widget.appId,
+              token: widget.token,
+              uid: widget.uid,
+              isTempToken: widget.isTempToken,
+              isFreeTrial: widget.isFreeTrial,
+              freeDurationSeconds: widget.freeDurationSeconds,
+              ratePerMinute: widget.ratePerMinute,
+              isIncoming: widget.isIncoming,
+              dialToneUrl: widget.dialToneUrl,
+              isVideo: widget.isVideo,
+              debugMode: widget.debugMode,
+              logLevel: widget.logLevel,
+            ),
+          ),
         );
       },
       onEndCall: () {
-        _handleUserHangup();
+        _endActiveSession(callId: widget.callId, durationSeconds: _callSeconds);
       },
     );
     Navigator.of(context).pop();

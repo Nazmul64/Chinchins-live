@@ -34,6 +34,8 @@ class PiPCallOverlay {
     double top = mediaQuery.size.height - 250;
     double left = mediaQuery.size.width - 150;
 
+    bool isDragging = false;
+
     _overlayEntry = OverlayEntry(
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) {
@@ -46,13 +48,24 @@ class PiPCallOverlay {
                 child: Material(
                   color: Colors.transparent,
                   child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onPanStart: (_) {
+                      isDragging = false;
+                    },
                     onPanUpdate: (details) {
+                      isDragging = true;
                       setState(() {
                         top += details.delta.dy;
                         left += details.delta.dx;
                       });
                     },
+                    onPanEnd: (_) {
+                      Future.delayed(const Duration(milliseconds: 200), () {
+                        isDragging = false;
+                      });
+                    },
                     onTap: () {
+                      if (isDragging) return;
                       hideMiniWindow();
                       if (_activeCallSessionId != null) {
                         CallApiService.restoreCall(callSessionId: _activeCallSessionId);

@@ -48,8 +48,28 @@ class VideoCallScreen extends StatefulWidget {
   State<VideoCallScreen> createState() => _VideoCallScreenState();
 }
 
+class ActiveWebRTCSession {
+  final String channelName;
+  final WebRTCCallService webrtcService;
+  final int callSeconds;
+  final bool isConnectingCall;
+  final bool isSwappedVideo;
+  final bool isVideoBlurred;
+
+  ActiveWebRTCSession({
+    required this.channelName,
+    required this.webrtcService,
+    required this.callSeconds,
+    required this.isConnectingCall,
+    required this.isSwappedVideo,
+    required this.isVideoBlurred,
+  });
+}
+
 class _VideoCallScreenState extends State<VideoCallScreen> {
-  final WebRTCCallService _webrtcService = WebRTCCallService();
+  static ActiveWebRTCSession? _activeSession;
+
+  late final WebRTCCallService _webrtcService;
   final GlobalKey<GiftAnimationOverlayState> _giftAnimKey = GlobalKey<GiftAnimationOverlayState>();
   final GlobalKey<InCallChatOverlayState> _chatKey = GlobalKey<InCallChatOverlayState>();
 
@@ -99,21 +119,35 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         ? widget.ratePerMinute
         : (widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100);
 
-    _webrtcService.onIceStateChanged = (RTCIceConnectionState state) {
-      if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
-          state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
-        _onMediaConnected();
-      }
-    };
-
-    if (!widget.isIncoming) {
-      _isConnectingCall = true;
-      CallSoundManager.playOutgoingRingtone(widget.dialToneUrl);
+    if (_activeSession != null && _activeSession!.channelName == widget.channelName) {
+      _webrtcService = _activeSession!.webrtcService;
+      _callSeconds = _activeSession!.callSeconds;
+      _isConnectingCall = _activeSession!.isConnectingCall;
+      _isSwappedVideo = _activeSession!.isSwappedVideo;
+      _isVideoBlurred = _activeSession!.isVideoBlurred;
+      _isCameraReady = true;
+      _hasStartedWebRTC = true;
+      _activeSession = null;
+      _startTimer();
     } else {
-      _isConnectingCall = false;
+      _webrtcService = WebRTCCallService();
+      _webrtcService.onIceStateChanged = (RTCIceConnectionState state) {
+        if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
+            state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
+          _onMediaConnected();
+        }
+      };
+
+      if (!widget.isIncoming) {
+        _isConnectingCall = true;
+        CallSoundManager.playOutgoingRingtone(widget.dialToneUrl);
+      } else {
+        _isConnectingCall = false;
+      }
+
+      _initWebRTCMediaAndFlow();
     }
 
-    _initWebRTCMediaAndFlow();
     _loadUserBalance();
     _loadFeaturedPackage();
     _loadCallConfig();
@@ -364,10 +398,26 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     }
   }
 
+  static void _endActiveSession({int? callId, int? durationSeconds}) async {
+    if (_activeSession != null) {
+      try {
+        await _activeSession!.webrtcService.dispose();
+      } catch (_) {}
+      _activeSession = null;
+    }
+    if (callId != null) {
+      try {
+        await CallApiService.endCall(callId: callId, durationSeconds: durationSeconds ?? 0);
+      } catch (_) {}
+    }
+  }
+
   Future<void> _endCall() async {
     if (_isEndingCall) return;
     _isEndingCall = true;
 
+    PiPCallOverlay.hideMiniWindow();
+    _activeSession = null;
     _timer?.cancel();
     _pollingTimer?.cancel();
     _wsEndedSub?.cancel();
@@ -393,7 +443,6 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   @override
   void dispose() {
-    _isEndingCall = true;
     _timer?.cancel();
     _pollingTimer?.cancel();
     _wsEndedSub?.cancel();
@@ -401,7 +450,14 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _wsCancelledSub?.cancel();
     _wsInCallMsgSub?.cancel();
     CallSoundManager.stopRingtone();
-    _webrtcService.dispose();
+
+    if (PiPCallOverlay.isMinimized && _activeSession != null) {
+      debugPrint('[VideoCallScreen] Preserving active WebRTC session for PiP overlay');
+    } else {
+      _isEndingCall = true;
+      _webrtcService.dispose();
+      _activeSession = null;
+    }
     super.dispose();
   }
 
@@ -563,6 +619,15 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   }
 
   void _minimizeToPiP() {
+    _activeSession = ActiveWebRTCSession(
+      channelName: widget.channelName,
+      webrtcService: _webrtcService,
+      callSeconds: _callSeconds,
+      isConnectingCall: _isConnectingCall,
+      isSwappedVideo: _isSwappedVideo,
+      isVideoBlurred: _isVideoBlurred,
+    );
+
     PiPCallOverlay.showMiniWindow(
       context,
       remoteVideoView: RepaintBoundary(child: _buildMainVideoView()),
@@ -572,11 +637,23 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       onTapRestore: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => widget),
+          MaterialPageRoute(
+            builder: (_) => VideoCallScreen(
+              model: widget.model,
+              callId: widget.callId,
+              channelName: widget.channelName,
+              isIncoming: widget.isIncoming,
+              dialToneUrl: widget.dialToneUrl,
+              freeDurationSeconds: widget.freeDurationSeconds,
+              ratePerMinute: widget.ratePerMinute,
+              isFreeTrial: widget.isFreeTrial,
+              debugMode: widget.debugMode,
+            ),
+          ),
         );
       },
       onEndCall: () {
-        _handleUserHangup();
+        _endActiveSession(callId: widget.callId, durationSeconds: _callSeconds);
       },
     );
     Navigator.of(context).pop();

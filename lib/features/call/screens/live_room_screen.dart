@@ -20,6 +20,30 @@ import '../widgets/in_call_profile_sheet.dart';
 import '../widgets/in_call_gift_sheet.dart';
 import '../widgets/gift_animation_overlay.dart';
 
+class ActiveLiveSession {
+  final dynamic liveId;
+  final String channelName;
+  final RtcEngine rtcEngine;
+  final int? hostUid;
+  final int? guestUid;
+  final int myUid;
+  final bool isGuestConnected;
+  final int viewerCount;
+  final int diamondsEarned;
+
+  ActiveLiveSession({
+    required this.liveId,
+    required this.channelName,
+    required this.rtcEngine,
+    this.hostUid,
+    this.guestUid,
+    required this.myUid,
+    required this.isGuestConnected,
+    required this.viewerCount,
+    required this.diamondsEarned,
+  });
+}
+
 class LiveHeart {
   final Key key;
   final double left;
@@ -51,6 +75,8 @@ class LiveRoomScreen extends StatefulWidget {
 }
 
 class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStateMixin {
+  static ActiveLiveSession? _activeSession;
+
   final GlobalKey<GiftAnimationOverlayState> _giftAnimKey = GlobalKey<GiftAnimationOverlayState>();
   final List<Map<String, dynamic>> _liveComments = [];
   final TextEditingController _commentController = TextEditingController();
@@ -96,7 +122,21 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       {'user': 'Rohan', 'text': 'You look stunning! ✨', 'color': Colors.cyanAccent},
     ]);
 
-    _initLiveRoom();
+    if (_activeSession != null &&
+        (_activeSession!.liveId == widget.liveId || _activeSession!.channelName == _activeChannelName)) {
+      _rtcEngine = _activeSession!.rtcEngine;
+      _hostUid = _activeSession!.hostUid;
+      _guestUid = _activeSession!.guestUid;
+      _myUid = _activeSession!.myUid;
+      _isGuestConnected = _activeSession!.isGuestConnected;
+      _viewerCount = _activeSession!.viewerCount;
+      _diamondsEarned = _activeSession!.diamondsEarned;
+      _isEngineReady = true;
+      _activeSession = null;
+    } else {
+      _initLiveRoom();
+    }
+
     _checkFollowStatus();
   }
 
@@ -109,10 +149,16 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     _guestKickedSub?.cancel();
     _streamEndedSub?.cancel();
 
-    if (_activeLiveId != null) {
-      SignalingService().leaveLiveRoom(_activeLiveId);
+    if (PiPCallOverlay.isMinimized && _activeSession != null) {
+      debugPrint('[LiveRoomScreen] Preserving RTC engine in background for PiP');
+    } else {
+      if (_activeLiveId != null) {
+        SignalingService().leaveLiveRoom(_activeLiveId);
+      }
+      _destroyAgoraEngine();
+      _activeSession = null;
     }
-    _destroyAgoraEngine();
+
     _commentController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -610,7 +656,35 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     }
   }
 
+  static void _endActiveLiveSession({dynamic liveId, bool isHost = false}) async {
+    if (_activeSession != null) {
+      try {
+        await _activeSession!.rtcEngine.leaveChannel();
+        await _activeSession!.rtcEngine.release();
+      } catch (_) {}
+      _activeSession = null;
+    }
+    if (isHost && liveId != null) {
+      try {
+        await LiveStreamingApiService.endLiveStream(liveStreamId: liveId);
+      } catch (_) {}
+    }
+  }
+
   void _minimizeToPiP() {
+    if (_rtcEngine == null) return;
+    _activeSession = ActiveLiveSession(
+      liveId: _activeLiveId,
+      channelName: _activeChannelName,
+      rtcEngine: _rtcEngine!,
+      hostUid: _hostUid,
+      guestUid: _guestUid,
+      myUid: _myUid,
+      isGuestConnected: _isGuestConnected,
+      viewerCount: _viewerCount,
+      diamondsEarned: _diamondsEarned,
+    );
+
     PiPCallOverlay.showMiniWindow(
       context,
       remoteVideoView: RepaintBoundary(child: _buildLiveVideoContent()),
@@ -620,17 +694,28 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       onTapRestore: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => widget),
+          MaterialPageRoute(
+            builder: (_) => LiveRoomScreen(
+              host: widget.host,
+              liveId: _activeLiveId,
+              channelName: _activeChannelName,
+              title: widget.title,
+              isHost: widget.isHost,
+              initialSessionData: widget.initialSessionData,
+            ),
+          ),
         );
       },
       onEndCall: () {
-        _handleExitLive();
+        _endActiveLiveSession(liveId: _activeLiveId, isHost: widget.isHost);
       },
     );
     Navigator.of(context).pop();
   }
 
   void _handleExitLive() async {
+    PiPCallOverlay.hideMiniWindow();
+    _activeSession = null;
     if (widget.isHost && _activeLiveId != null) {
       await LiveStreamingApiService.endLiveStream(liveStreamId: _activeLiveId);
     }
