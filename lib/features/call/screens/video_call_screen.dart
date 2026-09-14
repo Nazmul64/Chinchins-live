@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import '../../../main.dart';
 import '../../../core/models/model_profile.dart';
+import '../../../core/services/remote_config_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../../core/widgets/avatar_with_frame.dart';
@@ -635,8 +637,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       callDurationText: _formatDuration(_callSeconds),
       callSessionId: widget.callId ?? widget.channelName,
       onTapRestore: () {
-        Navigator.push(
-          context,
+        final navState = ChinchinsLiveApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+        navState.push(
           MaterialPageRoute(
             builder: (_) => VideoCallScreen(
               model: widget.model,
@@ -713,8 +715,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 ),
               ),
 
-              // ২. Ringing / Calling ইন্ডিকেটর
-              if (_isConnectingCall && !_webrtcService.hasRemoteStream)
+              // ২. Ringing / Calling ডিবাগ ইন্ডিকেটর (কেবলমাত্র অ্যাডমিন থেকে Debug Mode On থাকলে প্রদর্শিত হবে)
+              if (_isConnectingCall && !_webrtcService.hasRemoteStream && RemoteConfigService.instance.config.isDebugHudEnabled)
                 Positioned(
                   top: MediaQuery.of(context).size.height * 0.4,
                   left: 0,

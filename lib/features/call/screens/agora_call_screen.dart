@@ -3,7 +3,9 @@ import 'dart:ui';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../../main.dart';
 import '../../../core/models/model_profile.dart';
+import '../../../core/services/remote_config_service.dart';
 import '../../../core/services/signaling_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/avatar_with_frame.dart';
@@ -714,8 +716,8 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       callDurationText: _formatDuration(_callSeconds),
       callSessionId: widget.callId ?? widget.channelName,
       onTapRestore: () {
-        Navigator.push(
-          context,
+        final navState = ChinchinsLiveApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+        navState.push(
           MaterialPageRoute(
             builder: (_) => AgoraCallScreen(
               model: widget.model,
@@ -891,8 +893,8 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
                         ),
                       ),
                     ),
-                    // Dev Mode Button for Agora (Only visible if debugMode is explicitly true)
-                    if (widget.debugMode)
+                    // Dev Mode Button for Agora (Only visible if debugMode is enabled in Admin Config)
+                    if (widget.debugMode && RemoteConfigService.instance.config.isDebugHudEnabled)
                       GestureDetector(
                         onTap: _showAgoraDevModeModal,
                         child: Container(
@@ -1389,46 +1391,48 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              // Clean calling status pill (NO BACKEND/ENGINE NAME SHOWN)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1.2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.neonPink.withValues(alpha: 0.25),
-                      blurRadius: 14,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.neonPink),
+              if (RemoteConfigService.instance.config.isDebugHudEnabled) ...[
+                const SizedBox(height: 12),
+                // Clean calling status pill (Only visible in debug / dev mode)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.neonPink.withValues(alpha: 0.25),
+                        blurRadius: 14,
+                        spreadRadius: 1,
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      widget.model.isOnline ? 'Ringing...' : 'Connecting...',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.4,
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.neonPink),
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 10),
+                      Text(
+                        widget.model.isOnline ? 'Ringing...' : 'Connecting...',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

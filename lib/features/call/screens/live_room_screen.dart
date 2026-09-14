@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../../main.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/signaling_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -692,8 +693,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       callDurationText: 'LIVE',
       callSessionId: _activeLiveId ?? 'live_${widget.host.id}',
       onTapRestore: () {
-        Navigator.push(
-          context,
+        final navState = ChinchinsLiveApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+        navState.push(
           MaterialPageRoute(
             builder: (_) => LiveRoomScreen(
               host: widget.host,
