@@ -140,33 +140,44 @@ class ApiConstants {
   static String get unfollow => '$baseUrl/unfollow';
   static String userFollowStatus(dynamic id) => '$baseUrl/user/$id/follow-status';
 
-  // Live Broadcast & Live Streaming Endpoints (v3.0 RESTful Specification)
-  static String get liveActive => '$baseUrl/lives/active';
-  static String get liveActiveAlt => '$baseUrl/live/active';
+  // Live Streaming & Multi-Host Broadcasting Endpoints (v8.0.0 Production Edition)
+  static String get liveActive => '$baseUrl/live/active';
+  static String get liveActiveAlt => '$baseUrl/lives/active';
   static String get liveList => '$baseUrl/live/list';
+  static String get liveStreams => '$baseUrl/live/streams';
   static String get liveStart => '$baseUrl/live/start';
+  static String get liveCreate => '$baseUrl/live/create';
   static String get liveEnd => '$baseUrl/live/end';
   static String get liveJoin => '$baseUrl/live/join';
+  static String get liveLeave => '$baseUrl/live/leave';
+  static String get liveSendMessage => '$baseUrl/live/send-message';
   static String get liveMessage => '$baseUrl/live/message';
+  static String get liveComment => '$baseUrl/live/comment';
+  static String liveSendMessageUri(dynamic liveId) => '$baseUrl/live/$liveId/message';
+  static String get liveSendGift => '$baseUrl/live/send-gift';
   static String get liveGift => '$baseUrl/live/gift';
+  static String liveSendGiftUri(dynamic liveId) => '$baseUrl/live/$liveId/gift';
+  static String get liveCohostAction => '$baseUrl/live/cohost-action';
+  static String get liveHandleCohost => '$baseUrl/live/handle-cohost';
   static String get liveJoinRequest => '$baseUrl/live/join-request';
   static String get liveAcceptRequest => '$baseUrl/live/accept-request';
   static String get liveKickGuest => '$baseUrl/live/kick-guest';
+  static String get liveSignal => '$baseUrl/live/signal';
+  static String get liveSendSignal => '$baseUrl/live/send-signal';
+  static String get liveStreamSignal => '$baseUrl/v1/stream/signal';
+  static String get liveMuteToggle => '$baseUrl/live/mute-toggle';
+  static String get liveToggleMute => '$baseUrl/live/toggle-mute';
 
   // Agora Token Refresh Endpoints
   static String get agoraTokenRefresh => '$baseUrl/agora/token/refresh';
   static String get streamTokenRefresh => '$baseUrl/stream/token/refresh';
 
   // Legacy Live Endpoints
-  static String get liveStreams => '$baseUrl/live/streams';
-  static String get liveCreate => '$baseUrl/live/create';
   static String liveRoom(dynamic id) => '$baseUrl/live/$id';
   static String liveJoinLegacy(dynamic id) => '$baseUrl/live/$id/join';
-  static String liveLeave(dynamic id) => '$baseUrl/live/$id/leave';
+  static String liveLeaveLegacy(dynamic id) => '$baseUrl/live/$id/leave';
   static String liveEndLegacy(dynamic id) => '$baseUrl/live/$id/end';
   static String liveMessages(dynamic id) => '$baseUrl/live/$id/messages';
-  static String liveSendMessage(dynamic id) => '$baseUrl/live/$id/send-message';
-  static String liveSendGift(dynamic id) => '$baseUrl/live/$id/send-gift';
   static String liveConnectGuest(dynamic id) => '$baseUrl/live/$id/connect-guest';
   static String liveDisconnectGuest(dynamic id) => '$baseUrl/live/$id/disconnect-guest';
 
@@ -197,10 +208,14 @@ class ApiConstants {
   // Profile View Notification & Auto-Callback Trigger
   static String profileView(dynamic id) => '$baseUrl/profile/$id/view';
 
-  // In-App Messaging & Chat endpoints
+  // In-App Messaging & Direct 1-on-1 Chat endpoints (v9.0.0 Production Edition)
+  static String get chatConversations => '$baseUrl/chat/conversations';
   static String get messages => '$baseUrl/messages';
   static String get messagesConversations => '$baseUrl/messages/conversations';
+  static String chatMessages(dynamic userId) => '$baseUrl/chat/messages/$userId';
   static String messagesByUser(dynamic userId) => '$baseUrl/messages/$userId';
+  static String get chatSendMessage => '$baseUrl/chat/send-message';
+  static String get chatSend => '$baseUrl/chat/send';
   static String get messageSend => '$baseUrl/messages/send';
   static String get messagesRead => '$baseUrl/messages/read';
   static String get checkChatPermission => '$baseUrl/chat/check-permission';

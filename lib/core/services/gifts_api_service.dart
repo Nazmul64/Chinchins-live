@@ -407,17 +407,22 @@ class GiftsApiService {
         };
       }
 
+      final roomIdStr = streamId ?? (callSessionId != null ? callSessionId.toString() : null);
       final payload = <String, dynamic>{
         'receiver_id': receiverId is int ? receiverId : int.tryParse('$receiverId') ?? receiverId,
         'gift_id': giftId is int ? giftId : int.tryParse('$giftId') ?? giftId,
         'quantity': quantity,
         'context': context,
-        if (streamId != null && streamId.isNotEmpty) 'stream_id': streamId,
+        if (roomIdStr != null && roomIdStr.isNotEmpty) 'room_id': roomIdStr,
+        if (roomIdStr != null && roomIdStr.isNotEmpty) 'stream_id': roomIdStr,
         if (callSessionId != null) 'call_session_id': callSessionId,
       };
 
-      Uri uri = Uri.parse(ApiConstants.sendGift);
-      final response = await http.post(
+      Uri uri = (context == 'live' || (streamId != null && streamId.isNotEmpty))
+          ? Uri.parse(ApiConstants.liveSendGift)
+          : Uri.parse(ApiConstants.sendGift);
+
+      var response = await http.post(
         uri,
         headers: {
           'Accept': 'application/json',
@@ -426,6 +431,18 @@ class GiftsApiService {
         },
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 404) {
+        response = await http.post(
+          Uri.parse(ApiConstants.sendGift),
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(payload),
+        ).timeout(const Duration(seconds: 8));
+      }
 
       final data = _safeJsonDecode(response.body);
       if (data != null && data is Map<String, dynamic>) {

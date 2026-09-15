@@ -51,6 +51,16 @@ class SignalingService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _liveStreamEndedController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _liveMessageSentController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _cohostStatusController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _webRTCSignalController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _audioMuteController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _directMessageReceivedController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get onIncomingCall => _incomingCallController.stream;
   Stream<Map<String, dynamic>> get onCallAccepted => _callAcceptedController.stream;
@@ -61,12 +71,17 @@ class SignalingService {
   Stream<Map<String, dynamic>> get onWebRTCAnswer => _answerController.stream;
   Stream<Map<String, dynamic>> get onWebRTCICECandidate => _iceCandidateController.stream;
   Stream<Map<String, dynamic>> get onInCallMessage => _inCallMessageController.stream;
+  Stream<Map<String, dynamic>> get onDirectMessageReceived => _directMessageReceivedController.stream;
   Stream<Map<String, dynamic>> get onLiveMessage => _liveMessageController.stream;
   Stream<Map<String, dynamic>> get onLiveGift => _liveGiftController.stream;
   Stream<Map<String, dynamic>> get onLiveJoinRequest => _liveJoinRequestController.stream;
   Stream<Map<String, dynamic>> get onLiveJoinResponse => _liveJoinResponseController.stream;
   Stream<Map<String, dynamic>> get onLiveGuestKicked => _liveGuestKickedController.stream;
   Stream<Map<String, dynamic>> get onLiveStreamEnded => _liveStreamEndedController.stream;
+  Stream<Map<String, dynamic>> get onLiveMessageSent => _liveMessageSentController.stream;
+  Stream<Map<String, dynamic>> get onCoHostStatusChanged => _cohostStatusController.stream;
+  Stream<Map<String, dynamic>> get onWebRTCSignal => _webRTCSignalController.stream;
+  Stream<Map<String, dynamic>> get onAudioMuteToggled => _audioMuteController.stream;
 
   EndpointAuthorizableChannelTokenAuthorizationDelegate<PrivateChannelAuthorizationData>
       _getAuthDelegate() {
@@ -160,6 +175,9 @@ class SignalingService {
 
     final uIdStr = userId.toString().trim();
     if (uIdStr.isNotEmpty) {
+      await _subscribeToChannel('user-chat.$uIdStr', isPrivate: false);
+      await _subscribeToChannel('private-user-chat.$uIdStr', isPrivate: true);
+      await _subscribeToChannel('chat.$uIdStr', isPrivate: false);
       await _subscribeToChannel('private-user.$uIdStr', isPrivate: true);
       await _subscribeToChannel('user.$uIdStr', isPrivate: false);
     }
@@ -167,6 +185,7 @@ class SignalingService {
     if (accountId != null) {
       final accIdStr = accountId.toString().trim();
       if (accIdStr.isNotEmpty && accIdStr != uIdStr) {
+        await _subscribeToChannel('user-chat.$accIdStr', isPrivate: false);
         await _subscribeToChannel('private-user.$accIdStr', isPrivate: true);
         await _subscribeToChannel('user.$accIdStr', isPrivate: false);
       }
@@ -201,10 +220,13 @@ class SignalingService {
     if (_pusherClient == null || liveId == null) return;
     final idStr = liveId.toString().trim();
     if (idStr.isEmpty) return;
+    await _subscribeToChannel('presence-live-room.$idStr', isPrivate: true);
     await _subscribeToChannel('presence-live-stream.$idStr', isPrivate: true);
     await _subscribeToChannel('presence-live.$idStr', isPrivate: true);
+    await _subscribeToChannel('private-live-room.$idStr', isPrivate: true);
     await _subscribeToChannel('private-live-stream.$idStr', isPrivate: true);
     await _subscribeToChannel('private-live.$idStr', isPrivate: true);
+    await _subscribeToChannel('live-room.$idStr', isPrivate: false);
     await _subscribeToChannel('live-stream.$idStr', isPrivate: false);
     await _subscribeToChannel('live.$idStr', isPrivate: false);
   }
@@ -212,7 +234,7 @@ class SignalingService {
   Future<void> leaveLiveRoom(dynamic liveId) async {
     final idStr = liveId?.toString().trim() ?? '';
     final toRemove = _activeChannels.keys.where((k) => 
-      k.contains('live-stream.$idStr') || k.contains('live.$idStr') || (idStr.isEmpty && (k.contains('live-stream.') || k.contains('live.')))
+      k.contains('live-room.$idStr') || k.contains('live-stream.$idStr') || k.contains('live.$idStr') || (idStr.isEmpty && (k.contains('live-room.') || k.contains('live-stream.') || k.contains('live.')))
     ).toList();
     for (final chName in toRemove) {
       try {
@@ -248,6 +270,74 @@ class SignalingService {
     final cleanName = eventName.startsWith('.') ? eventName.substring(1) : eventName;
     final lowerName = cleanName.toLowerCase();
 
+    // 0. Direct 1-on-1 Chat Message (DirectMessageSent / message.received on user-chat.{id})
+    if (cleanName == 'message.received' ||
+        cleanName == 'DirectMessageSent' ||
+        cleanName.endsWith('DirectMessageSent') ||
+        cleanName == 'direct.message.sent' ||
+        event.channelName.startsWith('user-chat.') ||
+        event.channelName.startsWith('private-user-chat.')) {
+      _directMessageReceivedController.add(data);
+      _inCallMessageController.add(data);
+      return;
+    }
+
+    // 1. Live Chat Message & Gift Broadcast (LiveChatMessageEvent -> message.sent)
+    if (cleanName == 'message.sent' ||
+        cleanName == 'LiveChatMessageEvent' ||
+        cleanName.endsWith('LiveChatMessageEvent') ||
+        cleanName == 'LiveMessageSent' ||
+        cleanName == 'live.message.sent' ||
+        cleanName == 'live.message' ||
+        lowerName == 'message.sent') {
+      _liveMessageSentController.add(data);
+      if (data['type'] == 'gift' || data['gift_id'] != null || data['gift'] != null || data['gift_data'] != null) {
+        _liveGiftController.add(data);
+      } else {
+        _liveMessageController.add(data);
+      }
+      return;
+    }
+
+    // 2. Co-Host Status Changed (CoHostStatusEvent -> cohost.status.changed)
+    if (cleanName == 'cohost.status.changed' ||
+        cleanName == 'CoHostStatusEvent' ||
+        cleanName.endsWith('CoHostStatusEvent') ||
+        cleanName == 'live.cohost.status' ||
+        lowerName == 'cohost.status.changed' ||
+        lowerName.contains('cohost')) {
+      _cohostStatusController.add(data);
+      _liveJoinRequestController.add(data);
+      return;
+    }
+
+    // 3. WebRTC Signal (WebRTCSignalEvent -> webrtc.signal)
+    if (cleanName == 'webrtc.signal' ||
+        cleanName == 'WebRTCSignalEvent' ||
+        cleanName.endsWith('WebRTCSignalEvent') ||
+        lowerName == 'webrtc.signal') {
+      _webRTCSignalController.add(data);
+      final type = data['type']?.toString().toLowerCase();
+      if (type == 'offer') {
+        _offerController.add(data);
+      } else if (type == 'answer') {
+        _answerController.add(data);
+      } else if (type == 'candidate') {
+        _iceCandidateController.add(data);
+      }
+      return;
+    }
+
+    // 4. Audio Mute / Unmute (AudioMuteEvent -> audio.mute.toggled)
+    if (cleanName == 'audio.mute.toggled' ||
+        cleanName == 'AudioMuteEvent' ||
+        cleanName.endsWith('AudioMuteEvent') ||
+        lowerName == 'audio.mute.toggled' ||
+        lowerName.contains('audiomute')) {
+      _audioMuteController.add(data);
+      return;
+    }
+
     // Check for incoming call
     if (cleanName == 'call.incoming' ||
         cleanName == 'CallIncoming' ||
@@ -280,21 +370,7 @@ class SignalingService {
       return;
     }
 
-    // Check for Live Broadcast Comments
-    if (cleanName == 'LiveChatMessageEvent' ||
-        cleanName.endsWith('LiveChatMessageEvent') ||
-        cleanName == 'LiveMessageSent' ||
-        cleanName == 'live.message.sent' ||
-        cleanName == 'live.message' ||
-        cleanName == 'chat.message' ||
-        cleanName == 'LiveCommentEvent' ||
-        lowerName.contains('livechat') ||
-        lowerName.contains('livemessage')) {
-      _liveMessageController.add(data);
-      return;
-    }
-
-    // Check for Live Gifts Sent
+    // Check for other live events
     if (cleanName == 'LiveGiftSentEvent' ||
         cleanName.endsWith('LiveGiftSentEvent') ||
         cleanName == 'LiveGiftSent' ||
@@ -305,18 +381,6 @@ class SignalingService {
         lowerName.contains('giftsent') ||
         lowerName.contains('gift.received')) {
       _liveGiftController.add(data);
-      return;
-    }
-
-    // Check for Live Multi-Host / Co-Host Status
-    if (cleanName == 'CoHostStatusEvent' ||
-        cleanName.endsWith('CoHostStatusEvent') ||
-        cleanName == 'LiveJoinRequested' ||
-        cleanName == 'live.join.requested' ||
-        cleanName == 'live.cohost.request' ||
-        lowerName.contains('joinrequest') ||
-        lowerName.contains('cohost')) {
-      _liveJoinRequestController.add(data);
       return;
     }
 

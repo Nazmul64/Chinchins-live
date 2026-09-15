@@ -43,7 +43,8 @@ class ChatApiService {
       }
 
       // Check fast cache first
-      final cached = FastApiClient.getCachedSync(ApiConstants.messages, queryParams);
+      final cached = FastApiClient.getCachedSync(ApiConstants.chatConversations, queryParams) ??
+          FastApiClient.getCachedSync(ApiConstants.messages, queryParams);
       if (cached is Map && cached['data'] is Map) {
         final data = cached['data'] as Map<String, dynamic>;
         if (data['total_unread_badge'] is int) {
@@ -51,20 +52,35 @@ class ChatApiService {
         }
       }
 
-      final uri = Uri.parse(ApiConstants.messages).replace(
+      var uri = Uri.parse(ApiConstants.chatConversations).replace(
         queryParameters: queryParams.isNotEmpty ? queryParams : null,
       );
 
-      final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+      var response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 404) {
+        uri = Uri.parse(ApiConstants.messages).replace(
+          queryParameters: queryParams.isNotEmpty ? queryParams : null,
+        );
+        response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+      }
 
       if (response.statusCode == 200) {
         final res = _safeJsonDecode(response.body);
         if (res != null && res['data'] != null) {
-          final data = res['data'] as Map<String, dynamic>;
+          dynamic rawData = res['data'];
+          Map<String, dynamic> data;
+          if (rawData is List) {
+            data = {'conversations': rawData, 'total_unread_badge': 0};
+          } else if (rawData is Map) {
+            data = Map<String, dynamic>.from(rawData);
+          } else {
+            data = {};
+          }
           if (data['total_unread_badge'] is int) {
             totalUnreadBadgeNotifier.value = data['total_unread_badge'] as int;
           }
-          await FastApiClient.putCache(ApiConstants.messages, res, queryParams);
+          await FastApiClient.putCache(ApiConstants.chatConversations, res, queryParams);
           return data;
         }
       }
@@ -73,7 +89,8 @@ class ChatApiService {
     }
 
     // If network fails, return cached copy
-    final fallbackCached = await FastApiClient.getCached(ApiConstants.messages);
+    final fallbackCached = await FastApiClient.getCached(ApiConstants.chatConversations) ??
+        await FastApiClient.getCached(ApiConstants.messages);
     if (fallbackCached is Map && fallbackCached['data'] is Map) {
       return fallbackCached['data'] as Map<String, dynamic>;
     }
@@ -99,13 +116,23 @@ class ChatApiService {
         if (currentUserId != null && currentUserId.isNotEmpty) 'user_id': currentUserId,
       };
 
-      final url = Uri.parse(ApiConstants.messagesByUser(targetUserId)).replace(queryParameters: queryParams);
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
+      var url = Uri.parse(ApiConstants.chatMessages(targetUserId)).replace(queryParameters: queryParams);
+      var response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 404) {
+        url = Uri.parse(ApiConstants.messagesByUser(targetUserId)).replace(queryParameters: queryParams);
+        response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
+      }
 
       if (response.statusCode == 200) {
         final res = _safeJsonDecode(response.body);
         if (res != null && res['data'] != null) {
-          return res['data'] as Map<String, dynamic>;
+          final raw = res['data'];
+          if (raw is List) {
+            return {'messages': raw, 'free_messages_remaining': 999};
+          } else if (raw is Map) {
+            return Map<String, dynamic>.from(raw);
+          }
         }
       }
     } catch (e) {
@@ -133,11 +160,11 @@ class ChatApiService {
         if (currentUserId != null) 'X-User-Id': currentUserId,
       };
 
-      final uri = Uri.parse(ApiConstants.messageSend);
+      final uri = Uri.parse(ApiConstants.chatSendMessage);
 
       // If sending file (Voice or Image) -> multipart
       if (voiceFile != null || imageFile != null) {
-        final request = http.MultipartRequest('POST', uri);
+        var request = http.MultipartRequest('POST', uri);
         request.headers.addAll(headers);
         request.fields['receiver_id'] = receiverId.toString();
         request.fields['type'] = type;
@@ -162,12 +189,30 @@ class ChatApiService {
           request.files.add(await http.MultipartFile.fromPath('file', voiceFile.path));
         }
         if (imageFile != null && imageFile.existsSync()) {
+          request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
           request.files.add(await http.MultipartFile.fromPath('image_file', imageFile.path));
           request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
         }
 
-        final streamedResponse = await request.send().timeout(const Duration(seconds: 15));
-        final response = await http.Response.fromStream(streamedResponse);
+        var streamedResponse = await request.send().timeout(const Duration(seconds: 15));
+        var response = await http.Response.fromStream(streamedResponse);
+
+        if (response.statusCode == 404) {
+          // Fallback to /api/messages/send
+          final fbRequest = http.MultipartRequest('POST', Uri.parse(ApiConstants.messageSend));
+          fbRequest.headers.addAll(headers);
+          fbRequest.fields.addAll(request.fields);
+          if (voiceFile != null && voiceFile.existsSync()) {
+            fbRequest.files.add(await http.MultipartFile.fromPath('voice_file', voiceFile.path));
+          }
+          if (imageFile != null && imageFile.existsSync()) {
+            fbRequest.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+            fbRequest.files.add(await http.MultipartFile.fromPath('image_file', imageFile.path));
+          }
+          streamedResponse = await fbRequest.send().timeout(const Duration(seconds: 15));
+          response = await http.Response.fromStream(streamedResponse);
+        }
+
         final res = _safeJsonDecode(response.body);
 
         if (response.statusCode == 200 || response.statusCode == 201) {
@@ -246,7 +291,7 @@ class ChatApiService {
         }
         final body = jsonEncode(payload);
 
-        final response = await http.post(
+        var response = await http.post(
           uri,
           headers: {
             ...headers,
@@ -254,6 +299,17 @@ class ChatApiService {
           },
           body: body,
         ).timeout(const Duration(seconds: 10));
+
+        if (response.statusCode == 404) {
+          response = await http.post(
+            Uri.parse(ApiConstants.messageSend),
+            headers: {
+              ...headers,
+              'Content-Type': 'application/json',
+            },
+            body: body,
+          ).timeout(const Duration(seconds: 10));
+        }
 
         final res = _safeJsonDecode(response.body);
 

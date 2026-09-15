@@ -27,6 +27,8 @@ import '../../profile/screens/host_profile_screen.dart';
 import '../../../core/services/gifts_api_service.dart';
 import '../../../core/data/mock_data.dart';
 
+import '../../../core/services/signaling_service.dart';
+
 class ChatDetailScreen extends StatefulWidget {
   final ChatThread thread;
 
@@ -50,6 +52,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   int _freeMessagesRemaining = 5;
   bool _isLoadingMessages = false;
   Timer? _realtimePollTimer;
+  StreamSubscription? _directMessageSub;
 
   // Partner Profile & Moderation State
   bool _isBlockedByMe = false;
@@ -80,7 +83,50 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _initChatUserAndMessages();
     _loadCallConfig();
     _startRealtimePolling();
+    _subscribeToDirectMessages();
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  }
+
+  void _subscribeToDirectMessages() {
+    _directMessageSub?.cancel();
+    _directMessageSub = SignalingService().onDirectMessageReceived.listen((data) {
+      if (!mounted) return;
+      try {
+        final senderId = data['sender_id']?.toString() ?? data['from_user_id']?.toString() ?? data['user_id']?.toString() ?? '';
+        final receiverId = data['receiver_id']?.toString() ?? data['to_user_id']?.toString() ?? '';
+        final convId = data['conversation_id']?.toString() ?? '';
+        
+        // Match if from this partner or in this thread
+        final isRelevant = senderId == widget.thread.modelId ||
+            senderId == widget.thread.id ||
+            receiverId == widget.thread.modelId ||
+            receiverId == widget.thread.id ||
+            (convId.isNotEmpty && convId == widget.thread.id);
+
+        if (isRelevant) {
+          final newMsg = ChatMessage.fromJson(
+            data,
+            myUserId: _myUserId,
+            partnerName: widget.thread.name,
+            partnerAvatar: _partnerAvatar,
+          );
+          
+          final exists = _messages.any((m) => 
+            (m.id.isNotEmpty && m.id == newMsg.id) ||
+            (m.text == newMsg.text && m.time == newMsg.time && m.isFromMe == newMsg.isFromMe)
+          );
+
+          if (!exists) {
+            setState(() {
+              _messages.add(newMsg);
+            });
+            _scrollToBottom();
+          }
+        }
+      } catch (e) {
+        debugPrint('[ChatDetailScreen] Direct message stream error: $e');
+      }
+    });
   }
 
   Future<void> _loadCallConfig() async {
@@ -102,6 +148,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   void dispose() {
+    _directMessageSub?.cancel();
     _realtimePollTimer?.cancel();
     _recordDurationTimer?.cancel();
     _audioRecorder.dispose();

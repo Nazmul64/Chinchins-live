@@ -1385,13 +1385,13 @@ class CallApiService {
   static Future<bool> sendLiveMessage(dynamic liveId, String message) async {
     try {
       final token = await AuthApiService.getToken();
-      final url = Uri.parse(ApiConstants.liveSendMessage(liveId));
+      final url = Uri.parse(ApiConstants.liveSendMessageUri(liveId));
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
       };
-      final payload = {'message': message};
+      final payload = {'message': message, 'room_id': liveId.toString()};
       final response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 6));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (_) {
@@ -1402,13 +1402,13 @@ class CallApiService {
   static Future<bool> sendLiveGift(dynamic liveId, dynamic giftId, int quantity) async {
     try {
       final token = await AuthApiService.getToken();
-      final url = Uri.parse(ApiConstants.liveSendGift(liveId));
+      final url = Uri.parse(ApiConstants.liveSendGiftUri(liveId));
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
       };
-      final payload = {'gift_id': giftId, 'quantity': quantity};
+      final payload = {'gift_id': giftId, 'quantity': quantity, 'room_id': liveId.toString()};
       final response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 6));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (_) {
