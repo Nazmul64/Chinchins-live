@@ -116,6 +116,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   StreamSubscription? _wsRejectedSub;
   StreamSubscription? _wsCancelledSub;
   StreamSubscription? _wsInCallMsgSub;
+  StreamSubscription? _wsGiftSub;
   int _userGems = 0;
   bool _isRechargeSheetOpen = false;
   bool _isFreeTrialActive = true;
@@ -210,6 +211,33 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       debugPrint('[AgoraCallScreen] Received InCallMessage via WebSocket: $data');
       if (mounted) {
         _chatKey.currentState?.addIncomingMessage(data);
+      }
+    });
+
+    _wsGiftSub = signaling.onLiveGift.listen((data) {
+      debugPrint('[AgoraCallScreen] Received Gift via WebSocket: $data');
+      final giftData = data['gift_data'] ?? data['gift'];
+      final giftName = (giftData is Map ? giftData['name'] : null) ?? data['gift_name'] ?? 'Luxury Gift';
+      final coins = data['total_coins'] ?? (giftData is Map ? giftData['coin_price'] : null) ?? data['coins'] ?? 100;
+      final animUrl = (giftData is Map ? (giftData['animation_asset_url'] ?? giftData['icon_url']) : null) ??
+          data['animation_url']?.toString() ?? data['animation_asset_url']?.toString() ?? data['image_url']?.toString();
+      final senderName = data['sender_name'] ?? data['user_name'] ?? data['sender']?['name'] ?? 'Partner';
+
+      if (mounted) {
+        _giftAnimKey.currentState?.playGiftAnimationDynamic(
+          giftName: giftName,
+          animationUrl: animUrl,
+          senderName: senderName,
+          coins: coins is int ? coins : int.tryParse('$coins') ?? 100,
+        );
+
+        _chatKey.currentState?.addIncomingMessage({
+          'id': 'gift_${DateTime.now().millisecondsSinceEpoch}',
+          'sender_name': senderName,
+          'message': '🎁 sent $giftName ($coins Coins)!',
+          'type': 'gift',
+          'is_me': false,
+        });
       }
     });
   }
@@ -642,6 +670,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     _wsRejectedSub?.cancel();
     _wsCancelledSub?.cancel();
     _wsInCallMsgSub?.cancel();
+    _wsGiftSub?.cancel();
 
     if (widget.callId != null) {
       if (_isConnecting || _callSeconds <= 0) {

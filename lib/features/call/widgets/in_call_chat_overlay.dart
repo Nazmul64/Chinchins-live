@@ -164,13 +164,14 @@ class InCallChatOverlayState extends State<InCallChatOverlay> {
     if (!mounted) return;
     final msg = CallChatMessage.fromJson(data, myId: _currentUserId ?? widget.myId);
     
-    // Prevent duplicate messages if sender already added locally
-    if (msg.isMe) {
-      final isDuplicate = _messages.any((m) =>
-          m.id == msg.id ||
-          (m.isMe && m.message == msg.message && DateTime.now().difference(m.timestamp).inSeconds < 4));
-      if (isDuplicate) return;
-    }
+    // Strict deduplication for both incoming and locally-sent messages
+    final isDuplicate = _messages.any((m) =>
+        m.id == msg.id ||
+        (m.message == msg.message &&
+         m.type == msg.type &&
+         (m.isMe == msg.isMe || m.senderName == msg.senderName) &&
+         (DateTime.now().difference(m.timestamp).inSeconds).abs() < 5));
+    if (isDuplicate) return;
 
     setState(() {
       _messages.add(msg);

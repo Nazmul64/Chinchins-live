@@ -19,6 +19,23 @@ class SignalingService {
   StreamSubscription<void>? _reconnectSub;
 
   bool get isConnected => _isConnected;
+  final Map<String, int> _recentEventSignatures = {};
+
+  bool _isDuplicateEvent(String eventName, Map<String, dynamic> data) {
+    final msgId = data['id'] ?? data['message_id'] ?? data['message']?['id'];
+    final msgText = data['message'] is String ? data['message'] : data['message']?['message'] ?? data['text'];
+    final senderId = data['sender_id'] ?? data['user_id'] ?? data['message']?['sender_id'];
+    final sig = '${eventName}_${msgId ?? ''}_${senderId ?? ''}_${msgText ?? ''}';
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _recentEventSignatures.removeWhere((_, time) => now - time > 3500);
+
+    if (_recentEventSignatures.containsKey(sig)) {
+      return true;
+    }
+    _recentEventSignatures[sig] = now;
+    return false;
+  }
 
   final StreamController<Map<String, dynamic>> _incomingCallController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -290,6 +307,10 @@ class SignalingService {
     final isUserChatChannel = chName.contains('user-chat.') ||
         chName.contains('chat.') ||
         chName.contains('conversation.');
+
+    if (_isDuplicateEvent(cleanName, data)) {
+      return;
+    }
 
     // 1. IN-CALL GIFTS & LIVE GIFTS BROADCAST
     if (cleanName == 'gift.received' ||

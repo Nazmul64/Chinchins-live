@@ -311,6 +311,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       );
 
       await _rtcEngine!.enableVideo();
+      await _rtcEngine!.enableAudio();
+      await _rtcEngine!.setDefaultAudioRouteToSpeakerphone(true);
       await _rtcEngine!.setClientRole(
         role: isBroadcaster ? ClientRoleType.clientRoleBroadcaster : ClientRoleType.clientRoleAudience,
       );
@@ -325,6 +327,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
           ),
         );
         await _rtcEngine!.startPreview();
+        if (mounted) {
+          setState(() => _isEngineReady = true);
+        }
       }
 
       await _rtcEngine!.joinChannel(
@@ -336,6 +341,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
           publishMicrophoneTrack: isBroadcaster,
           autoSubscribeAudio: true,
           autoSubscribeVideo: true,
+          enableAudioRecordingOrPlayout: true,
           clientRoleType: isBroadcaster ? ClientRoleType.clientRoleBroadcaster : ClientRoleType.clientRoleAudience,
         ),
       );
