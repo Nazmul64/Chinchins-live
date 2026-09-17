@@ -6,7 +6,7 @@ import '../../auth/services/auth_api_service.dart';
 
 class LiveStreamingApiService {
   /// 1. Get list of active live streams
-  /// Calls GET /api/live/active with pagination and fallbacks
+  /// Calls GET /api/lives/active with pagination and fallbacks
   static Future<List<Map<String, dynamic>>> getActiveLiveStreams({int page = 1, int perPage = 20}) async {
     try {
       final token = await AuthApiService.getToken();
@@ -17,36 +17,36 @@ class LiveStreamingApiService {
 
       final queryParams = '?page=$page&per_page=$perPage';
       
-      // Try primary endpoint: /api/live/active
-      var response = await http
-          .get(Uri.parse('${ApiConstants.liveActive}$queryParams'), headers: headers)
-          .timeout(const Duration(seconds: 8));
+      final endpoints = [
+        '${ApiConstants.liveActive}$queryParams',
+        '${ApiConstants.liveActiveAlt}$queryParams',
+        '${ApiConstants.liveList}$queryParams',
+        '${ApiConstants.liveStreamActive}$queryParams',
+        '${ApiConstants.liveStreams}$queryParams',
+      ];
 
-      if (response.statusCode == 404) {
-        response = await http
-            .get(Uri.parse('${ApiConstants.liveActiveAlt}$queryParams'), headers: headers)
-            .timeout(const Duration(seconds: 8));
-      }
+      for (final endpoint in endpoints) {
+        try {
+          final response = await http
+              .get(Uri.parse(endpoint), headers: headers)
+              .timeout(const Duration(seconds: 5));
 
-      if (response.statusCode == 404) {
-        response = await http
-            .get(Uri.parse('${ApiConstants.liveList}$queryParams'), headers: headers)
-            .timeout(const Duration(seconds: 8));
-      }
-
-      if (response.statusCode == 404) {
-        response = await http
-            .get(Uri.parse('${ApiConstants.liveStreams}$queryParams'), headers: headers)
-            .timeout(const Duration(seconds: 8));
-      }
-
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        final dynamic data = decoded['data'] ?? decoded['streams'] ?? decoded['lives'];
-        if (data is List) {
-          return data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        } else if (data is Map && data['data'] is List) {
-          return (data['data'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          if (response.statusCode == 200) {
+            final decoded = jsonDecode(response.body);
+            if (decoded is List) {
+              return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+            }
+            if (decoded is Map) {
+              final dynamic data = decoded['data'] ?? decoded['streams'] ?? decoded['lives'] ?? decoded['items'];
+              if (data is List) {
+                return data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+              } else if (data is Map && data['data'] is List) {
+                return (data['data'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+              }
+            }
+          }
+        } catch (_) {
+          continue;
         }
       }
     } catch (e, st) {
@@ -56,7 +56,7 @@ class LiveStreamingApiService {
   }
 
   /// 2. Host starts a live stream
-  /// Calls POST /api/live/start
+  /// Calls POST /api/live/start, POST /api/v1/stream/start, POST /api/v1/live/start
   static Future<Map<String, dynamic>?> startLiveStream({
     required String title,
     String? coverImageUrl,
@@ -66,7 +66,6 @@ class LiveStreamingApiService {
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse(ApiConstants.liveStart);
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -80,22 +79,29 @@ class LiveStreamingApiService {
         if (coverImageUrl != null && coverImageUrl.isNotEmpty) 'cover_image_url': coverImageUrl,
       };
 
-      var response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 10));
+      final endpoints = [
+        ApiConstants.liveStart,
+        ApiConstants.liveStartV1,
+        ApiConstants.liveStartV1Alt,
+        ApiConstants.liveCreate,
+      ];
 
-      if (response.statusCode == 404) {
-        response = await http
-            .post(Uri.parse(ApiConstants.liveCreate), headers: headers, body: jsonEncode(payload))
-            .timeout(const Duration(seconds: 10));
-      }
+      for (final endpoint in endpoints) {
+        try {
+          final response = await http
+              .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 8));
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final decoded = jsonDecode(response.body);
-        if (decoded['status'] == true || decoded['success'] == true || decoded['status'] == 'success') {
-          return decoded['data'] is Map
-              ? Map<String, dynamic>.from(decoded['data'] as Map)
-              : Map<String, dynamic>.from(decoded as Map);
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final decoded = jsonDecode(response.body);
+            if (decoded['status'] == true || decoded['success'] == true || decoded['status'] == 'success') {
+              return decoded['data'] is Map
+                  ? Map<String, dynamic>.from(decoded['data'] as Map)
+                  : Map<String, dynamic>.from(decoded as Map);
+            }
+          }
+        } catch (_) {
+          continue;
         }
       }
     } catch (e, st) {

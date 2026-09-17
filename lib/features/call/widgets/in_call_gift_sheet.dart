@@ -94,6 +94,7 @@ class _InCallGiftSheetState extends State<InCallGiftSheet> {
         giftId: _selectedGift!.giftId,
         quantity: _selectedQuantity,
         context: 'call',
+        callSessionId: widget.callSessionId,
       );
 
       if (res['status'] == true && mounted) {
@@ -113,6 +114,10 @@ class _InCallGiftSheetState extends State<InCallGiftSheet> {
 
         widget.onGiftSent?.call(anim);
         Navigator.pop(context);
+      } else if (res['code'] == 422 || res['code'] == 'INSUFFICIENT_BALANCE' || (res['message']?.toString().toLowerCase().contains('recharge') ?? false)) {
+        if (mounted) {
+          RechargeGemsSheet.show(context);
+        }
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -121,15 +121,20 @@ class ApiConstants {
   static String get callDeductInterval => '$baseUrl/call/deduct-interval';
   static String get callHistory => '$baseUrl/call/history';
   static String get callRechargeSheet => '$baseUrl/call/recharge-sheet';
-  static String get callQuickMessages => '$baseUrl/call/quick-messages';
+  static String get callQuickMessages => '$baseUrl/v1/call/quick-messages';
+  static String get callQuickMessagesAlt => '$baseUrl/call/quick-messages';
   static String get callSendQuickMessage => '$baseUrl/call/send-quick-message';
   static String get callFilters => '$baseUrl/call/filters';
   static String get filters => '$baseUrl/filters';
   static String get callMinimize => '$baseUrl/call/minimize';
   static String get callRestore => '$baseUrl/call/restore';
   static String get callUploadImage => '$baseUrl/call/upload-image';
+  static String get callMessageSend => '$baseUrl/v1/call/message/send';
+  static String get callMessageSendAlt => '$baseUrl/call/message/send';
   static String get callChatSend => '$baseUrl/call/chat/send';
   static String get callSendMessage => '$baseUrl/call/send-message';
+  static String get callGiftSend => '$baseUrl/v1/call/gift/send';
+  static String get callGiftSendAlt => '$baseUrl/call/gift/send';
   static String callMessages(dynamic id) => '$baseUrl/call/$id/messages';
   static String get callChatMessages => '$baseUrl/call/chat/messages';
 
@@ -140,12 +145,15 @@ class ApiConstants {
   static String get unfollow => '$baseUrl/unfollow';
   static String userFollowStatus(dynamic id) => '$baseUrl/user/$id/follow-status';
 
-  // Live Streaming & Multi-Host Broadcasting Endpoints (v8.0.0 Production Edition)
-  static String get liveActive => '$baseUrl/live/active';
-  static String get liveActiveAlt => '$baseUrl/lives/active';
+  // Live Streaming & Multi-Host Broadcasting Endpoints (v10.0.0 Production Edition)
+  static String get liveActive => '$baseUrl/lives/active';
+  static String get liveActiveAlt => '$baseUrl/live/active';
   static String get liveList => '$baseUrl/live/list';
   static String get liveStreams => '$baseUrl/live/streams';
+  static String get liveStreamActive => '$baseUrl/v1/stream/active';
   static String get liveStart => '$baseUrl/live/start';
+  static String get liveStartV1 => '$baseUrl/v1/stream/start';
+  static String get liveStartV1Alt => '$baseUrl/v1/live/start';
   static String get liveCreate => '$baseUrl/live/create';
   static String get liveEnd => '$baseUrl/live/end';
   static String get liveJoin => '$baseUrl/live/join';
@@ -153,8 +161,10 @@ class ApiConstants {
   static String get liveSendMessage => '$baseUrl/live/send-message';
   static String get liveMessage => '$baseUrl/live/message';
   static String get liveComment => '$baseUrl/live/comment';
+  static String get liveStreamComment => '$baseUrl/v1/stream/comment';
   static String liveSendMessageUri(dynamic liveId) => '$baseUrl/live/$liveId/message';
   static String get liveSendGift => '$baseUrl/live/send-gift';
+  static String get liveStreamSendGift => '$baseUrl/v1/stream/send-gift';
   static String get liveGift => '$baseUrl/live/gift';
   static String liveSendGiftUri(dynamic liveId) => '$baseUrl/live/$liveId/gift';
   static String get liveCohostAction => '$baseUrl/live/cohost-action';

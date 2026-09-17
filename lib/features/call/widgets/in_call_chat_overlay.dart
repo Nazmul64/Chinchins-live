@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
+import '../../auth/services/auth_api_service.dart';
 import '../services/call_api_service.dart';
 import 'in_call_image_viewer_modal.dart';
 
@@ -28,19 +29,57 @@ class CallChatMessage {
   });
 
   factory CallChatMessage.fromJson(Map<String, dynamic> json, {String? myId}) {
-    final senderId = json['sender_id']?.toString();
-    final isMe = (myId != null && senderId == myId) || json['is_me'] == true;
+    // 1. Extract nested message object if Laravel broadcasts { "message": { ... } }
+    final Map<String, dynamic> msgMap = (json['message'] is Map)
+        ? Map<String, dynamic>.from(json['message'] as Map)
+        : ((json['data'] is Map && (json['data']['message'] is String || json['data']['sender_id'] != null))
+            ? Map<String, dynamic>.from(json['data'] as Map)
+            : json);
+
+    final senderObj = msgMap['sender'] is Map ? msgMap['sender'] as Map : null;
+    final senderId = msgMap['sender_id']?.toString() ?? senderObj?['id']?.toString() ?? senderObj?['account_id']?.toString();
+    
+    final bool isMe = (myId != null && myId.isNotEmpty && senderId != null && senderId == myId) ||
+        msgMap['is_me'] == true ||
+        (json['is_me'] == true);
+
+    final senderName = msgMap['sender_name']?.toString() ??
+        senderObj?['name']?.toString() ??
+        senderObj?['display_name']?.toString() ??
+        senderObj?['nickname']?.toString() ??
+        (isMe ? 'You' : 'Host');
+
+    final senderAvatar = msgMap['sender_avatar']?.toString() ??
+        senderObj?['avatar']?.toString() ??
+        senderObj?['avatar_url']?.toString();
+
+    final messageText = (msgMap['message'] is String ? msgMap['message'] as String : null) ??
+        msgMap['text']?.toString() ??
+        (json['message'] is String ? json['message'] as String : null) ??
+        '';
+
+    final imageUrl = msgMap['image_url']?.toString() ??
+        msgMap['media_url']?.toString() ??
+        msgMap['file_url']?.toString() ??
+        json['image_url']?.toString();
+
+    final type = msgMap['type']?.toString() ?? json['type']?.toString() ?? (imageUrl != null ? 'image' : 'text');
+
+    DateTime timestamp = DateTime.now();
+    final rawDate = msgMap['created_at'] ?? json['created_at'];
+    if (rawDate != null) {
+      timestamp = DateTime.tryParse(rawDate.toString()) ?? DateTime.now();
+    }
+
     return CallChatMessage(
-      id: json['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      senderName: json['sender_name'] ?? (isMe ? 'You' : 'Host'),
-      senderAvatar: json['sender_avatar']?.toString(),
+      id: msgMap['id']?.toString() ?? json['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      senderName: senderName,
+      senderAvatar: senderAvatar,
       isMe: isMe,
-      type: json['type']?.toString() ?? 'text',
-      message: json['message']?.toString() ?? '',
-      imageUrl: json['image_url']?.toString() ?? json['file_url']?.toString(),
-      timestamp: json['created_at'] != null
-          ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
-          : DateTime.now(),
+      type: type,
+      message: messageText,
+      imageUrl: imageUrl,
+      timestamp: timestamp,
     );
   }
 }
@@ -72,11 +111,28 @@ class InCallChatOverlayState extends State<InCallChatOverlay> {
   final ImagePicker _picker = ImagePicker();
   bool _isUploadingImage = false;
   bool _isChatOpen = false;
+  String? _currentUserId;
+  String? _currentUserName;
 
   @override
   void initState() {
     super.initState();
+    _currentUserId = widget.myId;
+    _currentUserName = widget.myName;
+    _initCurrentUser();
     _loadInitialMessages();
+  }
+
+  Future<void> _initCurrentUser() async {
+    try {
+      final user = await AuthApiService.getSavedUser();
+      if (user != null && mounted) {
+        setState(() {
+          _currentUserId ??= user['id']?.toString() ?? user['account_id']?.toString();
+          _currentUserName ??= user['name']?.toString() ?? user['display_name']?.toString();
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -96,7 +152,7 @@ class InCallChatOverlayState extends State<InCallChatOverlay> {
         setState(() {
           _messages.clear();
           for (final m in msgs) {
-            _messages.add(CallChatMessage.fromJson(m, myId: widget.myId));
+            _messages.add(CallChatMessage.fromJson(m, myId: _currentUserId ?? widget.myId));
           }
         });
         _scrollToBottom();
@@ -106,8 +162,18 @@ class InCallChatOverlayState extends State<InCallChatOverlay> {
 
   void addIncomingMessage(Map<String, dynamic> data) {
     if (!mounted) return;
+    final msg = CallChatMessage.fromJson(data, myId: _currentUserId ?? widget.myId);
+    
+    // Prevent duplicate messages if sender already added locally
+    if (msg.isMe) {
+      final isDuplicate = _messages.any((m) =>
+          m.id == msg.id ||
+          (m.isMe && m.message == msg.message && DateTime.now().difference(m.timestamp).inSeconds < 4));
+      if (isDuplicate) return;
+    }
+
     setState(() {
-      _messages.add(CallChatMessage.fromJson(data, myId: widget.myId));
+      _messages.add(msg);
     });
     _scrollToBottom();
   }
@@ -132,7 +198,7 @@ class InCallChatOverlayState extends State<InCallChatOverlay> {
 
     final localMsg = CallChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      senderName: widget.myName ?? 'You',
+      senderName: _currentUserName ?? widget.myName ?? 'You',
       isMe: true,
       type: 'text',
       message: text,
@@ -168,7 +234,7 @@ class InCallChatOverlayState extends State<InCallChatOverlay> {
       if (uploadedUrl != null && mounted) {
         final localMsg = CallChatMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
-          senderName: widget.myName ?? 'You',
+          senderName: _currentUserName ?? widget.myName ?? 'You',
           isMe: true,
           type: 'image',
           message: '📷 Photo',

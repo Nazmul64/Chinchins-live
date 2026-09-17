@@ -600,11 +600,21 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       });
     }
 
-    if (widget.callId != null) {
-      CallApiService.sendQuickMessage(
-        callId: widget.callId!,
+    _chatKey.currentState?.addIncomingMessage({
+      'sender_name': 'You',
+      'message': msg,
+      'is_me': true,
+      'type': 'quick_reply',
+      'created_at': DateTime.now().toIso8601String(),
+    });
+
+    final dynamic sessionId = widget.callId ?? widget.channelName;
+    if (sessionId != null) {
+      CallApiService.sendCallChatMessage(
+        callSessionId: sessionId,
         receiverId: widget.model.id,
         message: msg,
+        type: 'quick_reply',
       );
     }
 
@@ -963,7 +973,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                           context,
                           receiverId: widget.model.id,
                           receiverName: widget.model.name,
-                          callSessionId: widget.callId,
+                          callSessionId: widget.callId ?? widget.channelName,
                           onGiftSent: (anim) {
                             _giftAnimKey.currentState?.playGiftAnimation(anim);
                           },

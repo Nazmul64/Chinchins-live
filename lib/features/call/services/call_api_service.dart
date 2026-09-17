@@ -979,18 +979,30 @@ class CallApiService {
   static Future<Map<String, dynamic>?> getQuickMessages() async {
     try {
       final token = await AuthApiService.getToken();
-      final url = Uri.parse(ApiConstants.callQuickMessages);
       final headers = <String, String>{
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 6));
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded['status'] == true && decoded['data'] is Map) {
-          return Map<String, dynamic>.from(decoded['data']);
-        }
+      final urls = [
+        ApiConstants.callQuickMessages,
+        ApiConstants.callQuickMessagesAlt,
+      ];
+
+      for (final endpoint in urls) {
+        try {
+          final response = await http.get(Uri.parse(endpoint), headers: headers).timeout(const Duration(seconds: 5));
+          if (response.statusCode == 200) {
+            final decoded = jsonDecode(response.body);
+            if (decoded['data'] is Map) {
+              return Map<String, dynamic>.from(decoded['data']);
+            } else if (decoded['data'] is List) {
+              return {'messages': decoded['data']};
+            } else if (decoded is List) {
+              return {'messages': decoded};
+            }
+          }
+        } catch (_) {}
       }
     } catch (_) {}
     return null;
@@ -1002,29 +1014,13 @@ class CallApiService {
     required String message,
   }) async {
     try {
-      final token = await AuthApiService.getToken();
-      final savedUser = await AuthApiService.getSavedUser();
-      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
-
-      final url = Uri.parse(ApiConstants.callSendQuickMessage);
-      final headers = <String, String>{
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-        if (userId != null) 'X-User-Id': userId,
-      };
-
-      final payload = {
-        'call_id': callId,
-        'receiver_id': receiverId,
-        'message': message,
-      };
-
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 6));
-
-      return response.statusCode == 200 || response.statusCode == 201;
+      final res = await sendCallChatMessage(
+        callSessionId: callId,
+        receiverId: receiverId,
+        message: message,
+        type: 'quick_reply',
+      );
+      return res != null;
     } catch (_) {
       return false;
     }
@@ -1155,9 +1151,9 @@ class CallApiService {
       };
 
       final payload = {
-        'call_id': callSessionId,
-        'callSessionId': callSessionId,
-        'receiver_id': receiverId,
+        'call_session_id': callSessionId?.toString(),
+        'call_id': callSessionId?.toString(),
+        'receiver_id': receiverId is int ? receiverId : (int.tryParse('$receiverId') ?? receiverId),
         'sender_id': userId,
         'sender_name': senderName,
         'sender_avatar': senderAvatar,
@@ -1170,23 +1166,27 @@ class CallApiService {
         if (imageUrl != null) 'media_url': imageUrl,
       };
 
-      var url = Uri.parse(ApiConstants.callSendMessage);
-      var response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
+      final endpoints = [
+        ApiConstants.callMessageSend,
+        ApiConstants.callMessageSendAlt,
+        ApiConstants.callSendMessage,
+        ApiConstants.callChatSend,
+      ];
 
-      if (response.statusCode == 404) {
-        url = Uri.parse(ApiConstants.callChatSend);
-        response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
-      }
+      for (final endpoint in endpoints) {
+        try {
+          final response = await http
+              .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 6));
 
-      if (response.statusCode == 404) {
-        url = Uri.parse('${ApiConstants.baseUrl}/v1/call/send-message');
-        response = await http.post(url, headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
-      }
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map) {
-          return Map<String, dynamic>.from(decoded['data'] is Map ? decoded['data'] : decoded);
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final decoded = jsonDecode(response.body);
+            if (decoded is Map) {
+              return Map<String, dynamic>.from(decoded['data'] is Map ? decoded['data'] : decoded);
+            }
+          }
+        } catch (_) {
+          continue;
         }
       }
     } catch (e, st) {

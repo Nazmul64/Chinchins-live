@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
+import '../../auth/services/auth_api_service.dart';
 import '../../call/screens/live_room_screen.dart';
 import '../../call/services/live_streaming_api_service.dart';
 
@@ -49,6 +50,38 @@ class _LiveFeedViewState extends State<LiveFeedView> {
   Future<void> _handleRefresh() async {
     widget.onRefresh();
     await _loadActiveStreams();
+  }
+
+  Future<void> _startHostBroadcast() async {
+    final savedUser = await AuthApiService.getSavedUser();
+    final String myId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString() ?? 'host_me';
+    final String myName = savedUser?['name']?.toString() ?? savedUser?['display_name']?.toString() ?? 'My Broadcast';
+    final String myAvatar = savedUser?['avatar']?.toString() ?? savedUser?['avatar_url']?.toString() ?? 'https://chinchins.live/uploads/app/logo.png';
+
+    final hostModel = ModelProfile.fromJson({
+      'id': myId,
+      'account_id': savedUser?['account_id']?.toString() ?? myId,
+      'name': myName,
+      'avatar_url': myAvatar,
+      'price_per_min': 100,
+      'country': savedUser?['country'] ?? 'Global',
+    });
+
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LiveRoomScreen(
+          host: hostModel,
+          title: 'Welcome to my official live stream! 🌟',
+          isHost: true,
+        ),
+      ),
+    );
+
+    if (mounted) {
+      _loadActiveStreams();
+    }
   }
 
   @override
@@ -103,28 +136,7 @@ class _LiveFeedViewState extends State<LiveFeedView> {
                   ),
                 ),
                 GestureDetector(
-                  onTap: () {
-                    final defaultModel = widget.models.isNotEmpty
-                        ? widget.models.first
-                        : ModelProfile.fromJson(const {
-                            'id': 'me',
-                            'account_id': 'me',
-                            'name': 'My Broadcast',
-                            'avatar_url': 'https://chinchins.live/uploads/app/logo.png',
-                            'price_per_min': 100,
-                          });
-
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => LiveRoomScreen(
-                          host: defaultModel,
-                          title: 'Welcome to my official live stream! 🌟',
-                          isHost: true,
-                        ),
-                      ),
-                    );
-                  },
+                  onTap: _startHostBroadcast,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
@@ -227,28 +239,7 @@ class _LiveFeedViewState extends State<LiveFeedView> {
                           const SizedBox(height: 24),
                           Center(
                             child: ElevatedButton.icon(
-                              onPressed: () {
-                                final defaultModel = widget.models.isNotEmpty
-                                    ? widget.models.first
-                                    : ModelProfile.fromJson(const {
-                                        'id': 'me',
-                                        'account_id': 'me',
-                                        'name': 'My Broadcast',
-                                        'avatar_url': 'https://chinchins.live/uploads/app/logo.png',
-                                        'price_per_min': 100,
-                                      });
-
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => LiveRoomScreen(
-                                      host: defaultModel,
-                                      title: 'Welcome to my official live stream! 🌟',
-                                      isHost: true,
-                                    ),
-                                  ),
-                                );
-                              },
+                              onPressed: _startHostBroadcast,
                               icon: const Icon(Icons.videocam_rounded, color: Colors.white, size: 20),
                               label: const Text(
                                 'Start Broadcasting Now',

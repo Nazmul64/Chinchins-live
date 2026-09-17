@@ -178,6 +178,7 @@ class SignalingService {
       await _subscribeToChannel('user-chat.$uIdStr', isPrivate: false);
       await _subscribeToChannel('private-user-chat.$uIdStr', isPrivate: true);
       await _subscribeToChannel('chat.$uIdStr', isPrivate: false);
+      await _subscribeToChannel('private-chat.$uIdStr', isPrivate: true);
       await _subscribeToChannel('private-user.$uIdStr', isPrivate: true);
       await _subscribeToChannel('user.$uIdStr', isPrivate: false);
     }
@@ -186,6 +187,9 @@ class SignalingService {
       final accIdStr = accountId.toString().trim();
       if (accIdStr.isNotEmpty && accIdStr != uIdStr) {
         await _subscribeToChannel('user-chat.$accIdStr', isPrivate: false);
+        await _subscribeToChannel('private-user-chat.$accIdStr', isPrivate: true);
+        await _subscribeToChannel('chat.$accIdStr', isPrivate: false);
+        await _subscribeToChannel('private-chat.$accIdStr', isPrivate: true);
         await _subscribeToChannel('private-user.$accIdStr', isPrivate: true);
         await _subscribeToChannel('user.$accIdStr', isPrivate: false);
       }
@@ -198,6 +202,7 @@ class SignalingService {
     await _subscribeToChannel('presence-call.$rId', isPrivate: true);
     await _subscribeToChannel('private-call.$rId', isPrivate: true);
     await _subscribeToChannel('call.$rId', isPrivate: false);
+    await _subscribeToChannel('private-call_chat.$rId', isPrivate: true);
     await _subscribeToChannel('call_chat.$rId', isPrivate: false);
   }
 
@@ -248,6 +253,7 @@ class SignalingService {
 
   void _handleChannelEvent(ChannelReadEvent event) {
     final eventName = event.name;
+    final chName = event.channelName;
     Map<String, dynamic> data = {};
 
     try {
@@ -265,41 +271,102 @@ class SignalingService {
       }
     } catch (_) {}
 
-    AppLogger.info('SignalingService', 'Received Event: $eventName on channel ${event.channelName}');
+    AppLogger.info('SignalingService', 'Received Event: $eventName on channel $chName');
 
     final cleanName = eventName.startsWith('.') ? eventName.substring(1) : eventName;
     final lowerName = cleanName.toLowerCase();
 
-    // 0. Direct 1-on-1 Chat Message (DirectMessageSent / message.received on user-chat.{id})
-    if (cleanName == 'message.received' ||
+    final isCallChannel = chName.contains('call.') ||
+        chName.contains('call_chat.') ||
+        chName.contains('presence-call.') ||
+        chName.contains('private-call.') ||
+        data.containsKey('call_session_id') ||
+        (data['message'] is Map && data['message']['call_session_id'] != null);
+
+    final isLiveRoomChannel = chName.contains('live-room.') ||
+        chName.contains('live-stream.') ||
+        chName.contains('live.');
+
+    final isUserChatChannel = chName.contains('user-chat.') ||
+        chName.contains('chat.') ||
+        chName.contains('conversation.');
+
+    // 1. IN-CALL GIFTS & LIVE GIFTS BROADCAST
+    if (cleanName == 'gift.received' ||
+        cleanName == 'GiftSentEvent' ||
+        cleanName.endsWith('GiftSentEvent') ||
+        cleanName == 'LiveGiftSentEvent' ||
+        cleanName.endsWith('LiveGiftSentEvent') ||
+        cleanName == 'LiveGiftSent' ||
+        cleanName == 'live.gift.sent' ||
+        cleanName == 'live.gift' ||
+        lowerName.contains('gift.received') ||
+        lowerName.contains('giftsent') ||
+        data['type'] == 'gift' ||
+        data['gift_id'] != null ||
+        data['gift'] != null ||
+        data['gift_data'] != null) {
+      _liveGiftController.add(data);
+      if (isCallChannel) {
+        _inCallMessageController.add(data);
+      }
+      return;
+    }
+
+    // 2. IN-CALL REAL-TIME CHAT MESSAGES
+    if (isCallChannel && (cleanName == 'message.sent' ||
+        cleanName == 'MessageSentEvent' ||
+        cleanName.endsWith('MessageSentEvent') ||
+        cleanName == 'CallMessageEvent' ||
+        cleanName.endsWith('CallMessageEvent') ||
+        cleanName == 'InCallMessageSent' ||
+        cleanName == 'CallMessageSent' ||
+        cleanName == 'call.message.sent' ||
+        cleanName == 'call.message' ||
+        cleanName == 'chat_message' ||
+        lowerName.contains('callmessage') ||
+        lowerName.contains('incallmessage') ||
+        lowerName == 'message.sent')) {
+      _inCallMessageController.add(data);
+      return;
+    }
+
+    // 3. DIRECT 1-ON-1 USER CHAT MESSAGES
+    if (isUserChatChannel && (cleanName == 'message.sent' ||
+        cleanName == 'message.received' ||
         cleanName == 'DirectMessageSent' ||
         cleanName.endsWith('DirectMessageSent') ||
+        cleanName == 'MessageSentEvent' ||
+        cleanName.endsWith('MessageSentEvent') ||
         cleanName == 'direct.message.sent' ||
-        event.channelName.startsWith('user-chat.') ||
-        event.channelName.startsWith('private-user-chat.')) {
+        lowerName == 'message.sent')) {
       _directMessageReceivedController.add(data);
       _inCallMessageController.add(data);
       return;
     }
 
-    // 1. Live Chat Message & Gift Broadcast (LiveChatMessageEvent -> message.sent)
-    if (cleanName == 'message.sent' ||
+    // 4. LIVE ROOM BROADCAST CHAT COMMENTS
+    if (isLiveRoomChannel && (cleanName == 'message.sent' ||
         cleanName == 'LiveChatMessageEvent' ||
         cleanName.endsWith('LiveChatMessageEvent') ||
         cleanName == 'LiveMessageSent' ||
         cleanName == 'live.message.sent' ||
         cleanName == 'live.message' ||
-        lowerName == 'message.sent') {
+        lowerName == 'message.sent')) {
       _liveMessageSentController.add(data);
-      if (data['type'] == 'gift' || data['gift_id'] != null || data['gift'] != null || data['gift_data'] != null) {
-        _liveGiftController.add(data);
-      } else {
-        _liveMessageController.add(data);
-      }
+      _liveMessageController.add(data);
       return;
     }
 
-    // 2. Co-Host Status Changed (CoHostStatusEvent -> cohost.status.changed)
+    // 5. GENERIC FALLBACK FOR message.sent IF NOT CAUGHT
+    if (cleanName == 'message.sent' || cleanName == 'MessageSentEvent' || lowerName == 'message.sent') {
+      _inCallMessageController.add(data);
+      _directMessageReceivedController.add(data);
+      _liveMessageController.add(data);
+      return;
+    }
+
+    // 6. Co-Host Status Changed (CoHostStatusEvent -> cohost.status.changed)
     if (cleanName == 'cohost.status.changed' ||
         cleanName == 'CoHostStatusEvent' ||
         cleanName.endsWith('CoHostStatusEvent') ||
@@ -311,7 +378,7 @@ class SignalingService {
       return;
     }
 
-    // 3. WebRTC Signal (WebRTCSignalEvent -> webrtc.signal)
+    // 7. WebRTC Signal (WebRTCSignalEvent -> webrtc.signal)
     if (cleanName == 'webrtc.signal' ||
         cleanName == 'WebRTCSignalEvent' ||
         cleanName.endsWith('WebRTCSignalEvent') ||
@@ -328,7 +395,7 @@ class SignalingService {
       return;
     }
 
-    // 4. Audio Mute / Unmute (AudioMuteEvent -> audio.mute.toggled)
+    // 8. Audio Mute / Unmute (AudioMuteEvent -> audio.mute.toggled)
     if (cleanName == 'audio.mute.toggled' ||
         cleanName == 'AudioMuteEvent' ||
         cleanName.endsWith('AudioMuteEvent') ||
@@ -338,7 +405,7 @@ class SignalingService {
       return;
     }
 
-    // Check for incoming call
+    // 9. Incoming Call
     if (cleanName == 'call.incoming' ||
         cleanName == 'CallIncoming' ||
         cleanName == 'incoming.call' ||
@@ -351,36 +418,6 @@ class SignalingService {
         lowerName.contains('incoming') ||
         (data.containsKey('caller') && (data.containsKey('call_id') || data.containsKey('channel_name')))) {
       _incomingCallController.add(data);
-      return;
-    }
-
-    // Check for In-Call Real-Time Chat messages & Photos
-    if (cleanName == 'CallMessageEvent' ||
-        cleanName.endsWith('CallMessageEvent') ||
-        cleanName == 'InCallMessageSent' ||
-        cleanName == 'CallMessageSent' ||
-        cleanName == 'call.message.sent' ||
-        cleanName == 'call.message' ||
-        cleanName == 'chat_message' ||
-        cleanName == 'chat.message' ||
-        lowerName.contains('callmessage') ||
-        lowerName.contains('incallmessage') ||
-        lowerName.contains('call_message')) {
-      _inCallMessageController.add(data);
-      return;
-    }
-
-    // Check for other live events
-    if (cleanName == 'LiveGiftSentEvent' ||
-        cleanName.endsWith('LiveGiftSentEvent') ||
-        cleanName == 'LiveGiftSent' ||
-        cleanName == 'live.gift.sent' ||
-        cleanName == 'live.gift' ||
-        cleanName == 'gift.received' ||
-        lowerName.contains('livegift') ||
-        lowerName.contains('giftsent') ||
-        lowerName.contains('gift.received')) {
-      _liveGiftController.add(data);
       return;
     }
 

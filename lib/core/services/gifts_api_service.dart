@@ -415,33 +415,57 @@ class GiftsApiService {
         'context': context,
         if (roomIdStr != null && roomIdStr.isNotEmpty) 'room_id': roomIdStr,
         if (roomIdStr != null && roomIdStr.isNotEmpty) 'stream_id': roomIdStr,
-        if (callSessionId != null) 'call_session_id': callSessionId,
+        if (callSessionId != null) 'call_session_id': callSessionId.toString(),
       };
 
-      Uri uri = (context == 'live' || (streamId != null && streamId.isNotEmpty))
-          ? Uri.parse(ApiConstants.liveSendGift)
-          : Uri.parse(ApiConstants.sendGift);
+      final List<String> targetEndpoints = [];
+      if (context == 'live' || (streamId != null && streamId.isNotEmpty)) {
+        targetEndpoints.addAll([
+          ApiConstants.liveSendGift,
+          ApiConstants.liveStreamSendGift,
+          ApiConstants.liveGift,
+          ApiConstants.sendGift,
+        ]);
+      } else if (context == 'call' || callSessionId != null) {
+        targetEndpoints.addAll([
+          ApiConstants.callGiftSend,
+          ApiConstants.callGiftSendAlt,
+          ApiConstants.sendGift,
+        ]);
+      } else {
+        targetEndpoints.addAll([
+          ApiConstants.sendGift,
+          ApiConstants.callGiftSend,
+        ]);
+      }
 
-      var response = await http.post(
-        uri,
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 8));
+      http.Response? response;
+      for (final endpoint in targetEndpoints) {
+        try {
+          final res = await http.post(
+            Uri.parse(endpoint),
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode(payload),
+          ).timeout(const Duration(seconds: 6));
 
-      if (response.statusCode == 404) {
-        response = await http.post(
-          Uri.parse(ApiConstants.sendGift),
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-          body: jsonEncode(payload),
-        ).timeout(const Duration(seconds: 8));
+          if (res.statusCode == 200 || res.statusCode == 201 || res.statusCode == 422) {
+            response = res;
+            break;
+          }
+        } catch (_) {
+          continue;
+        }
+      }
+
+      if (response == null) {
+        return {
+          'status': false,
+          'message': 'Unable to connect to gifts server.',
+        };
       }
 
       final data = _safeJsonDecode(response.body);
