@@ -237,6 +237,8 @@ class ApiConstants {
   static String giftsReceived(dynamic userId) => '$baseUrl/gifts/received/$userId';
   static String profileGifts(dynamic userId) => '$baseUrl/profile/$userId/gifts';
   static String get giftsReceivedMe => '$baseUrl/gifts/received/me';
+  static String get userReceivedGifts => '$baseUrl/v1/user/received-gifts';
+  static String get userReceivedGiftsAlt => '$baseUrl/user/received-gifts';
   static String get sendGift => '$baseUrl/gifts/send';
   static String profileTopFans(dynamic userId) => '$baseUrl/profile/$userId/top-fans';
   static String profileLike(dynamic userId) => '$baseUrl/profile/$userId/like';

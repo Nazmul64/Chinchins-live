@@ -1188,6 +1188,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                               receiverId: widget.host.id,
                               receiverName: widget.host.name,
                               callSessionId: _activeLiveId,
+                              streamId: _activeLiveId,
+                              contextType: 'live',
                               onGiftSent: (anim) {
                                 _giftAnimKey.currentState?.playGiftAnimation(anim);
                               },

@@ -11,6 +11,8 @@ class InCallGiftSheet extends StatefulWidget {
   final dynamic receiverId;
   final String receiverName;
   final dynamic callSessionId;
+  final dynamic streamId;
+  final String contextType; // 'call' or 'live'
   final Function(ActiveGiftAnimation gift)? onGiftSent;
 
   const InCallGiftSheet({
@@ -18,6 +20,8 @@ class InCallGiftSheet extends StatefulWidget {
     required this.receiverId,
     required this.receiverName,
     this.callSessionId,
+    this.streamId,
+    this.contextType = 'call',
     this.onGiftSent,
   });
 
@@ -26,6 +30,8 @@ class InCallGiftSheet extends StatefulWidget {
     required dynamic receiverId,
     required String receiverName,
     dynamic callSessionId,
+    dynamic streamId,
+    String contextType = 'call',
     Function(ActiveGiftAnimation gift)? onGiftSent,
   }) {
     showModalBottomSheet(
@@ -36,6 +42,8 @@ class InCallGiftSheet extends StatefulWidget {
         receiverId: receiverId,
         receiverName: receiverName,
         callSessionId: callSessionId,
+        streamId: streamId,
+        contextType: contextType,
         onGiftSent: onGiftSent,
       ),
     );
@@ -93,20 +101,27 @@ class _InCallGiftSheetState extends State<InCallGiftSheet> {
         receiverId: widget.receiverId,
         giftId: _selectedGift!.giftId,
         quantity: _selectedQuantity,
-        context: 'call',
+        context: widget.contextType,
+        streamId: widget.streamId?.toString() ?? (widget.contextType == 'live' ? widget.callSessionId?.toString() : null),
         callSessionId: widget.callSessionId,
       );
 
-      if (res['status'] == true && mounted) {
+      if ((res['status'] == true || res['success'] == true) && mounted) {
         setState(() {
           _userCoins = (_userCoins - totalRequired).clamp(0, 999999999);
         });
+
+        final dynamic giftData = res['gift_data'] ?? res['data'];
+        final dynamic giftObj = (giftData is Map) ? giftData['gift'] : null;
+        final String? animUrl = (giftObj is Map)
+            ? (giftObj['animation_url'] ?? giftObj['image_url'] ?? giftObj['icon_url'])
+            : ((giftData is Map) ? giftData['animation_url'] : _selectedGift!.iconUrl);
 
         final anim = ActiveGiftAnimation(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           giftName: _selectedGift!.name,
           giftEmoji: _selectedGift!.emoji,
-          giftIconUrl: _selectedGift!.iconUrl,
+          giftIconUrl: animUrl ?? _selectedGift!.iconUrl,
           senderName: 'You',
           coins: totalRequired,
           combo: _selectedQuantity,

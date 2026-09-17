@@ -53,22 +53,29 @@ class GiftsApiService {
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
-      // Primary URL
-      Uri uri = Uri.parse(ApiConstants.giftsReceived(key));
-      http.Response response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 5));
+      final targetUrls = [
+        '${ApiConstants.userReceivedGifts}?user_id=$key',
+        ApiConstants.userReceivedGifts,
+        '${ApiConstants.userReceivedGiftsAlt}?user_id=$key',
+        ApiConstants.userReceivedGiftsAlt,
+        ApiConstants.giftsReceived(key),
+        ApiConstants.profileGifts(key),
+      ];
 
-      if (response.statusCode == 404) {
-        // Fallback endpoint: /api/profile/{userId}/gifts
-        uri = Uri.parse(ApiConstants.profileGifts(key));
-        response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 5));
-      }
-
-      if (response.statusCode == 200) {
-        final data = _safeJsonDecode(response.body);
-        if (data != null && data['status'] == true && data['data'] != null) {
-          final result = UserGiftsData.fromJson(data);
-          _receivedGiftsMemCache[key] = result;
-          return result;
+      for (final endpoint in targetUrls) {
+        try {
+          final uri = Uri.parse(endpoint);
+          final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 5));
+          if (response.statusCode == 200) {
+            final data = _safeJsonDecode(response.body);
+            if (data != null && (data['status'] == true || data['success'] == true)) {
+              final result = UserGiftsData.fromJson(data is Map<String, dynamic> ? data : Map<String, dynamic>.from(data as Map));
+              _receivedGiftsMemCache[key] = result;
+              return result;
+            }
+          }
+        } catch (_) {
+          continue;
         }
       }
     } catch (e) {
@@ -88,13 +95,24 @@ class GiftsApiService {
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
-      Uri uri = Uri.parse(ApiConstants.giftsReceived(userId));
-      final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 5));
-      if (response.statusCode == 200) {
-        final data = _safeJsonDecode(response.body);
-        if (data != null && data['status'] == true && data['data'] != null) {
-          _receivedGiftsMemCache[userId] = UserGiftsData.fromJson(data);
-        }
+      final targetUrls = [
+        '${ApiConstants.userReceivedGifts}?user_id=$userId',
+        ApiConstants.giftsReceived(userId),
+        ApiConstants.profileGifts(userId),
+      ];
+
+      for (final endpoint in targetUrls) {
+        try {
+          final uri = Uri.parse(endpoint);
+          final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 5));
+          if (response.statusCode == 200) {
+            final data = _safeJsonDecode(response.body);
+            if (data != null && (data['status'] == true || data['success'] == true)) {
+              _receivedGiftsMemCache[userId] = UserGiftsData.fromJson(data is Map<String, dynamic> ? data : Map<String, dynamic>.from(data as Map));
+              break;
+            }
+          }
+        } catch (_) {}
       }
     } catch (_) {}
   }
