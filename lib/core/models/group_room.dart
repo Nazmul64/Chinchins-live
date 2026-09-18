@@ -1,3 +1,5 @@
+import '../../features/profile/services/level_bases_api_service.dart';
+
 enum PartyRoomType {
   audioVoice,
   videoParty;
@@ -27,6 +29,7 @@ class RoomSeat {
   final String? accountId;
   final String? userName;
   final String? userAvatar;
+  final String? frameSvgUrl;
   final bool isHost;
   final bool isMuted;
   final bool isVideoMuted;
@@ -43,6 +46,7 @@ class RoomSeat {
     this.accountId,
     this.userName,
     this.userAvatar,
+    this.frameSvgUrl,
     this.isHost = false,
     this.isMuted = false,
     this.isVideoMuted = false,
@@ -71,6 +75,17 @@ class RoomSeat {
     final isOccupied = json['is_occupied'] == true || (rawUserId != null && rawUserId.isNotEmpty && rawUserId != '0');
     final role = json['role']?.toString() ?? (seatIdx == 0 || seatIdx == 1 ? 'host' : 'guest');
     final isHostFlag = json['is_host'] == true || role.toLowerCase() == 'host' || (userData?['is_host'] == true);
+    final userLvl = userData?['level'] is int ? userData!['level'] as int : (int.tryParse(userData?['level']?.toString() ?? '1') ?? 1);
+
+    final parsedFrame = userData?['profile_base_frame']?.toString() ??
+        userData?['frame_svg_url']?.toString() ??
+        userData?['base_frame_image']?.toString() ??
+        json['profile_base_frame']?.toString() ??
+        json['frame_svg_url']?.toString();
+
+    final finalFrameUrl = (parsedFrame != null && parsedFrame.isNotEmpty)
+        ? parsedFrame
+        : (isOccupied ? LevelBasesApiService.getFrameUrlForLevel(userLvl) : null);
 
     return RoomSeat(
       seatIndex: seatIdx,
@@ -78,11 +93,12 @@ class RoomSeat {
       accountId: userData?['account_id']?.toString() ?? json['account_id']?.toString(),
       userName: userData?['name']?.toString() ?? userData?['nickname']?.toString() ?? json['user_name']?.toString() ?? (isOccupied ? 'User $rawUserId' : null),
       userAvatar: userData?['avatar_url']?.toString() ?? userData?['avatar']?.toString() ?? json['user_avatar']?.toString(),
+      frameSvgUrl: finalFrameUrl,
       isHost: isHostFlag,
       isMuted: json['is_muted'] == true || json['is_mic_muted'] == true,
       isVideoMuted: json['is_video_muted'] == true || json['is_camera_off'] == true,
       isSpeaking: json['is_speaking'] == true,
-      level: userData?['level'] is int ? userData!['level'] as int : (int.tryParse(userData?['level']?.toString() ?? '1') ?? 1),
+      level: userLvl,
       isVerified: userData?['is_verified'] == true || userData?['verified'] == 1,
       coinsReceived: json['coins_received'] is int
           ? json['coins_received'] as int
@@ -99,6 +115,7 @@ class RoomSeat {
       'account_id': accountId,
       'user_name': userName,
       'user_avatar': userAvatar,
+      'frame_svg_url': frameSvgUrl,
       'is_host': isHost,
       'is_muted': isMuted,
       'is_video_muted': isVideoMuted,
@@ -117,6 +134,7 @@ class RoomSeat {
     String? accountId,
     String? userName,
     String? userAvatar,
+    String? frameSvgUrl,
     bool? isHost,
     bool? isMuted,
     bool? isVideoMuted,
@@ -133,6 +151,7 @@ class RoomSeat {
       accountId: accountId ?? this.accountId,
       userName: userName ?? this.userName,
       userAvatar: userAvatar ?? this.userAvatar,
+      frameSvgUrl: frameSvgUrl ?? this.frameSvgUrl,
       isHost: isHost ?? this.isHost,
       isMuted: isMuted ?? this.isMuted,
       isVideoMuted: isVideoMuted ?? this.isVideoMuted,

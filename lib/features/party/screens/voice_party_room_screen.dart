@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../core/models/group_room.dart';
 import '../../../core/models/live_gift_event.dart';
 import '../../../core/services/party_room_api_service.dart';
@@ -13,6 +16,7 @@ import '../widgets/room_seat_widget.dart';
 import '../widgets/invite_guests_modal.dart';
 import '../../chat/widgets/gift_picker_modal.dart';
 import '../../auth/services/auth_api_service.dart';
+import '../../profile/services/level_bases_api_service.dart';
 import '../../wallet/screens/wallet_screen.dart';
 
 class VoicePartyRoomScreen extends StatefulWidget {
@@ -44,6 +48,11 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
   String? _myUserId;
   String? _myUserName;
   String? _myUserAvatar;
+
+  // Agora RTC Engine & Volume Indicator State
+  RtcEngine? _rtcEngine;
+  int _myUid = 0;
+  bool _isAgoraConnected = false;
 
   Timer? _pollingTimer;
   Timer? _billingTimer;
@@ -98,6 +107,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
     final user = await AuthApiService.getSavedUser();
     if (user != null && mounted) {
       final uid = user['id']?.toString() ?? '';
+      _myUid = int.tryParse(uid) ?? (1000 + Random().nextInt(89999));
       setState(() {
         _myUserId = uid;
         _myUserName = user['name']?.toString() ?? user['nickname']?.toString() ?? 'You';
@@ -110,6 +120,107 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
           _amIOnSeat = true;
           _mySeatIndex = mySeat;
         }
+      });
+    } else {
+      _myUid = 1000 + Random().nextInt(89999);
+    }
+    _initAgoraAudio();
+  }
+
+  Future<void> _initAgoraAudio() async {
+    try {
+      await Permission.microphone.request();
+
+      final appId = widget.room.rtc?.appId ?? 'aab8b8f39d24490b8f4a13d7d792b95b';
+      final channelName = widget.room.channelName.isNotEmpty
+          ? widget.room.channelName
+          : 'party_room_${widget.room.id}';
+      final token = widget.room.rtc?.token ?? '';
+
+      _rtcEngine = createAgoraRtcEngine();
+      await _rtcEngine!.initialize(RtcEngineContext(
+        appId: appId,
+        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+      ));
+
+      _rtcEngine!.registerEventHandler(
+        RtcEngineEventHandler(
+          onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+            debugPrint('[VoiceParty] Joined Agora Channel: ${connection.channelId} as UID: ${connection.localUid}');
+            if (mounted) {
+              setState(() => _isAgoraConnected = true);
+            }
+          },
+          onAudioVolumeIndication: (RtcConnection connection, List<AudioVolumeInfo> speakers, int totalVolume, int speakerNumber) {
+            if (!mounted) return;
+            _handleAudioVolumeIndication(speakers);
+          },
+        ),
+      );
+
+      await _rtcEngine!.enableAudio();
+      await _rtcEngine!.disableVideo();
+      await _rtcEngine!.setDefaultAudioRouteToSpeakerphone(true);
+
+      // Section 7.3: Enable volume indication (200ms interval, smooth: 3, reportVad: true)
+      await _rtcEngine!.enableAudioVolumeIndication(
+        interval: 200,
+        smooth: 3,
+        reportVad: true,
+      );
+
+      final isSpeaker = _amIOnSeat || _isHost;
+      await _rtcEngine!.setClientRole(
+        role: isSpeaker ? ClientRoleType.clientRoleBroadcaster : ClientRoleType.clientRoleAudience,
+      );
+
+      if (isSpeaker && _isMyMicMuted) {
+        await _rtcEngine!.muteLocalAudioStream(true);
+      }
+
+      await _rtcEngine!.joinChannel(
+        token: token,
+        channelId: channelName,
+        uid: _myUid,
+        options: ChannelMediaOptions(
+          publishMicrophoneTrack: isSpeaker && !_isMyMicMuted,
+          autoSubscribeAudio: true,
+          clientRoleType: isSpeaker ? ClientRoleType.clientRoleBroadcaster : ClientRoleType.clientRoleAudience,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[VoiceParty] Agora setup error: $e');
+    }
+  }
+
+  void _handleAudioVolumeIndication(List<AudioVolumeInfo> speakers) {
+    final speakingUids = <int>{};
+    for (final speaker in speakers) {
+      if ((speaker.volume ?? 0) > 10) {
+        final uid = (speaker.uid == null || speaker.uid == 0) ? _myUid : speaker.uid!;
+        speakingUids.add(uid);
+      }
+    }
+
+    bool changed = false;
+    final updatedSeats = List<RoomSeat>.from(_seats);
+
+    for (int i = 0; i < updatedSeats.length; i++) {
+      final seat = updatedSeats[i];
+      if (seat.isEmpty) continue;
+
+      final seatUid = int.tryParse(seat.userId ?? '') ?? (int.tryParse(seat.accountId ?? '') ?? -1);
+      final isUserSpeaking = speakingUids.contains(seatUid) || (seat.userId == _myUserId && speakingUids.contains(_myUid));
+
+      if (seat.isSpeaking != isUserSpeaking) {
+        updatedSeats[i] = seat.copyWith(isSpeaking: isUserSpeaking);
+        changed = true;
+      }
+    }
+
+    if (changed && mounted) {
+      setState(() {
+        _seats = updatedSeats;
       });
     }
   }
@@ -170,6 +281,10 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
       final res = await PartyRoomApiService.deductInterval(widget.room.id, minutes: 1);
       if (res['insufficient_balance'] == true || res['evicted_from_seat'] == true) {
         if (mounted) {
+          // Evicted from seat: step down Agora role to audience and mute audio
+          _rtcEngine?.setClientRole(role: ClientRoleType.clientRoleAudience);
+          _rtcEngine?.muteLocalAudioStream(true);
+
           setState(() {
             if (_mySeatIndex != null && _mySeatIndex! < _seats.length) {
               _seats[_mySeatIndex!] = RoomSeat(seatIndex: _mySeatIndex!);
@@ -212,6 +327,12 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
     _billingTimer?.cancel();
     _chatController.dispose();
     _scrollController.dispose();
+
+    try {
+      _rtcEngine?.leaveChannel();
+      _rtcEngine?.release();
+      _rtcEngine = null;
+    } catch (_) {}
 
     if (_isHost) {
       PartyRoomApiService.endRoom(widget.room.id);
@@ -294,6 +415,12 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
       final res = await PartyRoomApiService.takeSeat(widget.room.id, seatIndex: index);
       if (mounted) {
         if (res['success'] == true) {
+          // Switch Agora client role to Broadcaster and un-mute microphone
+          try {
+            await _rtcEngine?.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+            await _rtcEngine?.muteLocalAudioStream(_isMyMicMuted);
+          } catch (_) {}
+
           setState(() {
             if (_mySeatIndex != null && _mySeatIndex! < _seats.length) {
               _seats[_mySeatIndex!] = RoomSeat(seatIndex: _mySeatIndex!);
@@ -303,7 +430,8 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
               userId: _myUserId ?? '1',
               userName: _myUserName ?? 'You',
               userAvatar: _myUserAvatar,
-              isSpeaking: true,
+              frameSvgUrl: LevelBasesApiService.getFrameUrlForLevel(_currentRoom.hostLevel),
+              isSpeaking: false,
               isMuted: _isMyMicMuted,
               status: 'occupied',
               role: index == 0 ? 'host' : 'guest',
@@ -387,6 +515,13 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
                   _buildActionChip(Icons.logout_rounded, 'Leave Seat', () async {
                     Navigator.pop(context);
                     await PartyRoomApiService.leaveSeat(widget.room.id);
+
+                    // Step down to audience and mute local audio stream
+                    try {
+                      await _rtcEngine?.setClientRole(role: ClientRoleType.clientRoleAudience);
+                      await _rtcEngine?.muteLocalAudioStream(true);
+                    } catch (_) {}
+
                     if (mounted) {
                       setState(() {
                         _seats[seat.seatIndex] = RoomSeat(seatIndex: seat.seatIndex);
@@ -487,6 +622,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
         streamId: widget.room.id,
         receiverId: targetId.toString(),
         onGiftSelected: (gift) async {
+          final messenger = ScaffoldMessenger.of(context);
           final res = await PartyRoomApiService.sendGift(
             widget.room.id,
             giftId: gift.giftId > 0 ? gift.giftId : (int.tryParse(gift.id) ?? 1),
@@ -496,7 +632,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
 
           if (!mounted) return;
           if (res['insufficient_balance'] == true) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            messenger.showSnackBar(
               SnackBar(
                 content: const Text('Insufficient gems balance! Please top up to send gifts.'),
                 backgroundColor: const Color(0xFFFF1744),
@@ -557,6 +693,9 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
         _seats[_mySeatIndex!] = _seats[_mySeatIndex!].copyWith(isMuted: nextState);
       }
     });
+    try {
+      await _rtcEngine?.muteLocalAudioStream(nextState);
+    } catch (_) {}
     await PartyRoomApiService.toggleMic(widget.room.id, isMuted: nextState);
   }
 
@@ -631,6 +770,17 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen> {
                                     if (_currentRoom.hostIsVerified) ...[
                                       const SizedBox(width: 3),
                                       const Icon(Icons.verified_rounded, color: Color(0xFF00E5FF), size: 12),
+                                    ],
+                                    if (_isAgoraConnected) ...[
+                                      const SizedBox(width: 4),
+                                      Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF10B981),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
                                     ],
                                   ],
                                 ),
