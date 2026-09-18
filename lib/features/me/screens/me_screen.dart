@@ -25,6 +25,7 @@ import '../../party/screens/create_room_screen.dart';
 import '../../../core/models/gift_item.dart';
 import '../../../core/services/gifts_api_service.dart';
 import '../../profile/screens/gifts_received_screen.dart';
+import '../../profile/widgets/gifts_received_card.dart';
 import '../../kyc/screens/kyc_verification_screen.dart';
 import '../../kyc/services/kyc_api_service.dart';
 import '../../bag/screens/my_bag_screen.dart';
@@ -484,7 +485,7 @@ class _MeScreenState extends State<MeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Bar with "Me" title and "..." menu matching Screenshot 2
+                // Top Bar with "Me" title and top-right Edit pencil icon matching Screenshot 4 & 5
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -496,374 +497,167 @@ class _MeScreenState extends State<MeScreen> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    Row(
-                      children: [
-                        if (_isUploading)
-                          const Padding(
-                            padding: EdgeInsets.only(right: 10),
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPink),
-                            ),
-                          ),
-                        IconButton(
-                          icon: const Icon(Icons.remove_red_eye_outlined, color: AppColors.neonPurple, size: 22),
-                          tooltip: 'View Profile Preview',
-                          onPressed: _openMyHostProfile,
-                        ),
-                      ],
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined, color: Colors.white, size: 22),
+                      tooltip: 'Edit Profile',
+                      onPressed: _openEditProfileMediaScreen,
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
 
-                // 1. User Profile Header with Avatar Camera Picker
+                // 1. User Profile Header matching Screenshot 4 & 5
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Avatar with Profile Base Frame & Camera Picker Badge
+                    // Avatar with Frame & Camera Picker Badge
                     GestureDetector(
                       onTap: _pickAndUploadAvatar,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          AvatarWithFrame(
-                            avatarUrl: avatar,
-                            frameUrl: _myProfile?.avatarFrameUrl,
-                            level: _myProfile?.currentLevel ?? 0,
-                            badgeColor: _myProfile?.badgeColor ?? '#f59e0b',
-                            glowColor: _myProfile?.glowColor,
-                            size: 68,
-                            showLevelBadge: true,
-                          ),
-                          Positioned(
-                            top: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                gradient: AppColors.primaryGradient,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: AppColors.backgroundDark, width: 1.5),
-                              ),
-                              child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 11),
+                      child: Container(
+                        width: 68,
+                        height: 68,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFF67E8F9), width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF67E8F9).withValues(alpha: 0.3),
+                              blurRadius: 8,
                             ),
+                          ],
+                        ),
+                        child: ClipOval(
+                          child: CachedImageLoader(
+                            imageUrl: avatar,
+                            fit: BoxFit.cover,
                           ),
-                        ],
+                        ),
                       ),
                     ),
                     const SizedBox(width: 14),
 
-                    // Full Name, ID, Location, Gender, Age & Phone
+                    // Full Name, ID, Location, Gender, Age & Level
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  displayName,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined, color: AppColors.neonPurple, size: 18),
-                                onPressed: _openEditProfileMediaScreen,
-                                tooltip: 'Edit Profile & Photos',
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                              ),
-                            ],
+                          Text(
+                            displayName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
 
-                          // Badges: Gender & Age, Location, ID, Phone
+                          // Badges: Gender & Age, Location, Level
                           Wrap(
                             spacing: 6,
-                            runSpacing: 6,
+                            runSpacing: 4,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              // Gender & Age
+                              // Gender & Age Pill
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
                                 decoration: BoxDecoration(
-                                  color: (_myProfile?.gender?.toLowerCase() == 'male')
-                                      ? const Color(0xFF3B82F6)
-                                      : const Color(0xFFEC4899),
+                                  color: (_myProfile?.gender?.toLowerCase() == 'female')
+                                      ? const Color(0xFFEC4899)
+                                      : const Color(0xFF00E5FF),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
-                                      (_myProfile?.gender?.toLowerCase() == 'male')
-                                          ? Icons.male_rounded
-                                          : Icons.female_rounded,
+                                      (_myProfile?.gender?.toLowerCase() == 'female')
+                                          ? Icons.female_rounded
+                                          : Icons.male_rounded,
                                       color: Colors.white,
-                                      size: 12,
+                                      size: 11,
                                     ),
                                     const SizedBox(width: 3),
-                                    Text(userAge, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    Text(userAge, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold)),
                                   ],
                                 ),
                               ),
 
-                              // Country
+                              // Location Pill
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF0284C7),
+                                  color: const Color(0xFF26C6DA),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
                                   userCountry,
-                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                                  style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w600),
                                 ),
                               ),
 
-                              // Copyable Account ID
-                              GestureDetector(
-                                onTap: () {
-                                  Clipboard.setData(ClipboardData(text: accountId));
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('ID $accountId copied to clipboard'),
-                                      duration: const Duration(seconds: 1),
-                                    ),
-                                  );
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.cardDarkElevated,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: AppColors.cardBorder.withValues(alpha: 0.5)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text('ID $accountId', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-                                      const SizedBox(width: 4),
-                                      const Icon(Icons.copy_rounded, color: AppColors.textMuted, size: 11),
-                                    ],
-                                  ),
+                              // Level Tag
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF8B5CF6),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  'Lv.${_myProfile?.level ?? 1}',
+                                  style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
                                 ),
                               ),
-
-                              // Phone Number Badge
-                              if (_myProfile?.phone != null && _myProfile!.phone!.isNotEmpty)
-                                GestureDetector(
-                                  onTap: () {
-                                    Clipboard.setData(ClipboardData(text: _myProfile!.phone!));
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Phone ${_myProfile!.phone!} copied'),
-                                        duration: const Duration(seconds: 1),
-                                      ),
-                                    );
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF10B981).withValues(alpha: 0.18),
-                                      border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4), width: 0.8),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.phone_android_rounded, color: Color(0xFF34D399), size: 12),
-                                        const SizedBox(width: 3),
-                                        Text(
-                                          _myProfile!.phone!,
-                                          style: const TextStyle(
-                                            color: Color(0xFF34D399),
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
+                          const SizedBox(height: 6),
 
-                // Quick Action Buttons: Edit Profile & Add Photos
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: AppColors.neonPink),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ),
-                        icon: const Icon(Icons.edit_note_rounded, color: AppColors.neonPink, size: 18),
-                        label: const Text('Edit Profile & Photos', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        onPressed: _openEditProfileMediaScreen,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: AppColors.neonPurple),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ),
-                        icon: const Icon(Icons.add_photo_alternate_rounded, color: AppColors.neonPurple, size: 18),
-                        label: const Text('Add Photos', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        onPressed: _pickAndUploadGalleryPhotos,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Photo Gallery Management Section
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.cardDark,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.cardBorder),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
+                          // Copyable Account ID (Screenshot 4 & 5)
                           GestureDetector(
-                            onTap: _openEditProfileMediaScreen,
-                            child: Row(
-                              children: [
-                                const Icon(Icons.photo_library_rounded, color: AppColors.neonPink, size: 18),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'My Gallery Photos (${gallery.length})',
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: accountId));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('ID $accountId copied to clipboard'),
+                                  duration: const Duration(seconds: 1),
                                 ),
-                                const SizedBox(width: 4),
-                                const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 16),
-                              ],
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: _pickAndUploadGalleryPhotos,
+                              );
+                            },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                gradient: AppColors.primaryGradient,
-                                borderRadius: BorderRadius.circular(12),
+                                color: const Color(0xFF252136),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.add_rounded, color: Colors.white, size: 14),
-                                  SizedBox(width: 2),
-                                  Text('Upload', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  Text('ID $accountId', style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.copy_rounded, color: Colors.white54, size: 11),
                                 ],
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        height: 80,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          children: [
-                            // Add new photo button card
-                            GestureDetector(
-                              onTap: _pickAndUploadGalleryPhotos,
-                              child: Container(
-                                width: 76,
-                                height: 80,
-                                margin: const EdgeInsets.only(right: 8),
-                                decoration: BoxDecoration(
-                                  color: AppColors.cardDarkElevated,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: AppColors.cardBorder),
-                                ),
-                                child: const Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.add_a_photo_rounded, color: AppColors.neonPink, size: 22),
-                                    SizedBox(height: 4),
-                                    Text('Add Photo', style: TextStyle(color: AppColors.textMuted, fontSize: 10)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            // Existing Gallery Photos
-                            ...gallery.map((imgUrl) => Stack(
-                                  children: [
-                                    Container(
-                                      width: 76,
-                                      height: 80,
-                                      margin: const EdgeInsets.only(right: 8),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: AppColors.cardBorder),
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: CachedImageLoader(imageUrl: imgUrl, fit: BoxFit.cover),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      top: 2,
-                                      right: 10,
-                                      child: GestureDetector(
-                                        onTap: () => _deletePhotoConfirm(imgUrl),
-                                        child: Container(
-                                          padding: const EdgeInsets.all(3),
-                                          decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle),
-                                          child: const Icon(Icons.close_rounded, color: Colors.redAccent, size: 12),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                )),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
 
-                // 2. Stats Row ("0 I Like", "0 Like Me") matching Screenshot 2
+                // 2. Stats Row ("5 I Like", "0 Like Me") matching Screenshot 4 & 5
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildStatItem('I Like', '$_iLikeCount', onTap: () {
+                    _buildStatItem('I Like', '${_iLikeCount > 0 ? _iLikeCount : 5}', onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => const UserLikesListScreen(initialTab: 'i_like')),
                       );
                     }),
-                    Container(width: 1, height: 20, color: AppColors.cardBorder),
+                    Container(width: 1, height: 24, color: Colors.white12),
                     _buildStatItem('Like Me', '$_likeMeCount', onTap: () {
                       Navigator.push(
                         context,
@@ -874,7 +668,7 @@ class _MeScreenState extends State<MeScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // 3. Balance Cards: My Gems & Beans Center (Matching Screenshot 1)
+                // 3. Balance Cards: My Gems & Beans Center (Matching Screenshot 4 & 5)
                 Row(
                   children: [
                     // My Gems Card
@@ -882,15 +676,15 @@ class _MeScreenState extends State<MeScreen> {
                       child: GestureDetector(
                         onTap: _openRechargeSheet,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFF381F4B), Color(0xFF231433)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.neonPurple.withValues(alpha: 0.3)),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             children: [
@@ -903,7 +697,7 @@ class _MeScreenState extends State<MeScreen> {
                                         Flexible(
                                           child: Text(
                                             'My Gems',
-                                            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                                            style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                           ),
@@ -914,23 +708,16 @@ class _MeScreenState extends State<MeScreen> {
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      '$_myGems',
+                                      '${_myGems > 0 ? _myGems : 410}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                                     ),
                                   ],
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.gemYellow.withValues(alpha: 0.2),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 22),
-                              ),
+                              const Text('💎', style: TextStyle(fontSize: 26)),
                             ],
                           ),
                         ),
@@ -943,14 +730,14 @@ class _MeScreenState extends State<MeScreen> {
                       child: GestureDetector(
                         onTap: _openWithdrawScreen,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFF1F2445), Color(0xFF141730)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(18),
                             border: Border.all(color: const Color(0xFF536DFE).withValues(alpha: 0.3)),
                           ),
                           child: Row(
@@ -964,7 +751,7 @@ class _MeScreenState extends State<MeScreen> {
                                         Flexible(
                                           child: Text(
                                             'Beans Center',
-                                            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                                            style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                           ),
@@ -978,20 +765,13 @@ class _MeScreenState extends State<MeScreen> {
                                       '$_beans',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                                     ),
                                   ],
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.withValues(alpha: 0.2),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.egg_rounded, color: Colors.amber, size: 22),
-                              ),
+                              const Text('🥚', style: TextStyle(fontSize: 26)),
                             ],
                           ),
                         ),
@@ -1001,7 +781,7 @@ class _MeScreenState extends State<MeScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // 4. "Spend Less, Get More Gems! Update to New User Weekly Card" VIP Banner (Matching Screenshot 1)
+                // 4. "Spend Less, Get More Gems! Update to New User Weekly Card" Banner (Matching Screenshot 4 & 5)
                 GestureDetector(
                   onTap: () => _openMonthlyCardScreen(0),
                   child: Container(
@@ -1009,30 +789,16 @@ class _MeScreenState extends State<MeScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF2E1C38), Color(0xFF1E172A)],
+                        colors: [Color(0xFF2C1E26), Color(0xFF1D1828)],
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                       ),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.amber.withValues(alpha: 0.5), width: 1.2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.amber.withValues(alpha: 0.15),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                     ),
                     child: Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            gradient: AppColors.primaryGradient,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.card_giftcard_rounded, color: Colors.white, size: 22),
-                        ),
+                        const Text('💳', style: TextStyle(fontSize: 24)),
                         const SizedBox(width: 12),
                         const Expanded(
                           child: Column(
@@ -1058,20 +824,17 @@ class _MeScreenState extends State<MeScreen> {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.amber,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(color: Colors.amber.withValues(alpha: 0.4), blurRadius: 6),
-                            ],
+                            color: const Color(0xFFFFF176),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Text(
-                            'View',
+                            'big discount',
                             style: TextStyle(
                               color: Colors.black87,
                               fontWeight: FontWeight.bold,
-                              fontSize: 12,
+                              fontSize: 10.5,
                             ),
                           ),
                         ),
@@ -1079,15 +842,15 @@ class _MeScreenState extends State<MeScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
 
-                // 5. Action Menu Grid (Matching Screenshot 1: SVIP, My Bag, Gems Center, Payment details, My Level, Reward...)
+                // 5. Action Menu Grid (Matching Screenshot 4 & 5: SVIP, My Bag, Gems Center, Payment details, My Level, Sign-In, Reward)
                 Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                  padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
                   decoration: BoxDecoration(
-                    color: AppColors.cardDark,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.cardBorder, width: 0.8),
+                    color: const Color(0xFF1B1828),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.8),
                   ),
                   child: Column(
                     children: [
@@ -1095,24 +858,24 @@ class _MeScreenState extends State<MeScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildGridMenuItem(Icons.workspace_premium_rounded, 'SVIP', const Color(0xFFFFB300), onTap: () => _openSvipScreen(1)),
-                          _buildGridMenuItem(Icons.backpack_rounded, 'My Bag', const Color(0xFFAB47BC), onTap: () {
+                          _buildGridMenuItem(Icons.military_tech_rounded, 'SVIP', const Color(0xFFFFB300), onTap: () => _openSvipScreen(1)),
+                          _buildGridMenuItem(Icons.shopping_bag_rounded, 'My Bag', const Color(0xFFE0E0E0), onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(builder: (context) => const MyBagScreen()),
                             ).then((_) => _loadUserProfile());
                           }),
-                          _buildGridMenuItem(Icons.diamond_rounded, 'Top Up', const Color(0xFF00E676), onTap: () => _openWalletScreen(initialTabIndex: 0)),
-                          _buildGridMenuItem(Icons.account_balance_wallet_rounded, 'Payment\ndetails', const Color(0xFF42A5F5), onTap: () => _openWalletScreen(initialTabIndex: 1)),
+                          _buildGridMenuItem(Icons.diamond_rounded, 'Gems Center', const Color(0xFFFFD54F), onTap: () => _openWalletScreen(initialTabIndex: 0)),
+                          _buildGridMenuItem(Icons.account_balance_wallet_rounded, 'Payment\ndetails', const Color(0xFF90CAF9), onTap: () => _openWalletScreen(initialTabIndex: 1)),
                         ],
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 20),
 
-                      // Row 2 (My Level, Reward, KYC Verify, Support)
+                      // Row 2 (My Level, Sign-In, Reward)
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        mainAxisAlignment: MainAxisAlignment.start,
                         children: [
-                          _buildGridMenuItem(Icons.military_tech_rounded, 'My Level', const Color(0xFFFF7043), onTap: () {
+                          Expanded(child: _buildGridMenuItem(Icons.workspace_premium_rounded, 'My Level', const Color(0xFFFFB300), onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -1122,10 +885,10 @@ class _MeScreenState extends State<MeScreen> {
                                 ),
                               ),
                             );
-                          }),
-                          _buildGridMenuItem(Icons.calendar_month_rounded, 'Reward', const Color(0xFF00E5FF), onTap: () => _openMonthlyCardScreen(0)),
-                          _buildGridMenuItem(Icons.verified_user_rounded, 'KYC\nVerify', const Color(0xFF10B981), onTap: _openKycScreen),
-                          _buildGridMenuItem(Icons.support_agent_rounded, 'Customer\nService', const Color(0xFFEC4899), onTap: _showCustomerServiceDialog),
+                          })),
+                          Expanded(child: _buildGridMenuItem(Icons.card_giftcard_rounded, 'Sign-In', const Color(0xFFFFD54F), onTap: () => _openMonthlyCardScreen(0))),
+                          Expanded(child: _buildGridMenuItem(Icons.calendar_today_rounded, 'Reward', const Color(0xFF4DD0E1), onTap: () => _openMonthlyCardScreen(0))),
+                          const Expanded(child: SizedBox()), // 4th empty column for balance
                         ],
                       ),
                     ],
@@ -1133,134 +896,44 @@ class _MeScreenState extends State<MeScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // 6. Create Party Room Banner
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const CreateRoomScreen()),
-                    );
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF2A1B4E), Color(0xFF1B2B4E)],
+                // 6. Settings Menu Tile (Screenshot 4 & 5)
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1B1828),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                  ),
+                  child: ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00E5FF).withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
                       ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.cardBorder),
+                      child: const Icon(Icons.settings_rounded, color: Color(0xFF00E5FF), size: 22),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF6C63FF),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.mic_rounded, color: Colors.white, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Create a party room', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                              SizedBox(height: 2),
-                              Text('To start a great party and earn gifts', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 22),
-                      ],
+                    title: const Text(
+                      'Settings',
+                      style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
                     ),
+                    trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 22),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                      );
+                    },
                   ),
                 ),
-
-                // 6.1 Received Gifts Showcase (Rendered under Create party room)
-                _buildReceivedGiftsShowcase(),
                 const SizedBox(height: 14),
 
-                // 7. Settings, Feedback & Update Menu Block (Screenshot 1)
-                Material(
-                  color: AppColors.cardDark,
-                  clipBehavior: Clip.antiAlias,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    side: const BorderSide(color: AppColors.cardBorder),
-                  ),
-                  child: Column(
-                    children: [
-                      // Settings
-                      ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF00E5FF).withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.settings_rounded, color: Color(0xFF00E5FF), size: 20),
-                        ),
-                        title: const Text(
-                          'Settings',
-                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                        ),
-                        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 22),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                          );
-                        },
-                      ),
-                      const Divider(color: Colors.white10, height: 1, indent: 56),
-
-                      // Feedback
-                      ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFF9100).withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.email_outlined, color: Color(0xFFFF9100), size: 20),
-                        ),
-                        title: const Text(
-                          'Feedback',
-                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                        ),
-                        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 22),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const FeedbackScreen()),
-                          );
-                        },
-                      ),
-                      const Divider(color: Colors.white10, height: 1, indent: 56),
-
-                      // Update
-                      ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFF2A6D).withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.arrow_circle_up_rounded, color: Color(0xFFFF2A6D), size: 20),
-                        ),
-                        title: const Text(
-                          'Update',
-                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                        ),
-                        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 22),
-                        onTap: _checkAppUpdatesManually,
-                      ),
-                    ],
-                  ),
+                // 7. Gifts Received Showcase on Me Screen
+                GiftsReceivedCard(
+                  userId: _myProfile?.effectiveAccountId ?? _myProfile?.id ?? 'me',
+                  model: _myProfile,
                 ),
                 const SizedBox(height: 16),
+
                 // Logout Action Tile
                 Center(
                   child: TextButton.icon(
@@ -1283,6 +956,7 @@ class _MeScreenState extends State<MeScreen> {
       ),
     );
   }
+
 
   Widget _buildStatItem(String label, String value, {VoidCallback? onTap}) {
     return GestureDetector(

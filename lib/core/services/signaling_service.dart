@@ -248,6 +248,9 @@ class SignalingService {
     if (_pusherClient == null || liveId == null) return;
     final idStr = liveId.toString().trim();
     if (idStr.isEmpty) return;
+    await _subscribeToChannel('presence-stream.$idStr', isPrivate: true);
+    await _subscribeToChannel('stream.$idStr', isPrivate: false);
+    await _subscribeToChannel('private-stream.$idStr', isPrivate: true);
     await _subscribeToChannel('presence-live-room.$idStr', isPrivate: true);
     await _subscribeToChannel('presence-live-stream.$idStr', isPrivate: true);
     await _subscribeToChannel('presence-live.$idStr', isPrivate: true);
@@ -262,7 +265,11 @@ class SignalingService {
   Future<void> leaveLiveRoom(dynamic liveId) async {
     final idStr = liveId?.toString().trim() ?? '';
     final toRemove = _activeChannels.keys.where((k) => 
-      k.contains('live-room.$idStr') || k.contains('live-stream.$idStr') || k.contains('live.$idStr') || (idStr.isEmpty && (k.contains('live-room.') || k.contains('live-stream.') || k.contains('live.')))
+      k.contains('stream.$idStr') ||
+      k.contains('live-room.$idStr') ||
+      k.contains('live-stream.$idStr') ||
+      k.contains('live.$idStr') ||
+      (idStr.isEmpty && (k.contains('stream.') || k.contains('live-room.') || k.contains('live-stream.') || k.contains('live.')))
     ).toList();
     for (final chName in toRemove) {
       try {
@@ -306,7 +313,9 @@ class SignalingService {
         data.containsKey('call_session_id') ||
         (data['message'] is Map && data['message']['call_session_id'] != null);
 
-    final isLiveRoomChannel = chName.contains('live-room.') ||
+    final isLiveRoomChannel = chName.contains('presence-stream.') ||
+        chName.contains('stream.') ||
+        chName.contains('live-room.') ||
         chName.contains('live-stream.') ||
         chName.contains('live.');
 

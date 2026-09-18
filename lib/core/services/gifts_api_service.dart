@@ -433,12 +433,16 @@ class GiftsApiService {
         'context': context,
         if (roomIdStr != null && roomIdStr.isNotEmpty) 'room_id': roomIdStr,
         if (roomIdStr != null && roomIdStr.isNotEmpty) 'stream_id': roomIdStr,
+        if (callSessionId != null) 'call_id': callSessionId.toString(),
         if (callSessionId != null) 'call_session_id': callSessionId.toString(),
       };
 
       final List<String> targetEndpoints = [];
       if (context == 'live' || (streamId != null && streamId.isNotEmpty)) {
         targetEndpoints.addAll([
+          '${ApiConstants.baseUrl}/live/send-gift',
+          '${ApiConstants.baseUrl}/live/gift',
+          '${ApiConstants.baseUrl}/v1/stream/send-gift',
           ApiConstants.liveSendGift,
           ApiConstants.liveStreamSendGift,
           ApiConstants.liveGift,
@@ -446,6 +450,10 @@ class GiftsApiService {
         ]);
       } else if (context == 'call' || callSessionId != null) {
         targetEndpoints.addAll([
+          '${ApiConstants.baseUrl}/call/send-gift',
+          '${ApiConstants.baseUrl}/call/gift/send',
+          '${ApiConstants.baseUrl}/call/gift',
+          '${ApiConstants.baseUrl}/v1/call/gift/send',
           ApiConstants.callGiftSend,
           ApiConstants.callGiftSendAlt,
           ApiConstants.sendGift,
@@ -453,6 +461,7 @@ class GiftsApiService {
       } else {
         targetEndpoints.addAll([
           ApiConstants.sendGift,
+          '${ApiConstants.baseUrl}/call/send-gift',
           ApiConstants.callGiftSend,
         ]);
       }

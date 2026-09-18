@@ -1014,6 +1014,13 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
                         callSessionId: widget.callId ?? widget.channelName,
                         onGiftSent: (anim) {
                           _giftAnimKey.currentState?.playGiftAnimation(anim);
+                          _chatKey.currentState?.addIncomingMessage({
+                            'id': 'gift_${DateTime.now().millisecondsSinceEpoch}',
+                            'sender_name': 'You',
+                            'message': '🎁 sent ${anim.giftName} (${anim.coins} Coins)!',
+                            'type': 'gift',
+                            'is_me': true,
+                          });
                         },
                       );
                     },

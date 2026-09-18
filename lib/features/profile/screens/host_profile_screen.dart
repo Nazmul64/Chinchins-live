@@ -850,50 +850,86 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                           ),
                           const SizedBox(height: 14),
 
-                          // 1. Close Friends (0/3) with Armchair / Sofa Icons (Screenshot 3)
+                          // 1. Close Friends (0/3) 3 Cards matching Screenshot 3
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: AppColors.cardDark,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppColors.cardBorder, width: 0.8),
+                              color: const Color(0xFF1B1828),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.06),
+                                width: 0.8,
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                Row(
                                   children: [
-                                    Row(
-                                      children: [
-                                        Text(
-                                          'Close Friends (0/3)',
-                                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                                        ),
-                                        SizedBox(width: 4),
-                                        Icon(Icons.help_outline_rounded, color: AppColors.textMuted, size: 16),
-                                      ],
+                                    const Text(
+                                      'Close Friends (0/3)',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Icon(
+                                      Icons.help_outline_rounded,
+                                      color: Colors.white.withValues(alpha: 0.4),
+                                      size: 15,
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 12),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                                   children: List.generate(
                                     3,
-                                    (index) => Container(
-                                      width: 58,
-                                      height: 58,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: const Color(0xFF262238),
-                                        border: Border.all(color: AppColors.cardBorder),
-                                      ),
-                                      child: const Center(
-                                        child: Icon(
-                                          Icons.chair_rounded,
-                                          color: Color(0xFF9E9E9E),
-                                          size: 26,
+                                    (index) => Expanded(
+                                      child: Container(
+                                        margin: EdgeInsets.only(
+                                          left: index == 0 ? 0 : 4,
+                                          right: index == 2 ? 0 : 4,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF272438), // Distinct rounded card
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: Colors.white.withValues(alpha: 0.05),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Container(
+                                              width: 44,
+                                              height: 44,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: const Color(0xFF3A354D),
+                                              ),
+                                              child: const Center(
+                                                child: Icon(
+                                                  Icons.chair_rounded,
+                                                  color: Colors.white70,
+                                                  size: 22,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            const Text(
+                                              'Waiting for\nsomeone',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: Colors.white54,
+                                                fontSize: 10.5,
+                                                height: 1.25,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),
@@ -909,9 +945,9 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                             width: double.infinity,
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: AppColors.cardDark,
+                              color: const Color(0xFF1B1828),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppColors.cardBorder, width: 0.8),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.8),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -922,7 +958,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  model.intro,
+                                  model.intro.isNotEmpty ? model.intro : 'Suggest good friends',
                                   style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
                                 ),
                               ],
@@ -930,64 +966,14 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                           ),
                           const SizedBox(height: 12),
 
-                          // 3. Interest tag (Screenshot 4)
-                          if (model.tags.isNotEmpty)
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: AppColors.cardDark,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: AppColors.cardBorder, width: 0.8),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Interest tag',
-                                    style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: model.tags
-                                        .map(
-                                          (tag) => Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF262A3D),
-                                              borderRadius: BorderRadius.circular(20),
-                                              border: Border.all(
-                                                color: const Color(0xFF3B4261),
-                                                width: 0.8,
-                                              ),
-                                            ),
-                                            child: Text(
-                                              tag,
-                                              style: const TextStyle(
-                                                color: Color(0xFFE2E8F0),
-                                                fontSize: 12.5,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                        )
-                                        .toList(),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          if (model.tags.isNotEmpty) const SizedBox(height: 12),
-
-                          // 4. Speaking Language (Screenshot 4)
+                          // 3. Speaking Language (Screenshot 4)
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: AppColors.cardDark,
+                              color: const Color(0xFF1B1828),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppColors.cardBorder, width: 0.8),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.8),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1000,15 +986,15 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                                 Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
-                                  children: model.languages
+                                  children: (model.languages.isNotEmpty ? model.languages : ['Urdu', 'English'])
                                       .map(
                                         (lang) => Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFF262A3D),
+                                            color: const Color(0xFF272438),
                                             borderRadius: BorderRadius.circular(20),
                                             border: Border.all(
-                                              color: const Color(0xFF3B4261),
+                                              color: Colors.white.withValues(alpha: 0.08),
                                               width: 0.8,
                                             ),
                                           ),
@@ -1029,7 +1015,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                           ),
                           const SizedBox(height: 14),
 
-                          // 5. Honor (Charm Level & Top Fans Badges - Screenshot 3)
+                          // 4. Honor (Charm Level & Top Fans Badges - Screenshot 3)
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -1037,7 +1023,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                                 padding: EdgeInsets.only(left: 4, bottom: 8),
                                 child: Text(
                                   'Honor',
-                                  style: TextStyle(color: AppColors.textMuted, fontSize: 13, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold),
                                 ),
                               ),
                               _buildCharmAndFansRow(model),
@@ -1045,17 +1031,17 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                           ),
                           const SizedBox(height: 14),
 
-                          // 6. Gifts Received > Card (Screenshot 3)
+                          // 5. Gifts Received > Card (Screenshot 1 & 2)
                           GiftsReceivedCard(userId: model.id, model: model),
                           const SizedBox(height: 14),
 
-                          // 7. Gallery Card
+                          // 6. Gallery Card matching Screenshot 1 & 2
                           _buildGallerySection(),
                           const SizedBox(height: 14),
                         ],
                       ),
 
-                      // Floating Emitting Love Hearts Stack (Single clean heart emission)
+                      // Floating Emitting Love Hearts Stack
                       Positioned(
                         top: 24,
                         right: 24,
@@ -1114,7 +1100,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
             ),
           ),
 
-          // Sticky Bottom Bar matching Screenshot 3: (Hi Button + Video Call 1800/min)
+          // Sticky Bottom Bar matching Screenshot 1 & 2: (Circular Hi Button + Video Call Pill Button)
           Positioned(
             bottom: 0,
             left: 0,
@@ -1122,109 +1108,104 @@ class _HostProfileScreenState extends State<HostProfileScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: AppColors.surfaceDark.withValues(alpha: 0.95),
-                border: const Border(
-                  top: BorderSide(color: AppColors.cardBorder, width: 0.8),
+                color: const Color(0xFF0F0E18).withValues(alpha: 0.95),
+                border: Border(
+                  top: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 0.8),
                 ),
               ),
               child: SafeArea(
                 top: false,
                 child: Row(
                   children: [
-                    // Hi Button (Circular purple pill on left)
+                    // Hi Button (Circular purple/lavender button on left matching Screenshot 1 & 2)
                     GestureDetector(
                       onTap: _sendHiGreeting,
                       child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: const BoxDecoration(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [Color(0xFFCE93D8), Color(0xFF8E24AA)],
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFBA68C8), Color(0xFF8E24AA)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF8E24AA).withValues(alpha: 0.4),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
                         child: const Center(
                           child: Text(
                             'Hi',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 15,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
+                              fontStyle: FontStyle.italic,
                             ),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
 
-                    // Audio Call Button (Circular green icon)
-                    GestureDetector(
-                      onTap: _startAudioCall,
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: const Color(0xFF10B981).withValues(alpha: 0.2),
-                          border: Border.all(color: const Color(0xFF10B981), width: 1.5),
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.call_rounded,
-                            color: Color(0xFF10B981),
-                            size: 22,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Video Call Action Bar (1800/min) matching Screenshot 3
+                    // Video Call Action Bar (Phone icon + Video Call + 💎 2700/min) matching Screenshot 1 & 2
                     Expanded(
                       child: GestureDetector(
                         onTap: _startVideoCall,
                         child: Container(
-                          height: 50,
+                          height: 52,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF8E24AA), Color(0xFFE91E63)],
+                              colors: [Color(0xFF8E24AA), Color(0xFFD81B60), Color(0xFFE91E63)],
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
                             ),
-                            borderRadius: BorderRadius.circular(25),
+                            borderRadius: BorderRadius.circular(26),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.neonPink.withValues(alpha: 0.4),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
+                                color: const Color(0xFFE91E63).withValues(alpha: 0.45),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
                               ),
                             ],
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.videocam_rounded, color: Colors.white, size: 24),
+                              const Icon(Icons.call_rounded, color: Colors.white, size: 22),
                               const SizedBox(width: 8),
-                              const Text(
-                                'Video Call',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 14),
-                              const SizedBox(width: 2),
-                              Text(
-                                '${model.pricePerMin}/min',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Video Call',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.diamond_rounded, color: Color(0xFFFFD54F), size: 12),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        '${model.pricePerMin > 0 ? model.pricePerMin : 2700}/min',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -1244,37 +1225,50 @@ class _HostProfileScreenState extends State<HostProfileScreen>
   Widget _buildCharmAndFansRow(ModelProfile model) {
     return Row(
       children: [
-        // Left: Charm Level Badge
+        // Left: Charm Level Badge matching Screenshot 1 & 3
         Expanded(
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF381F38), Color(0xFF24162C)],
+                colors: [Color(0xFF2C1935), Color(0xFF1B1325)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFFFFB300).withValues(alpha: 0.35),
+                color: const Color(0xFFFFB300).withValues(alpha: 0.3),
                 width: 0.8,
               ),
             ),
             child: Row(
               children: [
+                // Diamond icon in gold rounded diamond box
                 Container(
-                  padding: const EdgeInsets.all(6),
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFB300).withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFFD54F), Color(0xFFFF8F00)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF8F00).withValues(alpha: 0.4),
+                        blurRadius: 6,
+                      ),
+                    ],
                   ),
-                  child: const Icon(
-                    Icons.diamond_rounded,
-                    color: Color(0xFFFFB300),
-                    size: 18,
+                  child: const Center(
+                    child: Text(
+                      '💎',
+                      style: TextStyle(fontSize: 18),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1283,29 +1277,31 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                       const Text(
                         'Charm Level',
                         style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF9C27B0).withValues(alpha: 0.6),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFAB47BC), Color(0xFF7B1FA2)],
+                          ),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.favorite, color: Colors.pinkAccent, size: 8),
-                            const SizedBox(width: 2),
+                            const Icon(Icons.favorite, color: Color(0xFFFF80AB), size: 10),
+                            const SizedBox(width: 3),
                             Text(
-                              _giftsData?.charmLevel.levelTag ?? 'Lv${model.level}',
+                              _giftsData?.charmLevel.levelTag ?? 'Lv${model.level > 0 ? model.level : 6}',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 9.5,
+                                fontSize: 10,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -1321,21 +1317,21 @@ class _HostProfileScreenState extends State<HostProfileScreen>
         ),
         const SizedBox(width: 10),
 
-        // Right: Top Fans Badge
+        // Right: Top Fans Badge matching Screenshot 1 & 3
         Expanded(
           child: GestureDetector(
             onTap: () => _showTopFansSheet(model),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF221F45), Color(0xFF16152C)],
+                  colors: [Color(0xFF1E2248), Color(0xFF141732)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: const Color(0xFF6366F1).withValues(alpha: 0.35),
+                  color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
                   width: 0.8,
                 ),
               ),
@@ -1345,11 +1341,11 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                     clipBehavior: Clip.none,
                     children: [
                       Container(
-                        width: 32,
-                        height: 32,
+                        width: 36,
+                        height: 36,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFFFD700), width: 1),
+                          border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
                         ),
                         child: ClipOval(
                           child: (_giftsData?.topFan.avatarUrl.isNotEmpty == true)
@@ -1357,17 +1353,22 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                                   imageUrl: _giftsData!.topFan.avatarUrl,
                                   fit: BoxFit.cover,
                                 )
-                              : const Icon(Icons.person, color: Colors.white70, size: 20),
+                              : (model.avatarUrl.isNotEmpty
+                                  ? CachedImageLoader(
+                                      imageUrl: model.avatarUrl,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : const Icon(Icons.person, color: Colors.white70, size: 20)),
                         ),
                       ),
                       const Positioned(
                         top: -6,
                         left: -2,
-                        child: Text('👑', style: TextStyle(fontSize: 10)),
+                        child: Text('👑', style: TextStyle(fontSize: 12)),
                       ),
                     ],
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1376,19 +1377,21 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                         const Text(
                           'Top Fans',
                           style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 3),
                         Text(
-                          _giftsData?.topFan.name ?? model.topFan,
+                          _giftsData?.topFan.name.isNotEmpty == true
+                              ? _giftsData!.topFan.name
+                              : (model.topFan.isNotEmpty ? model.topFan : 'SUPER_BOY...'),
                           style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFFD54F),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1407,19 +1410,26 @@ class _HostProfileScreenState extends State<HostProfileScreen>
   Widget _buildGallerySection() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1730),
-        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF2E1722), // Warm copper/pink glow
+            Color(0xFF1A1325), // Dark purple
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
+          color: const Color(0xFFF43F5E).withValues(alpha: 0.25),
           width: 0.8,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Gallery Header with Crystal Crown Artwork
+          // Gallery Header with Glowing Crystal Crown matching Screenshot 1 & 2
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1431,85 +1441,57 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              Row(
-                children: [
-                  const Icon(Icons.auto_awesome, color: Color(0xFFFFD54F), size: 14),
-                  const SizedBox(width: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFEC4899), Color(0xFF8B5CF6)],
-                      ),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Text(
-                      '👑 VIP Crown',
-                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
+              // Crystal glowing crown artwork
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                child: const Text('👑✨', style: TextStyle(fontSize: 22)),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
           // Avatar Frame 1
-          Row(
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFFE040FB),
-                    width: 2.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFE040FB).withValues(alpha: 0.4),
-                      blurRadius: 10,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.favorite_rounded,
-                    color: Color(0xFFF48FB1),
-                    size: 26,
-                  ),
-                ),
+          const Text(
+            'Avatar Frame 1',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Rose Ribbon Frame Preview
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: const Color(0xFFF472B6),
+                width: 3,
               ),
-              const SizedBox(width: 14),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Avatar Frame 1',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Exclusive Rose Ribbon Frame',
-                    style: TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFF472B6).withValues(alpha: 0.5),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.person_rounded,
+                color: Colors.white30,
+                size: 28,
               ),
-            ],
+            ),
           ),
         ],
       ),
     );
   }
+
 }
 
 // Helper Widget for Floating Rising Love Reaction Particles matching Screenshot 3

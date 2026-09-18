@@ -151,7 +151,7 @@ class LiveStreamingApiService {
   }
 
   /// 4. Audience joins a live stream
-  /// Calls POST /api/live/join
+  /// Calls POST /api/live/join or POST /api/stream/join
   static Future<Map<String, dynamic>?> joinLiveStream({
     dynamic roomId,
     dynamic liveStreamId,
@@ -163,7 +163,6 @@ class LiveStreamingApiService {
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse(ApiConstants.liveJoin);
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -174,20 +173,34 @@ class LiveStreamingApiService {
       final payload = {
         'room_id': id,
         'live_stream_id': id,
+        'stream_id': id,
         'live_id': id,
         'id': id,
       };
 
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 10));
+      final endpoints = [
+        ApiConstants.liveJoin,
+        '${ApiConstants.baseUrl}/stream/join',
+        '${ApiConstants.baseUrl}/live-stream/join',
+        '${ApiConstants.baseUrl}/v1/stream/join',
+      ];
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final decoded = jsonDecode(response.body);
-        if (decoded['status'] == true || decoded['success'] == true || decoded['status'] == 'success') {
-          return decoded['data'] is Map
-              ? Map<String, dynamic>.from(decoded['data'] as Map)
-              : Map<String, dynamic>.from(decoded as Map);
+      for (final endpoint in endpoints) {
+        try {
+          final response = await http
+              .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 8));
+
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final decoded = jsonDecode(response.body);
+            if (decoded['status'] == true || decoded['success'] == true || decoded['status'] == 'success') {
+              return decoded['data'] is Map
+                  ? Map<String, dynamic>.from(decoded['data'] as Map)
+                  : Map<String, dynamic>.from(decoded as Map);
+            }
+          }
+        } catch (_) {
+          continue;
         }
       }
     } catch (e, st) {
@@ -231,7 +244,7 @@ class LiveStreamingApiService {
   }
 
   /// 5. Send public live comment message
-  /// Calls POST /api/live/send-message (Aliases: /api/live/message, /api/live/comment)
+  /// Calls POST /api/live/send-message, POST /api/live/comment, POST /api/v1/stream/comment
   static Future<Map<String, dynamic>?> sendLiveMessage({
     dynamic roomId,
     dynamic liveStreamId,
@@ -246,7 +259,6 @@ class LiveStreamingApiService {
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse(ApiConstants.liveSendMessage);
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -257,33 +269,37 @@ class LiveStreamingApiService {
       final payload = {
         'room_id': id,
         'live_stream_id': id,
+        'stream_id': id,
         'live_id': id,
         'message': message,
         'type': type,
         if (giftId != null) 'gift_id': giftId,
       };
 
-      var response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 6));
+      final endpoints = [
+        ApiConstants.liveSendMessage,
+        '${ApiConstants.baseUrl}/live/comment',
+        '${ApiConstants.baseUrl}/v1/stream/comment',
+        ApiConstants.liveComment,
+        ApiConstants.liveStreamComment,
+        ApiConstants.liveMessage,
+      ];
 
-      if (response.statusCode == 404) {
-        response = await http
-            .post(Uri.parse(ApiConstants.liveMessage), headers: headers, body: jsonEncode(payload))
-            .timeout(const Duration(seconds: 6));
-      }
+      for (final endpoint in endpoints) {
+        try {
+          final response = await http
+              .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 6));
 
-      if (response.statusCode == 404) {
-        response = await http
-            .post(Uri.parse(ApiConstants.liveComment), headers: headers, body: jsonEncode(payload))
-            .timeout(const Duration(seconds: 6));
-      }
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final decoded = jsonDecode(response.body);
-        return decoded['data'] is Map
-            ? Map<String, dynamic>.from(decoded['data'] as Map)
-            : Map<String, dynamic>.from(decoded as Map);
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final decoded = jsonDecode(response.body);
+            return decoded['data'] is Map
+                ? Map<String, dynamic>.from(decoded['data'] as Map)
+                : Map<String, dynamic>.from(decoded as Map);
+          }
+        } catch (_) {
+          continue;
+        }
       }
     } catch (e, st) {
       AppLogger.error('SendLiveMessageError', e, st);
@@ -292,7 +308,7 @@ class LiveStreamingApiService {
   }
 
   /// 6. Send virtual gift in live stream (50/50 revenue split)
-  /// Calls POST /api/live/send-gift (Aliases: /api/live/gift)
+  /// Calls POST /api/live/send-gift, POST /api/live/gift, POST /api/v1/stream/send-gift
   static Future<Map<String, dynamic>?> sendLiveGift({
     dynamic roomId,
     dynamic liveStreamId,
@@ -306,7 +322,6 @@ class LiveStreamingApiService {
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse(ApiConstants.liveSendGift);
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -317,24 +332,33 @@ class LiveStreamingApiService {
       final payload = {
         'room_id': id,
         'live_stream_id': id,
+        'stream_id': id,
         'live_id': id,
         'gift_id': giftId,
         'quantity': quantity,
       };
 
-      var response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 8));
+      final endpoints = [
+        ApiConstants.liveSendGift,
+        '${ApiConstants.baseUrl}/live/gift',
+        '${ApiConstants.baseUrl}/v1/stream/send-gift',
+        ApiConstants.liveGift,
+        ApiConstants.liveStreamSendGift,
+      ];
 
-      if (response.statusCode == 404) {
-        response = await http
-            .post(Uri.parse(ApiConstants.liveGift), headers: headers, body: jsonEncode(payload))
-            .timeout(const Duration(seconds: 8));
-      }
+      for (final endpoint in endpoints) {
+        try {
+          final response = await http
+              .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 8));
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final decoded = jsonDecode(response.body);
-        return decoded is Map<String, dynamic> ? decoded : Map<String, dynamic>.from(decoded as Map);
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final decoded = jsonDecode(response.body);
+            return decoded is Map<String, dynamic> ? decoded : Map<String, dynamic>.from(decoded as Map);
+          }
+        } catch (_) {
+          continue;
+        }
       }
     } catch (e, st) {
       AppLogger.error('SendLiveGiftError', e, st);

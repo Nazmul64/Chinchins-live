@@ -92,29 +92,42 @@ class LiveGiftReverbService {
         await init();
       }
 
-      final channelName = 'live-stream.$cleanStreamId';
-      debugPrint('[LiveGiftReverbService] Subscribing to $channelName');
+      final channelNames = [
+        'stream.$cleanStreamId',
+        'presence-stream.$cleanStreamId',
+        'live-stream.$cleanStreamId',
+        'live-room.$cleanStreamId',
+      ];
 
-      if (!_subscribedChannels.containsKey(channelName)) {
-        final channel = _pusherClient!.publicChannel(channelName);
-        _subscribedChannels[channelName] = channel;
-        _channelSubscriptions[channelName] = [];
+      for (final channelName in channelNames) {
+        debugPrint('[LiveGiftReverbService] Subscribing to $channelName');
 
-        channel.subscribeIfNotUnsubscribed();
+        if (!_subscribedChannels.containsKey(channelName)) {
+          final channel = _pusherClient!.publicChannel(channelName);
+          _subscribedChannels[channelName] = channel;
+          _channelSubscriptions[channelName] = [];
 
-        // Bind to "gift.received"
-        final sub1 = channel.bind('gift.received').listen((event) {
-          _processEventData(event.data, cleanStreamId);
-        });
-        _channelSubscriptions[channelName]!.add(sub1);
+          channel.subscribeIfNotUnsubscribed();
 
-        // Bind to "LiveGiftSentEvent" class name fallback
-        final sub2 = channel.bind('LiveGiftSentEvent').listen((event) {
-          _processEventData(event.data, cleanStreamId);
-        });
-        _channelSubscriptions[channelName]!.add(sub2);
-      } else {
-        _subscribedChannels[channelName]!.subscribeIfNotUnsubscribed();
+          // Bind to "gift.received" and variations
+          final sub1 = channel.bind('gift.received').listen((event) {
+            _processEventData(event.data, cleanStreamId);
+          });
+          _channelSubscriptions[channelName]!.add(sub1);
+
+          final sub2 = channel.bind('.gift.received').listen((event) {
+            _processEventData(event.data, cleanStreamId);
+          });
+          _channelSubscriptions[channelName]!.add(sub2);
+
+          // Bind to "LiveGiftSentEvent" class name fallback
+          final sub3 = channel.bind('LiveGiftSentEvent').listen((event) {
+            _processEventData(event.data, cleanStreamId);
+          });
+          _channelSubscriptions[channelName]!.add(sub3);
+        } else {
+          _subscribedChannels[channelName]!.subscribeIfNotUnsubscribed();
+        }
       }
     } catch (e, st) {
       AppLogger.error('LiveGiftSubscribeError: streamId=$cleanStreamId', e, st);
@@ -123,25 +136,33 @@ class LiveGiftReverbService {
 
   /// Unsubscribe from live room
   Future<void> unsubscribeFromLiveRoom(String streamId) async {
-    final cleanStreamId = streamId.replaceAll('live-stream.', '');
+    final cleanStreamId = streamId.replaceAll('live-stream.', '').replaceAll('presence-stream.', '').replaceAll('stream.', '');
     _roomListeners.remove(cleanStreamId);
 
     if (_activeStreamId == cleanStreamId) {
       _activeStreamId = null;
     }
 
-    final channelName = 'live-stream.$cleanStreamId';
-    if (_channelSubscriptions.containsKey(channelName)) {
-      for (final sub in _channelSubscriptions[channelName]!) {
-        await sub.cancel();
-      }
-      _channelSubscriptions.remove(channelName);
-    }
+    final channelNames = [
+      'stream.$cleanStreamId',
+      'presence-stream.$cleanStreamId',
+      'live-stream.$cleanStreamId',
+      'live-room.$cleanStreamId',
+    ];
 
-    if (_subscribedChannels.containsKey(channelName)) {
-      _subscribedChannels[channelName]!.unsubscribe();
-      _subscribedChannels.remove(channelName);
-      debugPrint('[LiveGiftReverbService] Unsubscribed from $channelName');
+    for (final channelName in channelNames) {
+      if (_channelSubscriptions.containsKey(channelName)) {
+        for (final sub in _channelSubscriptions[channelName]!) {
+          await sub.cancel();
+        }
+        _channelSubscriptions.remove(channelName);
+      }
+
+      if (_subscribedChannels.containsKey(channelName)) {
+        _subscribedChannels[channelName]!.unsubscribe();
+        _subscribedChannels.remove(channelName);
+        debugPrint('[LiveGiftReverbService] Unsubscribed from $channelName');
+      }
     }
   }
 
