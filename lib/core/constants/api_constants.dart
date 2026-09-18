@@ -177,6 +177,9 @@ class ApiConstants {
   static String get liveStreamSignal => '$baseUrl/v1/stream/signal';
   static String get liveMuteToggle => '$baseUrl/live/mute-toggle';
   static String get liveToggleMute => '$baseUrl/live/toggle-mute';
+  static String get liveLike => '$baseUrl/live/like';
+  static String get liveViewers => '$baseUrl/live/viewers';
+  static String get liveStreamers => '$baseUrl/live/streamers';
 
   // Agora Token Refresh Endpoints
   static String get agoraTokenRefresh => '$baseUrl/agora/token/refresh';

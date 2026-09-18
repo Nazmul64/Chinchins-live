@@ -557,4 +557,68 @@ class LiveStreamingApiService {
     }
     return null;
   }
+
+  /// 10. Send Live Like Reaction
+  /// Calls POST /api/live/like
+  static Future<Map<String, dynamic>?> sendLiveLike({
+    required dynamic roomId,
+    int count = 1,
+  }) async {
+    try {
+      final id = roomId.toString();
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.liveLike);
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      final payload = {
+        'room_id': id,
+        'stream_id': id,
+        'live_id': id,
+        'count': count,
+      };
+
+      final response = await http
+          .post(url, headers: headers, body: jsonEncode(payload))
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body);
+        return decoded is Map<String, dynamic> ? decoded : Map<String, dynamic>.from(decoded as Map);
+      }
+    } catch (e, st) {
+      AppLogger.error('SendLiveLikeError', e, st);
+    }
+    return null;
+  }
+
+  /// 11. Get Live Viewers list
+  /// Calls GET /api/live/viewers
+  static Future<List<Map<String, dynamic>>> getLiveViewers({required dynamic roomId}) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse('${ApiConstants.liveViewers}?room_id=$roomId');
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is List) {
+          return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+        if (decoded is Map && decoded['data'] is List) {
+          return (decoded['data'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      }
+    } catch (e, st) {
+      AppLogger.error('GetLiveViewersError', e, st);
+    }
+    return [];
+  }
 }

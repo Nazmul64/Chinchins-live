@@ -111,6 +111,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   StreamSubscription? _streamEndedSub;
   StreamSubscription? _cohostStatusSub;
   StreamSubscription? _muteSub;
+  StreamSubscription? _likeSub;
+  StreamSubscription? _viewerSub;
   bool _isAudioMuted = false;
 
   @override
@@ -154,6 +156,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     _streamEndedSub?.cancel();
     _cohostStatusSub?.cancel();
     _muteSub?.cancel();
+    _likeSub?.cancel();
+    _viewerSub?.cancel();
 
     if (PiPCallOverlay.isMinimized && _activeSession != null) {
       debugPrint('[LiveRoomScreen] Preserving RTC engine in background for PiP');
@@ -501,6 +505,61 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         _showStreamEndedDialog(data);
       }
     });
+
+    // 6. Real-Time Live Likes / Floating Hearts (.live.like)
+    _likeSub = signaling.onLiveLike.listen((data) {
+      if (mounted) {
+        final totalLikes = data['likes_count'] ?? data['total_likes'];
+        setState(() {
+          if (totalLikes != null) {
+            _likeCount = (totalLikes is int) ? totalLikes : (int.tryParse('$totalLikes') ?? _likeCount);
+          } else {
+            _likeCount++;
+          }
+          final heart = LiveHeart(
+            key: UniqueKey(),
+            left: 20.0 + _rnd.nextDouble() * 60.0,
+            color: [
+              Colors.pinkAccent,
+              Colors.redAccent,
+              Colors.purpleAccent,
+              Colors.amber,
+              Colors.cyanAccent,
+            ][_rnd.nextInt(5)],
+          );
+          _hearts.add(heart);
+          Future.delayed(const Duration(milliseconds: 1800), () {
+            if (mounted) {
+              setState(() => _hearts.removeWhere((h) => h.key == heart.key));
+            }
+          });
+        });
+      }
+    });
+
+    // 7. Real-Time Live Viewer Count Updated (.viewer.updated)
+    _viewerSub = signaling.onViewerCountUpdated.listen((data) {
+      if (mounted) {
+        final count = data['viewer_count'] ?? data['count'];
+        final action = data['action']?.toString();
+        final userObj = data['user'];
+        final userName = (userObj is Map ? (userObj['display_name'] ?? userObj['name']) : null) ?? data['user_name'];
+
+        setState(() {
+          if (count != null) {
+            _viewerCount = (count is int) ? count : (int.tryParse('$count') ?? _viewerCount);
+          }
+          if (action == 'joined' && userName != null && userName.isNotEmpty) {
+            _liveComments.add({
+              'user': 'System',
+              'text': '🌟 $userName joined the live stream',
+              'color': const Color(0xFF69F0AE),
+            });
+            _scrollToBottom();
+          }
+        });
+      }
+    });
   }
 
   void _showCoHostInviteReceivedDialog(Map<String, dynamic> data) {
@@ -678,6 +737,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       _likeCount++;
       _hearts.add(heart);
     });
+
+    if (_activeLiveId != null) {
+      LiveStreamingApiService.sendLiveLike(roomId: _activeLiveId, count: 1);
+    }
 
     Future.delayed(const Duration(milliseconds: 1800), () {
       if (mounted) {

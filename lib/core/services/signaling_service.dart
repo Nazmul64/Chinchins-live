@@ -78,6 +78,10 @@ class SignalingService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _directMessageReceivedController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _liveLikeController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _viewerCountUpdatedController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get onIncomingCall => _incomingCallController.stream;
   Stream<Map<String, dynamic>> get onCallAccepted => _callAcceptedController.stream;
@@ -99,6 +103,8 @@ class SignalingService {
   Stream<Map<String, dynamic>> get onCoHostStatusChanged => _cohostStatusController.stream;
   Stream<Map<String, dynamic>> get onWebRTCSignal => _webRTCSignalController.stream;
   Stream<Map<String, dynamic>> get onAudioMuteToggled => _audioMuteController.stream;
+  Stream<Map<String, dynamic>> get onLiveLike => _liveLikeController.stream;
+  Stream<Map<String, dynamic>> get onViewerCountUpdated => _viewerCountUpdatedController.stream;
 
   EndpointAuthorizableChannelTokenAuthorizationDelegate<PrivateChannelAuthorizationData>
       _getAuthDelegate() {
@@ -462,6 +468,28 @@ class SignalingService {
         cleanName == 'live.ended' ||
         lowerName.contains('streamended')) {
       _liveStreamEndedController.add(data);
+      return;
+    }
+
+    // 10. Live Like / Floating Heart Reaction (LiveLikeSent -> live.like)
+    if (cleanName == 'live.like' ||
+        cleanName == 'LiveLikeSent' ||
+        cleanName.endsWith('LiveLikeSent') ||
+        cleanName == 'LiveLikeEvent' ||
+        lowerName.contains('livelike') ||
+        lowerName == 'live.like') {
+      _liveLikeController.add(data);
+      return;
+    }
+
+    // 11. Live Viewer Count Updated (LiveViewerCountUpdated -> viewer.updated)
+    if (cleanName == 'viewer.updated' ||
+        cleanName == 'LiveViewerCountUpdated' ||
+        cleanName.endsWith('LiveViewerCountUpdated') ||
+        cleanName == 'ViewerCountUpdated' ||
+        lowerName.contains('viewercount') ||
+        lowerName == 'viewer.updated') {
+      _viewerCountUpdatedController.add(data);
       return;
     }
 
