@@ -201,7 +201,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     } catch (_) {}
   }
 
-  Future<void> _initLiveRoom() async {
+    Future<void> _initLiveRoom() async {
     try {
       final savedUser = await AuthApiService.getSavedUser();
       final myIdRaw = savedUser?['id'] ?? savedUser?['account_id'];
@@ -222,7 +222,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
         if (session != null) {
           _activeLiveId = session['live_stream_id'] ?? session['id'] ?? _activeLiveId;
-          _activeChannelName = session['channel_name']?.toString() ?? _activeChannelName;
+          _activeChannelName = session['channel_name']?.toString() ?? 
+                               session['room_name']?.toString() ?? 
+                               _activeChannelName;
 
           liveKitToken = session['livekit_token']?.toString() ??
               session['token']?.toString() ??
@@ -241,49 +243,63 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         }
       } else {
         // 2. Audience joins live broadcast
-        if (_activeLiveId != null) {
-          final joinData = await LiveStreamingApiService.joinLiveStream(liveStreamId: _activeLiveId);
-          if (joinData != null) {
-            _activeChannelName = joinData['channel_name']?.toString() ?? _activeChannelName;
-            _viewerCount = joinData['viewer_count'] is int ? joinData['viewer_count'] as int : _viewerCount;
+        final targetStreamId = _activeLiveId ?? widget.channelName ?? widget.host.id;
+        final joinData = await LiveStreamingApiService.joinLiveStream(liveStreamId: targetStreamId);
+        if (joinData != null) {
+          _activeLiveId = joinData['live_stream_id'] ?? joinData['id'] ?? _activeLiveId;
+          _activeChannelName = joinData['channel_name']?.toString() ?? 
+                               joinData['room_name']?.toString() ?? 
+                               _activeChannelName;
+          _viewerCount = joinData['viewer_count'] is int ? joinData['viewer_count'] as int : _viewerCount;
 
-            liveKitToken = joinData['livekit_token']?.toString() ??
-                joinData['token']?.toString() ??
-                joinData['session']?['livekit']?['token']?.toString() ??
-                '';
-            liveKitUrl = joinData['livekit_url']?.toString() ??
-                joinData['session']?['livekit']?['url']?.toString() ??
-                liveKitUrl;
+          liveKitToken = joinData['livekit_token']?.toString() ??
+              joinData['token']?.toString() ??
+              joinData['session']?['livekit']?['token']?.toString() ??
+              '';
+          liveKitUrl = joinData['livekit_url']?.toString() ??
+              joinData['session']?['livekit']?['url']?.toString() ??
+              liveKitUrl;
 
-            final agoraData = joinData['session']?['agora'] ?? joinData['agora'];
-            if (agoraData is Map) {
-              agoraAppId = agoraData['app_id']?.toString() ?? agoraAppId;
-              agoraToken = agoraData['token']?.toString() ?? '';
-              _myUid = agoraData['uid'] is int ? agoraData['uid'] : (int.tryParse(agoraData['uid']?.toString() ?? '') ?? _myUid);
-            }
+          final agoraData = joinData['session']?['agora'] ?? joinData['agora'];
+          if (agoraData is Map) {
+            agoraAppId = agoraData['app_id']?.toString() ?? agoraAppId;
+            agoraToken = agoraData['token']?.toString() ?? '';
+            _myUid = agoraData['uid'] is int ? agoraData['uid'] : (int.tryParse(agoraData['uid']?.toString() ?? '') ?? _myUid);
           }
         }
       }
 
       // If LiveKit token is not in start/join payload, generate from POST /api/live/get-token
-      if (liveKitToken.isEmpty && _activeChannelName.isNotEmpty) {
+      if (liveKitToken.isEmpty) {
+        final queryRoom = _activeChannelName.isNotEmpty 
+            ? _activeChannelName 
+            : (widget.channelName ?? widget.host.id.toString());
+
         final tokenRes = await LiveStreamingApiService.generateLiveKitToken(
-          roomName: _activeChannelName,
+          roomName: queryRoom,
           role: widget.isHost ? 'host' : 'viewer',
         );
         if (tokenRes != null) {
-          liveKitToken = tokenRes['token']?.toString() ?? '';
+          liveKitToken = tokenRes['livekit_token']?.toString() ?? tokenRes['token']?.toString() ?? '';
           liveKitUrl = tokenRes['livekit_url']?.toString() ?? liveKitUrl;
+          if (tokenRes['channel_name'] != null && tokenRes['channel_name'].toString().isNotEmpty) {
+            _activeChannelName = tokenRes['channel_name'].toString();
+          } else if (tokenRes['room_name'] != null && tokenRes['room_name'].toString().isNotEmpty) {
+            _activeChannelName = tokenRes['room_name'].toString();
+          }
         }
       }
 
-      // 3. Connect LiveKit RTC Engine
+      // 3. Connect LiveKit RTC Engine immediately
       if (liveKitToken.isNotEmpty) {
+        debugPrint('[LiveRoomScreen] Connecting LiveKit for room: $_activeChannelName');
         await _setupLiveKitRTC(
           token: liveKitToken,
           serverUrl: liveKitUrl,
           isHost: widget.isHost,
         );
+      } else {
+        debugPrint('[LiveRoomScreen] Warning: LiveKit token is empty!');
       }
 
       // 4. Setup Agora RTC as fallback/dual engine if token available

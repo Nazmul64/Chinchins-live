@@ -418,27 +418,55 @@ class LiveStreamingApiService {
   }) async {
     try {
       final token = await AuthApiService.getToken();
-      final url = Uri.parse(ApiConstants.liveGetToken);
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
+        if (userId != null) 'X-User-Id': userId,
       };
 
       final payload = {
         'room_name': roomName,
+        'channel_name': roomName,
+        'room_id': roomName,
+        'live_stream_id': roomName,
         'role': role,
+        if (userId != null) 'user_id': userId,
       };
 
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 8));
+      final endpoints = [
+        ApiConstants.liveGetToken,
+        '${ApiConstants.baseUrl}/live/get-token',
+        '${ApiConstants.baseUrl}/live/token',
+      ];
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map) {
-          final data = decoded['data'] ?? decoded;
-          return Map<String, dynamic>.from(data as Map);
+      for (final endpoint in endpoints) {
+        try {
+          final response = await http
+              .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 8));
+
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final decoded = jsonDecode(response.body);
+            if (decoded is Map) {
+              final data = decoded['data'] is Map ? Map<String, dynamic>.from(decoded['data'] as Map) : Map<String, dynamic>.from(decoded);
+              if (data['token'] != null || data['livekit_token'] != null || decoded['token'] != null) {
+                return {
+                  'token': data['token'] ?? data['livekit_token'] ?? decoded['token'] ?? decoded['livekit_token'],
+                  'livekit_token': data['livekit_token'] ?? data['token'] ?? decoded['livekit_token'] ?? decoded['token'],
+                  'room_name': data['room_name'] ?? data['channel_name'] ?? decoded['room_name'] ?? roomName,
+                  'channel_name': data['channel_name'] ?? data['room_name'] ?? decoded['channel_name'] ?? roomName,
+                  'livekit_url': data['livekit_url'] ?? decoded['livekit_url'] ?? 'wss://chinchins.live/livekit',
+                  ...data,
+                };
+              }
+            }
+          }
+        } catch (_) {
+          continue;
         }
       }
     } catch (e, st) {
