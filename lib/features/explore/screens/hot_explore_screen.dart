@@ -15,6 +15,8 @@ import '../../call/screens/random_match_screen.dart';
 import '../../call/services/call_api_service.dart';
 import '../../call/services/streaming_service.dart';
 
+import '../../party/screens/party_rooms_screen.dart';
+
 class HotExploreScreen extends StatefulWidget {
   final VoidCallback? onMenuTap;
 
@@ -435,14 +437,18 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
   }
 
   Widget _buildCurrentTabBody() {
-    if (_selectedTabIndex == 2) {
+    if (_selectedTabIndex == 1) {
       return LiveFeedView(
         models: _models,
         onRefresh: _loadHomeFeed,
       );
     }
 
-    if (_selectedTabIndex == 1) {
+    if (_selectedTabIndex == 2) {
+      return const PartyRoomsScreen();
+    }
+
+    if (_selectedTabIndex == 3) {
       return MatchTabView(
         onStartMatching: () {
           Navigator.push(
