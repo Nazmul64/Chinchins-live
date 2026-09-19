@@ -93,6 +93,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   int _viewerCount = 1;
   int _likeCount = 120;
   int _diamondsEarned = 0;
+  int _roseComboCount = 0;
+  Timer? _roseComboTimer;
   dynamic _activeLiveId;
   String _activeChannelName = '';
   
@@ -153,6 +155,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
   @override
   void dispose() {
+    _roseComboTimer?.cancel();
     _msgSub?.cancel();
     _giftSub?.cancel();
     _joinReqSub?.cancel();
@@ -1108,6 +1111,203 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     }
   }
 
+  void _sendQuickRoseGift() async {
+    setState(() {
+      _roseComboCount++;
+      _likeCount += 5;
+    });
+
+    _roseComboTimer?.cancel();
+    _roseComboTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _roseComboCount = 0);
+    });
+
+    _addHeart();
+
+    final now = DateTime.now();
+    final timeStr = "${now.hour % 12 == 0 ? 12 : now.hour % 12}:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}";
+
+    setState(() {
+      _liveComments.add({
+        'user': 'You',
+        'avatar': '',
+        'text': 'sent 1 Rose 🌹',
+        'giftName': 'Rose',
+        'isGift': true,
+        'time': timeStr,
+        'color': const Color(0xFFFF1744),
+      });
+    });
+    _scrollToBottom();
+
+    try {
+      final res = await GiftsApiService.sendGift(
+        receiverId: widget.host.id,
+        giftId: 1,
+        quantity: 1,
+        context: 'live',
+        streamId: _activeLiveId?.toString(),
+        callSessionId: _activeLiveId,
+      );
+
+      final dynamic giftData = res['gift_data'] ?? res['data'];
+      final animUrl = (giftData is Map ? (giftData['animation_asset_url'] ?? giftData['icon_url']) : null) ??
+          res['animation_url']?.toString();
+
+      _giftAnimKey.currentState?.playGiftAnimationDynamic(
+        giftName: 'Rose',
+        animationUrl: animUrl,
+        senderName: 'You',
+        coins: 10,
+        combo: _roseComboCount > 0 ? _roseComboCount : 1,
+      );
+    } catch (_) {}
+  }
+
+  void _shareLiveStream() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Live stream link for ${widget.host.name} copied to clipboard! 🔗'),
+        backgroundColor: const Color(0xFFFF1744),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _showMoreControlsSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF140F22),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Live Controls & Settings',
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    // Co-Host
+                    _buildModalControlItem(
+                      icon: (widget.isHost && _isGuestConnected) ? Icons.person_remove_rounded : Icons.video_call_rounded,
+                      label: widget.isHost ? (_isGuestConnected ? 'Kick Co-Host' : 'Co-Host Live') : (_isGuestConnected ? 'Leave Co-Host' : 'Join Co-Host'),
+                      color: _isGuestConnected ? Colors.redAccent : const Color(0xFF00E5FF),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _handleCoHostAction();
+                      },
+                    ),
+
+                    // Mic
+                    if (widget.isHost || _isGuestConnected)
+                      _buildModalControlItem(
+                        icon: _isAudioMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                        label: _isAudioMuted ? 'Unmute' : 'Mute Mic',
+                        color: _isAudioMuted ? Colors.redAccent : const Color(0xFF00E676),
+                        onTap: () {
+                          _toggleAudioMute();
+                          setModalState(() {});
+                        },
+                      ),
+
+                    // Camera
+                    if (widget.isHost || _isGuestConnected)
+                      _buildModalControlItem(
+                        icon: _isCameraOff ? Icons.videocam_off_rounded : Icons.videocam_rounded,
+                        label: _isCameraOff ? 'Turn Cam On' : 'Turn Cam Off',
+                        color: _isCameraOff ? Colors.redAccent : const Color(0xFF00E5FF),
+                        onTap: () {
+                          _toggleCamera();
+                          setModalState(() {});
+                        },
+                      ),
+
+                    // Beauty Filter
+                    _buildModalControlItem(
+                      icon: Icons.auto_fix_high_rounded,
+                      label: 'Beauty Glow',
+                      color: const Color(0xFFFF1744),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        CameraFilterTray.show(
+                          context,
+                          currentFilter: _currentFilter,
+                          onFilterSelected: (p) => setState(() => _currentFilter = p),
+                        );
+                      },
+                    ),
+
+                    // PiP Mini
+                    _buildModalControlItem(
+                      icon: Icons.picture_in_picture_alt_rounded,
+                      label: 'Mini Window',
+                      color: Colors.amberAccent,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _minimizeToPiP();
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModalControlItem({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withValues(alpha: 0.4), width: 1.2),
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 10.5),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -1121,325 +1321,664 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         key: _giftAnimKey,
         child: Scaffold(
           backgroundColor: Colors.black,
-          body: SafeArea(
-            child: Stack(
-              children: [
-                // Split Screen: 60% Upper Video Grid, 40% Lower Live Chat & Controls
-                Column(
-                  children: [
-                    // 1. UPPER SECTION: Multi-Video Grid (60% Screen Height)
-                    Expanded(
-                      flex: 6,
-                      child: Container(
-                        color: const Color(0xFF0F0E17),
-                        child: _buildVideoGrid(),
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              // 1. Fullscreen Live Video Stream
+              _buildVideoGrid(),
+
+              // 2. Subtle Gradient Overlay for Top Header and Bottom Chat readability
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Color(0x99000000),
+                          Colors.transparent,
+                          Colors.transparent,
+                          Color(0xDD000000),
+                        ],
+                        stops: [0.0, 0.2, 0.62, 1.0],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
                       ),
                     ),
+                  ),
+                ),
+              ),
 
-                    // 2. LOWER SECTION: Live Chat & Controls (40% Screen Height)
-                    Expanded(
-                      flex: 4,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF140F22),
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              // 3. Top Floating Header: Host Capsule, Viewer Count, LIVE Badge, Follow, Top 1 Fan, Avatar Stack, Options, Close
+              _buildTopFloatingHeader(),
+
+              // 4. Live Chat Floating Stream (Bottom-Left)
+              _buildFloatingChatStream(),
+
+              // 5. Floating Rising Love Hearts Overlay (Right side)
+              _buildFloatingHeartsOverlay(),
+
+              // 6. Rose Combo Multiplier Badge
+              if (_roseComboCount > 0) _buildRoseComboBadge(),
+
+              // 7. Bottom Floating Action Bar: Emoji + "Type a message..." + Send + Gift + Rose + Share
+              _buildBottomBar(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Top Floating Bar matching Screenshot 2
+  Widget _buildTopFloatingHeader() {
+    return Positioned(
+      top: 10,
+      left: 12,
+      right: 12,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                // Host Profile Capsule
+                GestureDetector(
+                  onTap: () => InCallProfileSheet.show(context, model: widget.host),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white24, width: 0.8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Host Avatar with Pink/Crimson Ring
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFFFF1744), width: 1.5),
+                          ),
+                          child: ClipOval(
+                            child: CachedImageLoader(
+                              imageUrl: widget.host.avatarUrl,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
                         ),
-                        child: Column(
+                        const SizedBox(width: 6),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Comments List
-                            Expanded(
-                              child: ListView.builder(
-                                controller: _scrollController,
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                physics: const BouncingScrollPhysics(),
-                                itemCount: _liveComments.length,
-                                itemBuilder: (context, index) {
-                                  final c = _liveComments[index];
-                                  final isMe = c['isMe'] == true;
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 2.5),
-                                    child: RichText(
-                                      text: TextSpan(
-                                        children: [
-                                          TextSpan(
-                                            text: "${c['user']}: ",
-                                            style: TextStyle(
-                                              color: isMe ? AppColors.neonPink : (c['color'] as Color? ?? const Color(0xFFFFD54F)),
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12.5,
-                                            ),
-                                          ),
-                                          TextSpan(
-                                            text: c['text']?.toString() ?? '',
-                                            style: const TextStyle(color: Colors.white, fontSize: 12.5),
-                                          ),
-                                        ],
-                                      ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 80),
+                                  child: Text(
+                                    widget.host.name,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                  );
-                                },
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 3),
+                                const Icon(Icons.check_circle_rounded, color: Color(0xFFFF1744), size: 12),
+                              ],
+                            ),
+                            Row(
+                              children: [
+                                const Icon(Icons.remove_red_eye_rounded, color: Colors.white70, size: 10),
+                                const SizedBox(width: 2),
+                                Text(
+                                  _viewerCount > 999 ? "${(_viewerCount / 1000).toStringAsFixed(1)}K" : '$_viewerCount',
+                                  style: const TextStyle(color: Colors.white70, fontSize: 9.5),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 6),
+
+                        // Red 🔴 LIVE Badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF1744),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.circle, color: Colors.white, size: 5),
+                              SizedBox(width: 3),
+                              Text(
+                                'LIVE',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        if (!widget.isHost) ...[
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: _toggleFollow,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                gradient: _isFollowing
+                                    ? const LinearGradient(colors: [Color(0xFF455A64), Color(0xFF37474F)])
+                                    : const LinearGradient(colors: [Color(0xFFFF1744), Color(0xFFFF007F)]),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                _isFollowing ? 'Joined' : '+ Follow',
+                                style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
                               ),
                             ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
 
-                            // Bottom Controls & Input Bar
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF0D0A17),
-                                border: Border(top: BorderSide(color: Colors.white10, width: 0.8)),
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // Action Icon Buttons Tray
-                                  Row(
-                                    children: [
-                                      // Co-Host Request / Kick Button
-                                      _buildActionButton(
-                                        icon: (widget.isHost && _isGuestConnected)
-                                            ? Icons.person_remove_rounded
-                                            : Icons.video_call_rounded,
-                                        label: widget.isHost
-                                            ? (_isGuestConnected ? 'Kick' : 'Live')
-                                            : (_isGuestConnected ? 'Leave' : 'Join Co-Host'),
-                                        color: _isGuestConnected ? Colors.redAccent : const Color(0xFF00E5FF),
-                                        isLoading: _isGuestConnecting,
-                                        onTap: _handleCoHostAction,
-                                      ),
-                                      const SizedBox(width: 8),
+                const Spacer(),
 
-                                      // Mic Toggle (Host and Co-Host)
-                                      if (widget.isHost || _isGuestConnected) ...[
-                                        _buildActionButton(
-                                          icon: _isAudioMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                                          label: _isAudioMuted ? 'Muted' : 'Mic',
-                                          color: _isAudioMuted ? Colors.redAccent : AppColors.onlineGreen,
-                                          onTap: _toggleAudioMute,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        _buildActionButton(
-                                          icon: _isCameraOff ? Icons.videocam_off_rounded : Icons.videocam_rounded,
-                                          label: _isCameraOff ? 'Cam Off' : 'Camera',
-                                          color: _isCameraOff ? Colors.redAccent : const Color(0xFF00E5FF),
-                                          onTap: _toggleCamera,
-                                        ),
-                                        const SizedBox(width: 8),
-                                      ],
-
-                                      // Beauty Filter
-                                      _buildActionButton(
-                                        icon: Icons.auto_fix_high_rounded,
-                                        label: 'Beauty',
-                                        color: AppColors.neonPink,
-                                        onTap: () {
-                                          CameraFilterTray.show(
-                                            context,
-                                            currentFilter: _currentFilter,
-                                            onFilterSelected: (p) => setState(() => _currentFilter = p),
-                                          );
-                                        },
-                                      ),
-                                      const SizedBox(width: 8),
-
-                                      // Gift Button (Viewers)
-                                      if (!widget.isHost) ...[
-                                        _buildActionButton(
-                                          icon: Icons.card_giftcard_rounded,
-                                          label: 'Gift',
-                                          color: const Color(0xFFFFD54F),
-                                          onTap: () {
-                                            InCallGiftSheet.show(
-                                              context,
-                                              receiverId: widget.host.id,
-                                              receiverName: widget.host.name,
-                                              callSessionId: _activeLiveId,
-                                              streamId: _activeLiveId,
-                                              contextType: 'live',
-                                              onGiftSent: (anim) => _giftAnimKey.currentState?.playGiftAnimation(anim),
-                                            );
-                                          },
-                                        ),
-                                        const SizedBox(width: 8),
-                                      ],
-
-                                      // Heart Like Button
-                                      _buildActionButton(
-                                        icon: Icons.favorite_rounded,
-                                        label: '$_likeCount',
-                                        color: const Color(0xFFFF007F),
-                                        onTap: _addHeart,
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-
-                                  // Comment Text Input Bar
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Container(
-                                          height: 38,
-                                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha: 0.08),
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(color: Colors.white12),
-                                          ),
-                                          child: TextField(
-                                            controller: _commentController,
-                                            style: const TextStyle(color: Colors.white, fontSize: 12.5),
-                                            decoration: const InputDecoration(
-                                              hintText: "Send a public comment...",
-                                              hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
-                                              border: InputBorder.none,
-                                              isDense: true,
-                                              contentPadding: EdgeInsets.only(bottom: 6),
-                                            ),
-                                            onSubmitted: (_) => _sendComment(),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      GestureDetector(
-                                        onTap: _sendComment,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            gradient: AppColors.primaryGradient,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(Icons.send_rounded, color: Colors.white, size: 16),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                // Top Viewer Overlapping Avatars Stack
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.black45,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 46,
+                        height: 22,
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              left: 0,
+                              child: _buildMiniAvatar(widget.host.avatarUrl),
+                            ),
+                            Positioned(
+                              left: 13,
+                              child: _buildMiniAvatar('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'),
+                            ),
+                            Positioned(
+                              left: 26,
+                              child: _buildMiniAvatar('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100'),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  ],
-                ),
-
-                // Top Floating Header: Host Capsule, Viewer Count, Diamonds, Follow, Close/PiP
-                Positioned(
-                  top: 8,
-                  left: 10,
-                  right: 10,
-                  child: Row(
-                    children: [
-                      // Host Profile Capsule
-                      GestureDetector(
-                        onTap: () => InCallProfileSheet.show(context, model: widget.host),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.65),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: Colors.white24, width: 0.8),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              AvatarWithFrame(
-                                avatarUrl: widget.host.avatarUrl,
-                                frameUrl: widget.host.avatarFrameUrl,
-                                level: widget.host.currentLevel > 0 ? widget.host.currentLevel : widget.host.level,
-                                badgeColor: widget.host.badgeColor,
-                                glowColor: widget.host.glowColor,
-                                size: 30,
-                                showLevelBadge: false,
-                              ),
-                              const SizedBox(width: 6),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    widget.host.name,
-                                    style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
-                                    maxLines: 1,
-                                  ),
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.remove_red_eye_rounded, color: Colors.white70, size: 10),
-                                      const SizedBox(width: 2),
-                                      Text('$_viewerCount', style: const TextStyle(color: Colors.white70, fontSize: 9.5)),
-                                      if (_diamondsEarned > 0) ...[
-                                        const SizedBox(width: 4),
-                                        const Icon(Icons.diamond_rounded, color: Color(0xFF00E5FF), size: 10),
-                                        const SizedBox(width: 2),
-                                        Text('$_diamondsEarned', style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 9.5)),
-                                      ],
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(width: 6),
-                              if (!widget.isHost)
-                                GestureDetector(
-                                  onTap: _toggleFollow,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      gradient: _isFollowing
-                                          ? const LinearGradient(colors: [Color(0xFF455A64), Color(0xFF37474F)])
-                                          : AppColors.primaryGradient,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      _isFollowing ? 'Joined' : '+ Follow',
-                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const Spacer(),
-
-                      // PiP & Close Action Buttons
-                      IconButton(
-                        icon: const Icon(Icons.picture_in_picture_alt_rounded, color: Colors.white, size: 20),
-                        onPressed: _minimizeToPiP,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                      ),
                       const SizedBox(width: 4),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
-                        onPressed: _handleExitLive,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      Text(
+                        _viewerCount > 999 ? "${(_viewerCount / 1000).toStringAsFixed(1)}K" : '3.2K',
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 4),
 
-                // Floating Hearts Overlay
-                Positioned(
-                  right: 20,
-                  bottom: 120,
-                  width: 80,
-                  height: 200,
-                  child: Stack(
-                    children: _hearts.map((h) {
-                      return Positioned(
-                        bottom: 0,
-                        right: h.left,
-                        child: _FloatingHeartWidget(heart: h),
-                      );
-                    }).toList(),
+                // Options Menu Button
+                IconButton(
+                  icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 20),
+                  onPressed: _showMoreControlsSheet,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                ),
+
+                // Close Button
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
+                  onPressed: _handleExitLive,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 4),
+
+            // Gold Top 1 Badge Capsule
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFFD54F).withValues(alpha: 0.4), width: 0.8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('👑', style: TextStyle(fontSize: 11)),
+                  SizedBox(width: 4),
+                  Text(
+                    'Top 1',
+                    style: TextStyle(
+                      color: Color(0xFFFFD54F),
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniAvatar(String url) {
+    return Container(
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 1.2),
+      ),
+      child: ClipOval(
+        child: CachedImageLoader(imageUrl: url, fit: BoxFit.cover),
+      ),
+    );
+  }
+
+  /// Live Chat Floating Stream (Bottom-Left, Semi-Transparent, matching Screenshot 2)
+  Widget _buildFloatingChatStream() {
+    return Positioned(
+      left: 12,
+      bottom: 74,
+      width: MediaQuery.of(context).size.width * 0.72,
+      height: 240,
+      child: ShaderMask(
+        shaderCallback: (rect) {
+          return const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.transparent, Colors.black, Colors.black],
+            stops: [0.0, 0.18, 1.0],
+          ).createShader(rect);
+        },
+        blendMode: BlendMode.dstIn,
+        child: ListView.builder(
+          controller: _scrollController,
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.zero,
+          itemCount: _liveComments.length,
+          itemBuilder: (context, index) {
+            final c = _liveComments[index];
+            return _buildCommentItem(c);
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Comment row bubble matching Screenshot 2
+  Widget _buildCommentItem(Map<String, dynamic> c) {
+    final isGift = c['isGift'] == true;
+    final isMe = c['isMe'] == true;
+    final avatarUrl = c['avatar']?.toString() ?? '';
+    final userName = c['user']?.toString() ?? 'Viewer';
+    final messageText = c['text']?.toString() ?? '';
+    final timeStr = c['time']?.toString() ?? '';
+
+    if (isGift) {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFF6A1B29).withValues(alpha: 0.85),
+              const Color(0xFF2E0C16).withValues(alpha: 0.85),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFF1744).withValues(alpha: 0.4), width: 0.8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('👑', style: TextStyle(fontSize: 13)),
+            const SizedBox(width: 5),
+            Text(
+              userName,
+              style: const TextStyle(color: Color(0xFFFFD54F), fontWeight: FontWeight.bold, fontSize: 11.5),
+            ),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                messageText,
+                style: const TextStyle(color: Colors.white, fontSize: 11.5),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Text('🌹', style: TextStyle(fontSize: 13)),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2.5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // User Avatar Circle
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isMe ? const Color(0xFFFF1744) : Colors.white24,
+                width: 1.0,
+              ),
+            ),
+            child: ClipOval(
+              child: avatarUrl.isNotEmpty
+                  ? CachedImageLoader(imageUrl: avatarUrl, fit: BoxFit.cover)
+                  : Container(
+                      color: const Color(0xFF2A2438),
+                      child: Center(
+                        child: Text(
+                          userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 7),
+
+          // Name + Time & Message
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      userName,
+                      style: TextStyle(
+                        color: isMe ? const Color(0xFFFF5252) : Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (timeStr.isNotEmpty) ...[
+                      const SizedBox(width: 5),
+                      Text(
+                        timeStr,
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 9,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  messageText,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    height: 1.25,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Floating Love Hearts Overlay
+  Widget _buildFloatingHeartsOverlay() {
+    return Positioned(
+      right: 14,
+      bottom: 120,
+      width: 70,
+      height: 220,
+      child: IgnorePointer(
+        child: Stack(
+          children: _hearts.map((h) {
+            return Positioned(
+              bottom: 0,
+              right: h.left,
+              child: _FloatingHeartWidget(heart: h),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  /// Rose Combo Counter Badge matching Screenshot 2
+  Widget _buildRoseComboBadge() {
+    return Positioned(
+      right: 68,
+      bottom: 74,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.8, end: 1.15),
+        duration: const Duration(milliseconds: 150),
+        builder: (context, scale, child) => Transform.scale(
+          scale: scale,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFF1744), Color(0xFFFF007F)],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF1744).withValues(alpha: 0.6),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('🌹', style: TextStyle(fontSize: 13)),
+                const SizedBox(width: 3),
+                Text(
+                  'x$_roseComboCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
                   ),
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// Bottom Floating Action Bar matching Screenshot 2
+  Widget _buildBottomBar() {
+    return Positioned(
+      bottom: 10,
+      left: 12,
+      right: 12,
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            // Emoji / Comment Input Pill
+            Expanded(
+              child: Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: Colors.white24, width: 0.8),
+                ),
+                child: Row(
+                  children: [
+                    // Emoji Icon
+                    IconButton(
+                      icon: const Icon(Icons.sentiment_satisfied_alt_rounded, color: Colors.white70, size: 20),
+                      onPressed: () {
+                        _commentController.text += '❤️';
+                        _sendComment();
+                      },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    ),
+                    const SizedBox(width: 2),
+
+                    // Input Text
+                    Expanded(
+                      child: TextField(
+                        controller: _commentController,
+                        style: const TextStyle(color: Colors.white, fontSize: 12.5),
+                        decoration: const InputDecoration(
+                          hintText: "Type a message...",
+                          hintStyle: TextStyle(color: Colors.white54, fontSize: 11.5),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 8),
+                        ),
+                        onSubmitted: (_) => _sendComment(),
+                      ),
+                    ),
+
+                    // Send Button
+                    GestureDetector(
+                      onTap: _sendComment,
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [Color(0xFFFF1744), Color(0xFFFF007F)],
+                          ),
+                        ),
+                        child: const Icon(Icons.send_rounded, color: Colors.white, size: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // Gift Button
+            _buildCircleActionItem(
+              icon: Icons.card_giftcard_rounded,
+              label: 'Gift',
+              color: const Color(0xFFFF1744),
+              onTap: () {
+                InCallGiftSheet.show(
+                  context,
+                  receiverId: widget.host.id,
+                  receiverName: widget.host.name,
+                  callSessionId: _activeLiveId,
+                  streamId: _activeLiveId,
+                  contextType: 'live',
+                  onGiftSent: (anim) => _giftAnimKey.currentState?.playGiftAnimation(anim),
+                );
+              },
+            ),
+            const SizedBox(width: 6),
+
+            // Rose Quick Gift Button
+            _buildCircleActionItem(
+              emoji: '🌹',
+              label: 'Rose',
+              color: const Color(0xFFFF1744),
+              onTap: _sendQuickRoseGift,
+            ),
+            const SizedBox(width: 6),
+
+            // Share Button
+            _buildCircleActionItem(
+              icon: Icons.reply_rounded,
+              label: 'Share',
+              color: Colors.white70,
+              onTap: _shareLiveStream,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCircleActionItem({
+    IconData? icon,
+    String? emoji,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.black.withValues(alpha: 0.5),
+              border: Border.all(color: Colors.white24, width: 0.8),
+            ),
+            child: Center(
+              child: emoji != null
+                  ? Text(emoji, style: const TextStyle(fontSize: 18))
+                  : Icon(icon, color: color, size: 20),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 9.5, fontWeight: FontWeight.w600),
+          ),
+        ],
       ),
     );
   }

@@ -153,68 +153,91 @@ class _InCallGiftSheetState extends State<InCallGiftSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 380,
-      padding: const EdgeInsets.all(16),
+      height: 440,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF140F22).withValues(alpha: 0.96),
+        color: const Color(0xFF0F0E17).withValues(alpha: 0.98),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.3), width: 1.2),
+        border: Border(
+          top: BorderSide(color: const Color(0xFFFF1744).withValues(alpha: 0.3), width: 1.2),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.8),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
+            color: Colors.black.withValues(alpha: 0.9),
+            blurRadius: 24,
+            offset: const Offset(0, -6),
           ),
         ],
       ),
       child: Column(
         children: [
-          // Top Row: User Balance & Recharge Button
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.diamond_rounded, color: Color(0xFFFFD54F), size: 18),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Balance: $_userCoins',
-                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () => RechargeGemsSheet.show(context),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.add, size: 12, color: Colors.white),
-                          Text(' Recharge', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+          // Drag Handle
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
               ),
-              IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 10),
 
-          // Gift Grid
+          // Top Header: Send Gift Title & Coins Balance Badge
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const SizedBox(width: 32), // Placeholder for balance
+              const Text(
+                'Send Gift',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              // Gold Coin Balance Pill
+              GestureDetector(
+                onTap: () => RechargeGemsSheet.show(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1B2E),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFFFD54F).withValues(alpha: 0.4), width: 0.8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.diamond_rounded, color: Color(0xFFFFD54F), size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$_userCoins',
+                        style: const TextStyle(
+                          color: Color(0xFFFFD54F),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 3),
+                      const Icon(Icons.add_circle_rounded, color: Color(0xFFFF1744), size: 12),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 3x3 Luxury Gift Grid (Rose, Love, Fire, Panda, Diamond, Castle, Rocket, Car, Yacht)
           Expanded(
             child: GridView.builder(
               physics: const BouncingScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                childAspectRatio: 0.82,
+                crossAxisCount: 3,
+                childAspectRatio: 1.15,
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
               ),
@@ -229,12 +252,21 @@ class _InCallGiftSheetState extends State<InCallGiftSheet> {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppColors.neonPink.withValues(alpha: 0.25) : Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(14),
+                      color: isSelected ? const Color(0xFF281120) : const Color(0xFF1A1726),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isSelected ? AppColors.neonPink : Colors.white12,
+                        color: isSelected ? const Color(0xFFFF1744) : Colors.white.withValues(alpha: 0.06),
                         width: isSelected ? 1.8 : 1,
                       ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: const Color(0xFFFF1744).withValues(alpha: 0.35),
+                                blurRadius: 10,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null,
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -242,19 +274,24 @@ class _InCallGiftSheetState extends State<InCallGiftSheet> {
                         if (gift.iconUrl.isNotEmpty)
                           CachedImageLoader(
                             imageUrl: gift.iconUrl,
-                            width: 38,
-                            height: 38,
+                            width: 36,
+                            height: 36,
                             fit: BoxFit.contain,
                           )
                         else
-                          Text(gift.emoji, style: const TextStyle(fontSize: 32)),
+                          Text(gift.emoji, style: const TextStyle(fontSize: 30)),
                         const SizedBox(height: 4),
                         Text(
                           gift.name,
-                          style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        const SizedBox(height: 2),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -262,7 +299,11 @@ class _InCallGiftSheetState extends State<InCallGiftSheet> {
                             const SizedBox(width: 2),
                             Text(
                               '${gift.coins}',
-                              style: const TextStyle(color: Color(0xFFFFD54F), fontSize: 9.5, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                color: Color(0xFFFFD54F),
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ],
                         ),
@@ -275,22 +316,25 @@ class _InCallGiftSheetState extends State<InCallGiftSheet> {
           ),
           const SizedBox(height: 10),
 
-          // Bottom Action: Quantity multiplier & Send Button
+          // Bottom Action: Multiplier Chips & Wide Crimson/Red Send Button
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Multiplier Chips
+              // Quantity chips (x1, x10, x99)
               Row(
-                children: [1, 10, 66, 99].map((qty) {
+                children: [1, 10, 99].map((qty) {
                   final isSelected = _selectedQuantity == qty;
                   return GestureDetector(
                     onTap: () => setState(() => _selectedQuantity = qty),
                     child: Container(
                       margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.neonPink : Colors.white12,
+                        color: isSelected ? const Color(0xFFFF1744) : const Color(0xFF1E1B2E),
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFFFF1744) : Colors.white12,
+                          width: 0.8,
+                        ),
                       ),
                       child: Text(
                         'x$qty',
@@ -304,33 +348,44 @@ class _InCallGiftSheetState extends State<InCallGiftSheet> {
                   );
                 }).toList(),
               ),
+              const SizedBox(width: 8),
 
-              // Send Button
-              GestureDetector(
-                onTap: _isSending ? null : _sendSelectedGift,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.neonPink.withValues(alpha: 0.5),
-                        blurRadius: 10,
-                        spreadRadius: 1,
+              // Big Red Send Button
+              Expanded(
+                child: GestureDetector(
+                  onTap: _isSending ? null : _sendSelectedGift,
+                  child: Container(
+                    height: 44,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF1744), Color(0xFFFF007F)],
                       ),
-                    ],
-                  ),
-                  child: _isSending
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Text(
-                          'Send Gift',
-                          style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFF1744).withValues(alpha: 0.45),
+                          blurRadius: 12,
+                          offset: const Offset(0, 3),
                         ),
+                      ],
+                    ),
+                    child: Center(
+                      child: _isSending
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : Text(
+                              'Send${_selectedGift != null ? " (${_selectedGift!.coins * _selectedQuantity} 💎)" : ""}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                    ),
+                  ),
                 ),
               ),
             ],
