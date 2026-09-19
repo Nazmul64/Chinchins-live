@@ -82,6 +82,8 @@ class SignalingService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _liveLikeController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _seatRequestController =
+      StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _viewerCountUpdatedController =
       StreamController<Map<String, dynamic>>.broadcast();
 
@@ -107,6 +109,7 @@ class SignalingService {
   Stream<Map<String, dynamic>> get onWebRTCSignal => _webRTCSignalController.stream;
   Stream<Map<String, dynamic>> get onAudioMuteToggled => _audioMuteController.stream;
   Stream<Map<String, dynamic>> get onLiveLike => _liveLikeController.stream;
+  Stream<Map<String, dynamic>> get onSeatRequest => _seatRequestController.stream;
   Stream<Map<String, dynamic>> get onViewerCountUpdated => _viewerCountUpdatedController.stream;
 
   EndpointAuthorizableChannelTokenAuthorizationDelegate<PrivateChannelAuthorizationData>
@@ -236,6 +239,31 @@ class SignalingService {
     final rId = roomId?.trim() ?? '';
     final toRemove = _activeChannels.keys.where((k) => 
       k.contains('call.$rId') || k.contains('call_chat.$rId') || (rId.isEmpty && (k.contains('call.') || k.contains('call_chat.')))
+    ).toList();
+    for (final chName in toRemove) {
+      try {
+        _activeSubscriptions[chName]?.cancel();
+        _activeSubscriptions.remove(chName);
+        _activeChannels[chName]?.unsubscribe();
+        _activeChannels.remove(chName);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> subscribeToPartyRoom(dynamic partyRoomId) async {
+    if (_pusherClient == null || partyRoomId == null) return;
+    final idStr = partyRoomId.toString().trim();
+    if (idStr.isEmpty) return;
+    await _subscribeToChannel('party-room.' + idStr, isPrivate: false);
+    await _subscribeToChannel('private-party-room.' + idStr, isPrivate: true);
+    await _subscribeToChannel('party-room-seat.' + idStr, isPrivate: false);
+    await _subscribeToChannel('presence-party-room.' + idStr, isPrivate: true);
+  }
+
+  Future<void> leavePartyRoom(dynamic partyRoomId) async {
+    final idStr = partyRoomId?.toString().trim() ?? '';
+    final toRemove = _activeChannels.keys.where((k) =>
+      k.contains('party-room.' + idStr) || (idStr.isEmpty && k.contains('party-room.'))
     ).toList();
     for (final chName in toRemove) {
       try {
@@ -406,6 +434,24 @@ class SignalingService {
       _inCallMessageController.add(data);
       _directMessageReceivedController.add(data);
       _liveMessageController.add(data);
+      return;
+    }
+
+    // 6. Seat Request Event (SeatRequestEvent -> seat.requested / join.requested)
+    if (cleanName == 'seat.requested' ||
+        cleanName == 'SeatRequestEvent' ||
+        cleanName.endsWith('SeatRequestEvent') ||
+        cleanName == 'join.requested' ||
+        cleanName == 'JoinRequestEvent' ||
+        cleanName.endsWith('JoinRequestEvent') ||
+        cleanName == 'LiveJoinRequested' ||
+        cleanName == 'live.join.requested' ||
+        lowerName == 'seat.requested' ||
+        lowerName == 'seatrequestevent' ||
+        lowerName == 'join.requested') {
+      _seatRequestController.add(data);
+      _liveJoinRequestController.add(data);
+      _cohostStatusController.add(data);
       return;
     }
 

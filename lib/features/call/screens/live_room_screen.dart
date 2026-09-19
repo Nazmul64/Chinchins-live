@@ -120,6 +120,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   StreamSubscription? _giftSub;
   StreamSubscription? _joinReqSub;
   StreamSubscription? _joinRespSub;
+  StreamSubscription? _seatRequestSub;
   StreamSubscription? _coHostAcceptedSub;
   StreamSubscription? _guestKickedSub;
   StreamSubscription? _streamEndedSub;
@@ -161,6 +162,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     _giftSub?.cancel();
     _joinReqSub?.cancel();
     _joinRespSub?.cancel();
+    _seatRequestSub?.cancel();
     _coHostAcceptedSub?.cancel();
     _guestKickedSub?.cancel();
     _streamEndedSub?.cancel();
@@ -556,6 +558,38 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
   void _subscribeWebSocketEvents() {
     final signaling = SignalingService();
+
+    // 0. Seat Request Listener for Host
+    _seatRequestSub = signaling.onSeatRequest.listen((data) {
+      if (mounted && widget.isHost) {
+        final guestName = data['user_name'] ?? data['name'] ?? 'Viewer';
+        final seatIndex = data['seat_index'] ?? 1;
+        final reqId = data['invitation_id'] ?? data['id'] ?? data['request_id'];
+        final targetUid = data['user_id'];
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF1E1E2E),
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              "$guestName requested to join Seat #$seatIndex",
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            action: SnackBarAction(
+              label: 'ACCEPT',
+              textColor: const Color(0xFFFF2D55),
+              onPressed: () {
+                _showCoHostRequestDialog(
+                  requestId: reqId,
+                  guestName: guestName,
+                  targetUserId: targetUid,
+                );
+              },
+            ),
+          ),
+        );
+      }
+    });
 
     // 1. Live Chat Comments (.chat.message, .message.sent)
     _msgSub = signaling.onLiveMessage.listen((data) {
@@ -2087,41 +2121,96 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   }
 
   /// Dynamic Multi-Video Grid (Host + Co-Hosts)
-  Widget _buildVideoGrid({bool isMini = false}) {
+    /// 5-User Dynamic Grid Layout (Top 2 users with flex 3, Bottom up to 3 users with flex 2)
+  Widget buildFiveUserGrid(List<VideoTrack> videoTracks) {
+    if (videoTracks.length == 1) {
+      return BeautyFilterEngine.applyFilterToWidget(
+        filter: _currentFilter,
+        child: VideoTrackRenderer(
+          videoTracks[0],
+          fit: VideoViewFit.cover,
+        ),
+      );
+    }
+
+    if (videoTracks.length == 2) {
+      return Row(
+        children: [
+          Expanded(
+            child: VideoTrackRenderer(
+              videoTracks[0],
+              fit: VideoViewFit.cover,
+            ),
+          ),
+          const SizedBox(width: 2),
+          Expanded(
+            child: VideoTrackRenderer(
+              videoTracks[1],
+              fit: VideoViewFit.cover,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        // Upper Row: Host & 1st Co-Host (2 users, flex 3)
+        Expanded(
+          flex: 3,
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.all(1.5),
+                  child: VideoTrackRenderer(
+                    videoTracks[0],
+                    fit: VideoViewFit.cover,
+                  ),
+                ),
+              ),
+              if (videoTracks.length > 1)
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.all(1.5),
+                    child: VideoTrackRenderer(
+                      videoTracks[1],
+                      fit: VideoViewFit.cover,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        // Lower Row: Remaining Co-Hosts (up to 3 users, flex 2)
+        if (videoTracks.length > 2)
+          Expanded(
+            flex: 2,
+            child: Row(
+              children: videoTracks
+                  .sublist(2, videoTracks.length > 5 ? 5 : videoTracks.length)
+                  .map((track) {
+                return Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.all(1.5),
+                    child: VideoTrackRenderer(
+                      track,
+                      fit: VideoViewFit.cover,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+      ],
+    );
+  }
+
+Widget _buildVideoGrid({bool isMini = false}) {
     // 1. Check LiveKit Tracks
     if (_liveKitRoom != null && _isLiveKitConnected) {
       if (_activeVideos.isNotEmpty) {
-        if (_activeVideos.length == 1) {
-          return BeautyFilterEngine.applyFilterToWidget(
-            filter: _currentFilter,
-            child: VideoTrackRenderer(
-              _activeVideos.first,
-              fit: VideoViewFit.cover,
-            ),
-          );
-        }
-
-        // Multi-Host 50/50 Split Screen Grid (Host + Guests)
-        return GridView.builder(
-          padding: EdgeInsets.zero,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: _activeVideos.length > 1 ? 2 : 1,
-            childAspectRatio: _activeVideos.length > 1 ? 0.75 : (9 / 16),
-            crossAxisSpacing: 2,
-            mainAxisSpacing: 2,
-          ),
-          itemCount: _activeVideos.length,
-          itemBuilder: (context, index) {
-            return Container(
-              color: Colors.black,
-              child: VideoTrackRenderer(
-                _activeVideos[index],
-                fit: VideoViewFit.cover,
-              ),
-            );
-          },
-        );
+        return buildFiveUserGrid(_activeVideos);
       }
     }
 
