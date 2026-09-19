@@ -110,6 +110,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   int? _guestUid;
   int _myUid = 0;
   bool _isGuestConnected = false;
+  bool _isGuestConnecting = false;
   bool _isAudioMuted = false;
   bool _isCameraOff = false;
 
