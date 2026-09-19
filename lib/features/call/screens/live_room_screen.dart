@@ -1447,190 +1447,215 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     );
   }
 
-  /// Top Floating Bar matching Screenshot 2
+  /// Top Floating Bar matching Screenshot 2 (100% responsive across all screens)
   Widget _buildTopFloatingHeader() {
     return Positioned(
-      top: 10,
-      left: 12,
-      right: 12,
+      top: 6,
+      left: 8,
+      right: 8,
       child: SafeArea(
         bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
-                // Host Profile Capsule
-                GestureDetector(
-                  onTap: () => InCallProfileSheet.show(context, model: widget.host),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white24, width: 0.8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Host Avatar with Pink/Crimson Ring
-                        Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFFFF1744), width: 1.5),
-                          ),
-                          child: ClipOval(
-                            child: CachedImageLoader(
-                              imageUrl: widget.host.avatarUrl,
-                              fit: BoxFit.cover,
+                // 1. Host Profile Capsule (Flexible to avoid overflowing right side buttons)
+                Flexible(
+                  child: GestureDetector(
+                    onTap: () => InCallProfileSheet.show(context, model: widget.host),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.white24, width: 0.8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Host Avatar with Pink/Crimson Ring
+                          Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: const Color(0xFFFF1744), width: 1.5),
+                            ),
+                            child: ClipOval(
+                              child: CachedImageLoader(
+                                imageUrl: widget.host.avatarUrl,
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 80),
-                                  child: Text(
-                                    widget.host.name,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        widget.host.name,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                    const SizedBox(width: 2),
+                                    const Icon(Icons.check_circle_rounded, color: Color(0xFFFF1744), size: 10),
+                                  ],
+                                ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.remove_red_eye_rounded, color: Colors.white70, size: 9),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      _viewerCount > 999 ? "${(_viewerCount / 1000).toStringAsFixed(1)}K" : '$_viewerCount',
+                                      style: const TextStyle(color: Colors.white70, fontSize: 8.5),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+
+                          // Red LIVE Badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF1744),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.circle, color: Colors.white, size: 4),
+                                SizedBox(width: 2),
+                                Text(
+                                  'LIVE',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w900,
                                   ),
                                 ),
-                                const SizedBox(width: 3),
-                                const Icon(Icons.check_circle_rounded, color: Color(0xFFFF1744), size: 12),
                               ],
                             ),
-                            Row(
-                              children: [
-                                const Icon(Icons.remove_red_eye_rounded, color: Colors.white70, size: 10),
-                                const SizedBox(width: 2),
-                                Text(
-                                  _viewerCount > 999 ? "${(_viewerCount / 1000).toStringAsFixed(1)}K" : '$_viewerCount',
-                                  style: const TextStyle(color: Colors.white70, fontSize: 9.5),
+                          ),
+
+                          if (!widget.isHost) ...[
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: _toggleFollow,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  gradient: _isFollowing
+                                      ? const LinearGradient(colors: [Color(0xFF455A64), Color(0xFF37474F)])
+                                      : const LinearGradient(colors: [Color(0xFFFF1744), Color(0xFFFF007F)]),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
-                              ],
+                                child: Text(
+                                  _isFollowing ? 'Joined' : '+ Follow',
+                                  style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold),
+                                ),
+                              ),
                             ),
                           ],
-                        ),
-                        const SizedBox(width: 6),
-
-                        // Red 🔴 LIVE Badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFF1744),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.circle, color: Colors.white, size: 5),
-                              SizedBox(width: 3),
-                              Text(
-                                'LIVE',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8.5,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        if (!widget.isHost) ...[
-                          const SizedBox(width: 6),
-                          GestureDetector(
-                            onTap: _toggleFollow,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                gradient: _isFollowing
-                                    ? const LinearGradient(colors: [Color(0xFF455A64), Color(0xFF37474F)])
-                                    : const LinearGradient(colors: [Color(0xFFFF1744), Color(0xFFFF007F)]),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                _isFollowing ? 'Joined' : '+ Follow',
-                                style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
 
-                const Spacer(),
-
-                // Top Viewer Overlapping Avatars Stack
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.black45,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 46,
-                        height: 22,
-                        child: Stack(
-                          children: [
-                            Positioned(
-                              left: 0,
-                              child: _buildMiniAvatar(widget.host.avatarUrl),
-                            ),
-                            Positioned(
-                              left: 13,
-                              child: _buildMiniAvatar('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'),
-                            ),
-                            Positioned(
-                              left: 26,
-                              child: _buildMiniAvatar('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _viewerCount > 999 ? "${(_viewerCount / 1000).toStringAsFixed(1)}K" : '3.2K',
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
                 const SizedBox(width: 4),
 
-                // Options Menu Button
-                IconButton(
-                  icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 20),
-                  onPressed: _showMoreControlsSheet,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                ),
+                // 2. Right Side Controls (Viewers, 3-dots, Close) - Fixed, won't overflow
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Top Viewer Avatars Stack
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black45,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 34,
+                            height: 18,
+                            child: Stack(
+                              children: [
+                                Positioned(
+                                  left: 0,
+                                  child: _buildMiniAvatar(widget.host.avatarUrl),
+                                ),
+                                Positioned(
+                                  left: 8,
+                                  child: _buildMiniAvatar('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'),
+                                ),
+                                Positioned(
+                                  left: 16,
+                                  child: _buildMiniAvatar('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100'),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            _viewerCount > 999 ? "${(_viewerCount / 1000).toStringAsFixed(1)}K" : '$_viewerCount',
+                            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 2),
 
-                // Close Button
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
-                  onPressed: _handleExitLive,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    // Options Menu Button (3-dots)
+                    GestureDetector(
+                      onTap: _showMoreControlsSheet,
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 16),
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+
+                    // Close Button (Always visible on all screens)
+                    GestureDetector(
+                      onTap: _handleExitLive,
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white24, width: 0.8),
+                        ),
+                        child: const Icon(Icons.close_rounded, color: Colors.white, size: 16),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
