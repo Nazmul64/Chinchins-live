@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
-import 'package:livekit_client/livekit_client.dart';
+import 'package:livekit_client/livekit_client.dart' hide VideoDimensions;
 import 'package:permission_handler/permission_handler.dart';
 import '../../../main.dart';
 import '../../../core/models/model_profile.dart';
