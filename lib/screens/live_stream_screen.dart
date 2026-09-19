@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
 import '../services/livekit_service.dart';
@@ -55,11 +55,11 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
     final savedUser = await AuthApiService.getSavedUser();
     _myUserId = savedUser?['id'] ?? savedUser?['account_id'];
 
-    // 1. Ensure speakerphone is on
+    // Ensure speakerphone is on
     try {
       await Hardware.instance.setSpeakerphoneOn(true);
     } catch (e) {
-      debugPrint(LiveStreamScreen speakerphone error: );
+      debugPrint('LiveStreamScreen speakerphone error: $e');
     }
 
     _room = await _liveKitService.connectToRoom(
@@ -194,7 +194,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
         videoWidgets.add(
           VideoTrackRenderer(
             localVideoTrack,
-            fit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            fit: VideoViewFit.cover,
           ),
         );
       }
@@ -202,7 +202,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
         videoWidgets.add(
           VideoTrackRenderer(
             track,
-            fit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            fit: VideoViewFit.cover,
           ),
         );
       }
@@ -212,7 +212,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
         videoWidgets.add(
           VideoTrackRenderer(
             track,
-            fit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            fit: VideoViewFit.cover,
           ),
         );
       }
@@ -237,7 +237,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                                 Image.network(
                                   widget.hostAvatar!,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(color: Colors.grey[900]),
+                                  errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey[900]),
                                 )
                               else
                                 Container(color: Colors.grey[900]),
@@ -305,7 +305,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                                     style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                                   ),
                                   Text(
-                                    ' Viewers',
+                                    '${_room!.remoteParticipants.length + 1} Viewers',
                                     style: const TextStyle(color: Colors.white70, fontSize: 9),
                                   ),
                                 ],
@@ -356,7 +356,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                               text: TextSpan(
                                 children: [
                                   TextSpan(
-                                    text: : ,
+                                    text: "${msg['user']}: ",
                                     style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12.5),
                                   ),
                                   TextSpan(
@@ -382,7 +382,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                               controller: _chatController,
                               style: const TextStyle(color: Colors.white, fontSize: 12.5),
                               decoration: const InputDecoration(
-                                hintText: Send a public comment...,
+                                hintText: "Send a public comment...",
                                 hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                                 border: InputBorder.none,
                               ),
@@ -416,7 +416,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                               label: const Text('Join Mic', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                               onPressed: () async {
                                 if (widget.roomId != null) {
-                                  await LiveStreamingApiService.requestJoin(roomId: widget.roomId);
+                                  await LiveStreamingApiService.requestJoinCoHost(roomId: widget.roomId);
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(content: Text('Join request sent to Host!'), duration: Duration(seconds: 2)),

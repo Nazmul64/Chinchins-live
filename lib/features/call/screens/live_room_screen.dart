@@ -9,7 +9,6 @@ import '../../../core/models/model_profile.dart';
 import '../../../core/services/signaling_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_logger.dart';
-import '../../../core/widgets/avatar_with_frame.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../services/beauty_filter_engine.dart';
@@ -111,7 +110,6 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   int? _guestUid;
   int _myUid = 0;
   bool _isGuestConnected = false;
-  bool _isGuestConnecting = false;
   bool _isAudioMuted = false;
   bool _isCameraOff = false;
 
@@ -2034,7 +2032,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
           filter: _currentFilter,
           child: VideoTrackRenderer(
             allDisplayTracks.first,
-            fit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            fit: VideoViewFit.cover,
           ),
         );
       }
@@ -2055,7 +2053,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
             borderRadius: BorderRadius.circular(10),
             child: VideoTrackRenderer(
               allDisplayTracks[index],
-              fit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+              fit: VideoViewFit.cover,
             ),
           );
         },

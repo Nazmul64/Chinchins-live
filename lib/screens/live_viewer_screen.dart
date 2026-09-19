@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
 
 class LiveViewerScreen extends StatefulWidget {
@@ -32,14 +32,19 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
   }
 
   Future<void> _connectToHostStream() async {
-    // 1. Set loud speakerphone on
+    // 1. Ensure loud speakerphone is on
     try {
       await Hardware.instance.setSpeakerphoneOn(true);
     } catch (e) {
-      debugPrint(LiveKit Hardware Speakerphone Error: );
+      debugPrint('LiveKit Hardware Speakerphone Error: $e');
     }
 
-    _room = Room();
+    _room = Room(
+      roomOptions: const RoomOptions(
+        adaptiveStream: true,
+        dynacast: true,
+      ),
+    );
     _listener = _room!.createListener();
 
     // 2. Setup track listeners
@@ -65,10 +70,6 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
       await _room!.connect(
         'wss://chinchins.live/livekit',
         widget.liveKitToken,
-        roomOptions: const RoomOptions(
-          adaptiveStream: true,
-          dynacast: true,
-        ),
       );
 
       // 4. Double check speakerphone after connection
@@ -89,7 +90,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
         }
       }
     } catch (e) {
-      debugPrint(LiveKit Viewer Connection Error: );
+      debugPrint('LiveKit Viewer Connection Error: $e');
     }
   }
 
@@ -112,7 +113,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
             child: _remoteHostVideoTrack != null
                 ? VideoTrackRenderer(
                     _remoteHostVideoTrack!,
-                    fit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                    fit: VideoViewFit.cover,
                   )
                 : Stack(
                     fit: StackFit.expand,
@@ -121,7 +122,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
                         Image.network(
                           widget.hostImageUrl,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(color: Colors.black),
+                          errorBuilder: (context, error, stackTrace) => Container(color: Colors.black),
                         )
                       else
                         Container(color: Colors.black),
@@ -154,7 +155,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Text(
-                          LIVE,
+                          'LIVE',
                           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -181,7 +182,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
                           child: const TextField(
                             style: TextStyle(color: Colors.white),
                             decoration: InputDecoration(
-                              hintText: Say something...,
+                              hintText: 'Say something...',
                               hintStyle: TextStyle(color: Colors.white60),
                               border: InputBorder.none,
                             ),

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -24,17 +24,17 @@ class LiveKitService {
     required bool isAudioOnly,
     String? customServerUrl,
   }) async {
-    // 1. Ensure audio outputs through speakerphone
+    // Ensure audio outputs through speakerphone
     try {
       await Hardware.instance.setSpeakerphoneOn(true);
     } catch (e) {
-      debugPrint(Hardware speakerphone error: );
+      debugPrint('Hardware speakerphone error: ' + e.toString());
     }
 
     if (isHost) {
       final hasPermission = await requestPermissions(isVideo: !isAudioOnly);
       if (!hasPermission) {
-        debugPrint(Camera/Mic permissions denied!);
+        debugPrint('Camera/Mic permissions denied!');
         return null;
       }
     }
@@ -73,7 +73,7 @@ class LiveKitService {
 
       return _room;
     } catch (e) {
-      debugPrint(LiveKit Connection Error: );
+      debugPrint('LiveKit Connection Error: ' + e.toString());
       return null;
     }
   }
