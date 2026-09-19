@@ -1,12 +1,16 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'core/services/screen_protection_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/app_logger.dart';
 import 'features/auth/screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Allow screenshots and screen recording
+  ScreenProtectionService.instance.allowScreenshots();
 
   // Global Flutter framework error handling
   FlutterError.onError = (FlutterErrorDetails details) {
