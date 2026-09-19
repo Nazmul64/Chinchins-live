@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+﻿import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -17,17 +17,26 @@ class LiveKitService {
     return statuses.values.every((status) => status.isGranted);
   }
 
-  /// লাইভ ভিডিও হোস্ট অথবা ভয়েস চ্যাট স্পিকার হিসেবে কানেক্ট হতে
+  /// Connect to LiveKit Room as Host, Co-Host, or Viewer
   Future<Room?> connectToRoom({
     required String token,
     required bool isHost,
     required bool isAudioOnly,
     String? customServerUrl,
   }) async {
-    final hasPermission = await requestPermissions(isVideo: !isAudioOnly);
-    if (!hasPermission) {
-      debugPrint("Camera/Mic permissions denied!");
-      return null;
+    // 1. Ensure audio outputs through speakerphone
+    try {
+      await Hardware.instance.setSpeakerphoneOn(true);
+    } catch (e) {
+      debugPrint(Hardware speakerphone error: );
+    }
+
+    if (isHost) {
+      final hasPermission = await requestPermissions(isVideo: !isAudioOnly);
+      if (!hasPermission) {
+        debugPrint(Camera/Mic permissions denied!);
+        return null;
+      }
     }
 
     _room = Room(
@@ -49,7 +58,12 @@ class LiveKitService {
         token,
       );
 
-      // হোস্ট বা স্পিকার হলে অডিও/ভিডিও ট্র্যাক পাবলিশ করা
+      // Double check speakerphone after connection
+      try {
+        await Hardware.instance.setSpeakerphoneOn(true);
+      } catch (_) {}
+
+      // If host, enable camera and mic automatically
       if (isHost) {
         await _room!.localParticipant?.setMicrophoneEnabled(true);
         if (!isAudioOnly) {
@@ -59,33 +73,34 @@ class LiveKitService {
 
       return _room;
     } catch (e) {
-      debugPrint("LiveKit Connection Error: $e");
+      debugPrint(LiveKit Connection Error: );
       return null;
     }
   }
 
-  /// অডিয়েন্স থেকে কো-হোস্ট বা অডিও সিটে স্পিকার হিসেবে মাইক/ক্যামেরা অন করতে
+  /// Enable broadcasting for newly accepted co-host
   Future<void> enableBroadcasting({bool isAudioOnly = false}) async {
     if (_room == null) return;
+    await requestPermissions(isVideo: !isAudioOnly);
     await _room!.localParticipant?.setMicrophoneEnabled(true);
     if (!isAudioOnly) {
       await _room!.localParticipant?.setCameraEnabled(true);
     }
   }
 
-  /// মাইক মিউট / আনমিউট টগল
+  /// Toggle microphone
   Future<void> setMicrophoneEnabled(bool enabled) async {
     if (_room == null) return;
     await _room!.localParticipant?.setMicrophoneEnabled(enabled);
   }
 
-  /// ক্যামেরা অন / অফ টগল
+  /// Toggle camera
   Future<void> setCameraEnabled(bool enabled) async {
     if (_room == null) return;
     await _room!.localParticipant?.setCameraEnabled(enabled);
   }
 
-  /// সংযোগ বিচ্ছিন্ন করা
+  /// Disconnect and release room
   Future<void> disconnect() async {
     await _room?.disconnect();
     await _room?.dispose();

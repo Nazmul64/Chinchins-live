@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
 import '../services/livekit_service.dart';
@@ -54,6 +54,13 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
   void _initLiveKit() async {
     final savedUser = await AuthApiService.getSavedUser();
     _myUserId = savedUser?['id'] ?? savedUser?['account_id'];
+
+    // 1. Ensure speakerphone is on
+    try {
+      await Hardware.instance.setSpeakerphoneOn(true);
+    } catch (e) {
+      debugPrint(LiveStreamScreen speakerphone error: );
+    }
 
     _room = await _liveKitService.connectToRoom(
       token: widget.roomToken,
@@ -169,9 +176,47 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
       );
     }
 
-    final remoteParticipants = _room!.remoteParticipants.values.toList();
-    final isCoHosting = remoteParticipants.isNotEmpty || _isCoHost;
-    final totalCount = 1 + remoteParticipants.length;
+    final localVideoTrack = _room!.localParticipant?.videoTrackPublications.firstOrNull?.track as VideoTrack?;
+    final remoteTracks = <VideoTrack>[];
+    for (var p in _room!.remoteParticipants.values) {
+      for (var pub in p.videoTrackPublications) {
+        if (pub.track != null && pub.track is VideoTrack) {
+          remoteTracks.add(pub.track as VideoTrack);
+        }
+      }
+    }
+
+    final isBroadcasting = widget.isHost || _isCoHost;
+    final List<Widget> videoWidgets = [];
+
+    if (isBroadcasting) {
+      if (localVideoTrack != null) {
+        videoWidgets.add(
+          VideoTrackRenderer(
+            localVideoTrack,
+            fit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+          ),
+        );
+      }
+      for (var track in remoteTracks) {
+        videoWidgets.add(
+          VideoTrackRenderer(
+            track,
+            fit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+          ),
+        );
+      }
+    } else {
+      // Viewer mode: only show remote tracks
+      for (var track in remoteTracks) {
+        videoWidgets.add(
+          VideoTrackRenderer(
+            track,
+            fit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+          ),
+        );
+      }
+    }
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -183,54 +228,46 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
               flex: 6,
               child: Stack(
                 children: [
-                  GridView.builder(
-                    padding: const EdgeInsets.all(4),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: isCoHosting ? 2 : 1,
-                      crossAxisSpacing: 4,
-                      mainAxisSpacing: 4,
-                      childAspectRatio: isCoHosting ? 1.0 : (9 / 16),
-                    ),
-                    itemCount: totalCount,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        // Local Participant Track
-                        final localTrack = _room!.localParticipant?.videoTrackPublications.firstOrNull?.track as VideoTrack?;
-                        return ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: localTrack != null
-                              ? VideoTrackRenderer(localTrack)
-                              : Container(
-                                  color: Colors.grey[900],
-                                  child: Center(
-                                    child: Icon(
-                                      widget.isHost ? Icons.live_tv_rounded : Icons.person,
-                                      color: Colors.white54,
-                                      size: 40,
-                                    ),
-                                  ),
-                                ),
-                        );
-                      }
-
-                      // Remote Participant Tracks
-                      final p = remoteParticipants[index - 1];
-                      final track = p.videoTrackPublications.firstOrNull?.track as VideoTrack?;
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: track != null
-                            ? VideoTrackRenderer(track)
-                            : Container(
-                                color: Colors.grey[900],
-                                child: Center(
-                                  child: Text(
-                                    p.name.isNotEmpty ? p.name : "Connecting...",
-                                    style: const TextStyle(color: Colors.white70, fontSize: 12),
-                                  ),
-                                ),
+                  Positioned.fill(
+                    child: videoWidgets.isEmpty
+                        ? Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if (widget.hostAvatar != null && widget.hostAvatar!.isNotEmpty)
+                                Image.network(
+                                  widget.hostAvatar!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(color: Colors.grey[900]),
+                                )
+                              else
+                                Container(color: Colors.grey[900]),
+                              Container(color: Colors.black45),
+                              const Center(
+                                child: CircularProgressIndicator(color: AppColors.neonPink),
                               ),
-                      );
-                    },
+                            ],
+                          )
+                        : videoWidgets.length == 1
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: videoWidgets.first,
+                              )
+                            : GridView.builder(
+                                padding: const EdgeInsets.all(4),
+                                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 4,
+                                  mainAxisSpacing: 4,
+                                  childAspectRatio: 1.0,
+                                ),
+                                itemCount: videoWidgets.length,
+                                itemBuilder: (context, index) {
+                                  return ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: videoWidgets[index],
+                                  );
+                                },
+                              ),
                   ),
 
                   // Top Header Overlay
@@ -268,7 +305,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                                     style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                                   ),
                                   Text(
-                                    '${_room!.remoteParticipants.length + 1} Viewers',
+                                    ' Viewers',
                                     style: const TextStyle(color: Colors.white70, fontSize: 9),
                                   ),
                                 ],
@@ -319,7 +356,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                               text: TextSpan(
                                 children: [
                                   TextSpan(
-                                    text: "${msg['user']}: ",
+                                    text: : ,
                                     style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12.5),
                                   ),
                                   TextSpan(
@@ -345,56 +382,48 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                               controller: _chatController,
                               style: const TextStyle(color: Colors.white, fontSize: 12.5),
                               decoration: const InputDecoration(
-                                hintText: "Send a public comment...",
+                                hintText: Send a public comment...,
                                 hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                                 border: InputBorder.none,
-                                isDense: true,
                               ),
                               onSubmitted: (_) => _sendMessage(),
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.send, color: Colors.amber, size: 18),
+                            icon: const Icon(Icons.send_rounded, color: AppColors.neonPink, size: 20),
                             onPressed: _sendMessage,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                           ),
+
+                          // Mic / Cam toggles for Host & Co-Hosts
                           if (widget.isHost || _isCoHost) ...[
                             IconButton(
-                              icon: Icon(_isMicMuted ? Icons.mic_off : Icons.mic, color: _isMicMuted ? Colors.redAccent : Colors.white, size: 18),
+                              icon: Icon(_isMicMuted ? Icons.mic_off_rounded : Icons.mic_rounded, color: Colors.white70, size: 20),
                               onPressed: _toggleMic,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                             ),
                             IconButton(
-                              icon: Icon(_isCameraOff ? Icons.videocam_off : Icons.videocam, color: _isCameraOff ? Colors.redAccent : Colors.white, size: 18),
+                              icon: Icon(_isCameraOff ? Icons.videocam_off_rounded : Icons.videocam_rounded, color: Colors.white70, size: 20),
                               onPressed: _toggleCamera,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                             ),
-                          ] else if (!widget.isHost && !_isCoHost) ...[
-                            GestureDetector(
-                              onTap: () async {
+                          ] else ...[
+                            // Join Request Button for Viewers
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.neonPink,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                              icon: const Icon(Icons.person_add_rounded, size: 14, color: Colors.white),
+                              label: const Text('Join Mic', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                              onPressed: () async {
                                 if (widget.roomId != null) {
-                                  await LiveStreamingApiService.requestJoinCoHost(roomId: widget.roomId);
-                                  if (mounted) {
+                                  await LiveStreamingApiService.requestJoin(roomId: widget.roomId);
+                                  if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Co-Host request sent to host!')),
+                                      const SnackBar(content: Text('Join request sent to Host!'), duration: Duration(seconds: 2)),
                                     );
                                   }
-                                } else {
-                                  await _liveKitService.enableBroadcasting(isAudioOnly: false);
-                                  if (mounted) setState(() => _isCoHost = true);
                                 }
                               },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppColors.neonPink,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Text('Join', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                              ),
                             ),
                           ],
                         ],

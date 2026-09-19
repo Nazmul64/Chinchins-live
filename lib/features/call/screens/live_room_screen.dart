@@ -316,7 +316,16 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     required bool isHost,
   }) async {
     try {
-      await [Permission.camera, Permission.microphone].request();
+      // 1. Force audio through loud speakerphone for live stream
+      try {
+        await Hardware.instance.setSpeakerphoneOn(true);
+      } catch (e) {
+        debugPrint('[LiveRoomScreen] Speakerphone init error: $e');
+      }
+
+      if (isHost || _isGuestConnected) {
+        await [Permission.camera, Permission.microphone].request();
+      }
 
       _liveKitRoom = Room(
         roomOptions: const RoomOptions(
@@ -354,6 +363,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
       await _liveKitRoom!.connect(serverUrl, token);
       _isLiveKitConnected = true;
+
+      // Ensure speakerphone is maintained after connect
+      try {
+        await Hardware.instance.setSpeakerphoneOn(true);
+      } catch (_) {}
 
       // Host publishes camera and microphone automatically
       if (isHost) {
@@ -1988,91 +2002,61 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   Widget _buildVideoGrid({bool isMini = false}) {
     // 1. Check LiveKit Tracks
     if (_liveKitRoom != null && _isLiveKitConnected) {
-      final remoteParticipants = _liveKitRoom!.remoteParticipants.values.toList();
       final localVideoTrack = _liveKitRoom!.localParticipant?.videoTrackPublications.firstOrNull?.track as VideoTrack?;
-      final isCoHosting = remoteParticipants.isNotEmpty || _isGuestConnected;
-
-      // Single stream view
-      if (!isCoHosting && (widget.isHost || remoteParticipants.isEmpty)) {
-        if (widget.isHost && localVideoTrack != null) {
-          return BeautyFilterEngine.applyFilterToWidget(
-            filter: _currentFilter,
-            child: VideoTrackRenderer(localVideoTrack),
-          );
-        }
-        if (remoteParticipants.isNotEmpty) {
-          final firstRemoteTrack = remoteParticipants.first.videoTrackPublications.firstOrNull?.track as VideoTrack?;
-          if (firstRemoteTrack != null) {
-            return BeautyFilterEngine.applyFilterToWidget(
-              filter: _currentFilter,
-              child: VideoTrackRenderer(firstRemoteTrack),
-            );
+      final remoteTracks = <VideoTrack>[];
+      for (var p in _liveKitRoom!.remoteParticipants.values) {
+        for (var pub in p.videoTrackPublications) {
+          if (pub.track != null && pub.track is VideoTrack) {
+            remoteTracks.add(pub.track as VideoTrack);
           }
         }
       }
 
-      // Multi-Stream Grid View (1 Host + Co-Hosts)
-      final totalParticipants = 1 + remoteParticipants.length;
+      final isBroadcaster = widget.isHost || _isGuestConnected;
+      final allDisplayTracks = <VideoTrack>[];
+
+      if (isBroadcaster) {
+        if (localVideoTrack != null) {
+          allDisplayTracks.add(localVideoTrack);
+        }
+        allDisplayTracks.addAll(remoteTracks);
+      } else {
+        // Viewer mode: only display remote broadcaster video tracks
+        allDisplayTracks.addAll(remoteTracks);
+      }
+
+      if (allDisplayTracks.isEmpty) {
+        return _buildCoverFallback();
+      }
+
+      if (allDisplayTracks.length == 1) {
+        return BeautyFilterEngine.applyFilterToWidget(
+          filter: _currentFilter,
+          child: VideoTrackRenderer(
+            allDisplayTracks.first,
+            fit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+          ),
+        );
+      }
+
+      // Multi-Stream Co-Hosting Grid (2 or more participants)
       return GridView.builder(
         padding: const EdgeInsets.all(4),
         physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: totalParticipants > 1 ? 2 : 1,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
           crossAxisSpacing: 4,
           mainAxisSpacing: 4,
-          childAspectRatio: totalParticipants > 1 ? 1.0 : (9 / 16),
+          childAspectRatio: 1.0,
         ),
-        itemCount: totalParticipants,
+        itemCount: allDisplayTracks.length,
         itemBuilder: (context, index) {
-          if (index == 0) {
-            // Local Participant (Host or self Co-Host)
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: localVideoTrack != null
-                  ? BeautyFilterEngine.applyFilterToWidget(
-                      filter: _currentFilter,
-                      child: VideoTrackRenderer(localVideoTrack),
-                    )
-                  : Container(
-                      color: Colors.grey[900],
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AvatarWithFrame(
-                              avatarUrl: widget.host.avatarUrl,
-                              size: 48,
-                              showLevelBadge: false,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(widget.isHost ? 'Host' : 'You (Co-Host)', style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                          ],
-                        ),
-                      ),
-                    ),
-            );
-          }
-
-          // Remote Participants (Host or other Co-Hosts)
-          final remoteP = remoteParticipants[index - 1];
-          final remoteTrack = remoteP.videoTrackPublications.firstOrNull?.track as VideoTrack?;
           return ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: remoteTrack != null
-                ? VideoTrackRenderer(remoteTrack)
-                : Container(
-                    color: Colors.grey[900],
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.person_rounded, color: Colors.white54, size: 36),
-                          const SizedBox(height: 4),
-                          Text(remoteP.name.isNotEmpty ? remoteP.name : 'Connecting...', style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                  ),
+            child: VideoTrackRenderer(
+              allDisplayTracks[index],
+              fit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            ),
           );
         },
       );
