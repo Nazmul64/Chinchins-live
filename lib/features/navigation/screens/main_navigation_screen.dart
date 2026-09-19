@@ -14,6 +14,7 @@ import '../../me/screens/me_screen.dart';
 import '../../call/screens/incoming_call_screen.dart';
 import '../../call/services/call_api_service.dart';
 import '../../chat/services/chat_api_service.dart';
+import '../../call/screens/go_live_screen.dart';
 import '../widgets/app_side_drawer.dart';
 import '../../../main.dart';
 
@@ -35,6 +36,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int? _activeIncomingCallId;
 
   late final List<Widget> _screens = [
+    HotExploreScreen(
+      onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+    ),
     HotExploreScreen(
       onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
     ),
@@ -192,96 +196,167 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         children: _screens,
       ),
       bottomNavigationBar: Container(
+        height: 64,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: const BoxDecoration(
-          color: AppColors.bottomBarBg,
+          color: Color(0xFF0F0E17),
           border: Border(
-            top: BorderSide(color: AppColors.cardBorder, width: 0.6),
+            top: BorderSide(color: Color(0xFF26223B), width: 0.6),
           ),
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          backgroundColor: AppColors.bottomBarBg,
-          selectedItemColor: Colors.white,
-          unselectedItemColor: AppColors.textMuted,
-          selectedFontSize: 11,
-          unselectedFontSize: 11,
-          type: BottomNavigationBarType.fixed,
-          items: [
-            // "Home" Tab with Home Icon
-            BottomNavigationBarItem(
-              icon: Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Icon(
-                  _currentIndex == 0 ? Icons.home_rounded : Icons.home_outlined,
-                  color: _currentIndex == 0 ? Colors.white : AppColors.textMuted,
-                  size: 24,
-                ),
-              ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            // 1. Home
+            _buildCustomNavItem(
+              index: 0,
+              icon: Icons.home_rounded,
+              unselectedIcon: Icons.home_outlined,
               label: 'Home',
             ),
 
-            // "Messages" Tab with dynamic unread badge
-            BottomNavigationBarItem(
-              icon: Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Icon(
-                      _currentIndex == 1 ? Icons.chat_bubble_rounded : Icons.chat_bubble_outline_rounded,
-                      color: _currentIndex == 1 ? Colors.white : AppColors.textMuted,
-                      size: 24,
+            // 2. Discover / Explore
+            _buildCustomNavItem(
+              index: 1,
+              icon: Icons.explore_rounded,
+              unselectedIcon: Icons.explore_outlined,
+              label: 'Discover',
+            ),
+
+            // 3. Center Go Live "+" Button (Screen H)
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const GoLiveScreen()),
+                );
+              },
+              child: Container(
+                width: 44,
+                height: 32,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF2A6D), Color(0xFFFF0055)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF2A6D).withValues(alpha: 0.45),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
                     ),
-                    ValueListenableBuilder<int>(
-                      valueListenable: ChatApiService.totalUnreadBadgeNotifier,
-                      builder: (context, badgeCount, _) {
-                        if (badgeCount <= 0) return const SizedBox.shrink();
-                        return Positioned(
-                          top: -4,
-                          right: -8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE91E63),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Center(
-                              child: Text(
-                                badgeCount > 99 ? '99+' : '$badgeCount',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
+                  ],
+                ),
+                child: const Center(
+                  child: Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                ),
+              ),
+            ),
+
+            // 4. Inbox with dynamic unread badge
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _currentIndex = 2),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Icon(
+                          _currentIndex == 2 ? Icons.chat_bubble_rounded : Icons.chat_bubble_outline_rounded,
+                          color: _currentIndex == 2 ? const Color(0xFFFF2A6D) : Colors.white60,
+                          size: 22,
+                        ),
+                        ValueListenableBuilder<int>(
+                          valueListenable: ChatApiService.totalUnreadBadgeNotifier,
+                          builder: (context, badgeCount, _) {
+                            if (badgeCount <= 0) return const SizedBox.shrink();
+                            return Positioned(
+                              top: -4,
+                              right: -8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF0055),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    badgeCount > 99 ? '99+' : '$badgeCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        );
-                      },
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Inbox',
+                      style: TextStyle(
+                        color: _currentIndex == 2 ? const Color(0xFFFF2A6D) : Colors.white60,
+                        fontSize: 10,
+                        fontWeight: _currentIndex == 2 ? FontWeight.bold : FontWeight.normal,
+                      ),
                     ),
                   ],
                 ),
               ),
-              label: 'Messages',
             ),
 
-            // "Me" Tab
-            BottomNavigationBarItem(
-              icon: Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Icon(
-                  _currentIndex == 2 ? Icons.sentiment_satisfied_alt_rounded : Icons.sentiment_satisfied_rounded,
-                  color: _currentIndex == 2 ? Colors.white : AppColors.textMuted,
-                  size: 24,
-                ),
+            // 5. Profile
+            _buildCustomNavItem(
+              index: 3,
+              icon: Icons.person_rounded,
+              unselectedIcon: Icons.person_outline_rounded,
+              label: 'Profile',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomNavItem({
+    required int index,
+    required IconData icon,
+    required IconData unselectedIcon,
+    required String label,
+  }) {
+    final isSelected = _currentIndex == index;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _currentIndex = index),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isSelected ? icon : unselectedIcon,
+              color: isSelected ? const Color(0xFFFF2A6D) : Colors.white60,
+              size: 22,
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFFFF2A6D) : Colors.white60,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
-              label: 'Me',
             ),
           ],
         ),

@@ -21,6 +21,7 @@ import '../widgets/camera_filter_tray.dart';
 import '../widgets/in_call_profile_sheet.dart';
 import '../widgets/in_call_gift_sheet.dart';
 import '../widgets/gift_animation_overlay.dart';
+import '../../../core/services/gifts_api_service.dart';
 
 class ActiveLiveSession {
   final dynamic liveId;
