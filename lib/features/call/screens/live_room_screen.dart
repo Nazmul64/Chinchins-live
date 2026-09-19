@@ -1065,6 +1065,39 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   }
 
   void _handleExitLive() async {
+    if (widget.isHost) {
+      final shouldEnd = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1435),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'End Live Broadcast?',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          content: const Text(
+            'Are you sure you want to end this live streaming session for all viewers?',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('End Broadcast', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      if (shouldEnd != true) return;
+    }
+
     PiPCallOverlay.hideMiniWindow();
     _activeSession = null;
     if (widget.isHost && _activeLiveId != null) {
@@ -1607,15 +1640,24 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
             ),
           ),
           Container(
-            color: Colors.black45,
-            child: const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(color: AppColors.neonPink, strokeWidth: 2.5),
-                  SizedBox(height: 12),
-                  Text('Connecting Live Broadcast...', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0x33000000),
+                  Color(0x66000000),
                 ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: const Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  color: AppColors.neonPink,
+                  strokeWidth: 2.2,
+                ),
               ),
             ),
           ),

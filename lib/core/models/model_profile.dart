@@ -39,6 +39,9 @@ class ModelProfile {
   final int likeMeCount;
   final int coins;
   final int beans;
+  final bool isLive;
+  final dynamic activeLiveStreamId;
+  final String? liveChannelName;
 
   const ModelProfile({
     required this.id,
@@ -79,6 +82,9 @@ class ModelProfile {
     this.likeMeCount = 0,
     this.coins = 0,
     this.beans = 0,
+    this.isLive = false,
+    this.activeLiveStreamId,
+    this.liveChannelName,
   });
 
   /// Country Flag emoji helper
@@ -339,6 +345,14 @@ class ModelProfile {
       likeMeCount: likeMe,
       coins: userCoins,
       beans: userBeans,
+      isLive: json['is_live'] == true ||
+          json['is_live'] == 1 ||
+          json['status'] == 'in_live' ||
+          json['status'] == 'live' ||
+          json['live_stream_id'] != null ||
+          json['active_live'] != null,
+      activeLiveStreamId: json['live_stream_id'] ?? json['active_live_id'] ?? json['active_live']?['id'] ?? json['active_stream_id'],
+      liveChannelName: json['live_channel_name']?.toString() ?? json['channel_name']?.toString() ?? json['active_live']?['channel_name']?.toString(),
     );
   }
 

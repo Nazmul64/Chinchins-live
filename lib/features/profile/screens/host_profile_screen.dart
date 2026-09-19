@@ -11,6 +11,7 @@ import '../../../core/widgets/avatar_with_frame.dart';
 import '../widgets/gifts_received_card.dart';
 import 'level_progression_screen.dart';
 import '../../call/screens/incoming_call_screen.dart';
+import '../../call/screens/live_room_screen.dart';
 import '../../call/services/call_api_service.dart';
 import '../../call/services/call_sound_manager.dart';
 import '../../call/services/streaming_service.dart';
@@ -40,12 +41,19 @@ class _HostProfileScreenState extends State<HostProfileScreen>
   Timer? _heartTimer;
   UserGiftsData? _giftsData;
   late ModelProfile _currentModel;
+  late AnimationController _shakeController;
+  bool _showMiniLivePreview = true;
 
   @override
   void initState() {
     super.initState();
     _currentModel = widget.model;
     _selectedGalleryIndex = 0;
+
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
 
     // Fast instant cached gifts data
     _giftsData = GiftsApiService.getCachedReceivedGifts(widget.model.id);
@@ -119,6 +127,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
 
   @override
   void dispose() {
+    _shakeController.dispose();
     _heartTimer?.cancel();
     super.dispose();
   }
@@ -1153,71 +1162,314 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                     ),
                     const SizedBox(width: 12),
 
-                    // Video Call Action Bar (Phone icon + Video Call + 💎 2700/min) matching Screenshot 1 & 2
+                    // Video Call or Live Stream Action Bar
                     Expanded(
-                      child: GestureDetector(
-                        onTap: _startVideoCall,
-                        child: Container(
-                          height: 52,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF8E24AA), Color(0xFFD81B60), Color(0xFFE91E63)],
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                            ),
-                            borderRadius: BorderRadius.circular(26),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFE91E63).withValues(alpha: 0.45),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.call_rounded, color: Colors.white, size: 22),
-                              const SizedBox(width: 8),
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Video Call',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
+                      child: model.isLive
+                          ? _buildLiveActionButton(model)
+                          : GestureDetector(
+                              onTap: _startVideoCall,
+                              child: Container(
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF8E24AA), Color(0xFFD81B60), Color(0xFFE91E63)],
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(26),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFE91E63).withValues(alpha: 0.45),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
                                     ),
-                                  ),
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.diamond_rounded, color: Color(0xFFFFD54F), size: 12),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        '${model.pricePerMin > 0 ? model.pricePerMin : 2700}/min',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.call_rounded, color: Colors.white, size: 22),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Video Call',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.diamond_rounded, color: Color(0xFFFFD54F), size: 12),
+                                            const SizedBox(width: 2),
+                                            Text(
+                                              '${model.pricePerMin > 0 ? model.pricePerMin : 2700}/min',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
+                            ),
                     ),
                   ],
                 ),
               ),
             ),
           ),
+
+          // Floating Mini Live Stream Preview Corner Box (When host is currently Live)
+          if (model.isLive && _showMiniLivePreview)
+            _buildMiniLiveStreamFloatingPreview(model),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLiveActionButton(ModelProfile model) {
+    return AnimatedBuilder(
+      animation: _shakeController,
+      builder: (context, child) {
+        final double shake = math.sin(_shakeController.value * 2 * math.pi) * 3.0;
+        final double scale = 1.0 + (math.sin(_shakeController.value * math.pi) * 0.035);
+        return Transform.translate(
+          offset: Offset(shake, 0),
+          child: Transform.scale(
+            scale: scale,
+            child: child,
+          ),
+        );
+      },
+      child: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => LiveRoomScreen(
+                host: model,
+                liveId: model.activeLiveStreamId ?? model.id,
+                channelName: model.liveChannelName ?? 'live_${model.id}',
+                isHost: false,
+              ),
+            ),
+          );
+        },
+        child: Container(
+          height: 52,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFF1744), Color(0xFFFF5252), Color(0xFFFF007F)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFFF1744).withValues(alpha: 0.55),
+                blurRadius: 14,
+                spreadRadius: 1,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.videocam_rounded, color: Colors.white, size: 22),
+              SizedBox(width: 8),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'LIVE NOW 🔴',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  Text(
+                    'Tap to Join Stream',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniLiveStreamFloatingPreview(ModelProfile model) {
+    return Positioned(
+      top: 64,
+      right: 14,
+      child: Material(
+        color: Colors.transparent,
+        child: GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => LiveRoomScreen(
+                  host: model,
+                  liveId: model.activeLiveStreamId ?? model.id,
+                  channelName: model.liveChannelName ?? 'live_${model.id}',
+                  isHost: false,
+                ),
+              ),
+            );
+          },
+          child: Container(
+            width: 112,
+            height: 154,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFFFF1744),
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF1744).withValues(alpha: 0.45),
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Live Stream Thumbnail Image
+                  CachedImageLoader(
+                    imageUrl: model.coverPhotoUrl ?? model.avatarUrl,
+                    fit: BoxFit.cover,
+                  ),
+
+                  // Subtle gradient
+                  Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Color(0x77000000),
+                          Colors.transparent,
+                          Color(0xAA000000),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  ),
+
+                  // Top Bar: 🔴 LIVE Badge + Close Button
+                  Positioned(
+                    top: 6,
+                    left: 6,
+                    right: 6,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF1744),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.circle, color: Colors.white, size: 6),
+                              SizedBox(width: 3),
+                              Text(
+                                'LIVE',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _showMiniLivePreview = false;
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.close_rounded, color: Colors.white70, size: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Center pulsating sound wave / live icon
+                  const Center(
+                    child: Icon(
+                      Icons.play_circle_fill_rounded,
+                      color: Colors.white70,
+                      size: 28,
+                    ),
+                  ),
+
+                  // Bottom Label: "Watch Live"
+                  const Positioned(
+                    bottom: 6,
+                    left: 6,
+                    right: 6,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Watch Live',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
