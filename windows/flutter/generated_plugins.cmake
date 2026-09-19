@@ -5,9 +5,11 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   agora_rtc_engine
   audioplayers_windows
+  connectivity_plus
   file_selector_windows
   flutter_webrtc
   iris_method_channel
+  livekit_client
   permission_handler_windows
   record_windows
   url_launcher_windows
