@@ -72,6 +72,8 @@ class SignalingService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _cohostStatusController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _coHostAcceptedController =
+      StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _webRTCSignalController =
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _audioMuteController =
@@ -101,6 +103,7 @@ class SignalingService {
   Stream<Map<String, dynamic>> get onLiveStreamEnded => _liveStreamEndedController.stream;
   Stream<Map<String, dynamic>> get onLiveMessageSent => _liveMessageSentController.stream;
   Stream<Map<String, dynamic>> get onCoHostStatusChanged => _cohostStatusController.stream;
+  Stream<Map<String, dynamic>> get onCoHostAccepted => _coHostAcceptedController.stream;
   Stream<Map<String, dynamic>> get onWebRTCSignal => _webRTCSignalController.stream;
   Stream<Map<String, dynamic>> get onAudioMuteToggled => _audioMuteController.stream;
   Stream<Map<String, dynamic>> get onLiveLike => _liveLikeController.stream;
@@ -383,11 +386,15 @@ class SignalingService {
 
     // 4. LIVE ROOM BROADCAST CHAT COMMENTS
     if (isLiveRoomChannel && (cleanName == 'message.sent' ||
+        cleanName == 'chat.message' ||
         cleanName == 'LiveChatMessageEvent' ||
         cleanName.endsWith('LiveChatMessageEvent') ||
+        cleanName == 'ChatMessageEvent' ||
+        cleanName.endsWith('ChatMessageEvent') ||
         cleanName == 'LiveMessageSent' ||
         cleanName == 'live.message.sent' ||
         cleanName == 'live.message' ||
+        lowerName == 'chat.message' ||
         lowerName == 'message.sent')) {
       _liveMessageSentController.add(data);
       _liveMessageController.add(data);
@@ -395,14 +402,28 @@ class SignalingService {
     }
 
     // 5. GENERIC FALLBACK FOR message.sent IF NOT CAUGHT
-    if (cleanName == 'message.sent' || cleanName == 'MessageSentEvent' || lowerName == 'message.sent') {
+    if (cleanName == 'message.sent' || cleanName == 'chat.message' || cleanName == 'MessageSentEvent' || lowerName == 'message.sent' || lowerName == 'chat.message') {
       _inCallMessageController.add(data);
       _directMessageReceivedController.add(data);
       _liveMessageController.add(data);
       return;
     }
 
-    // 6. Co-Host Status Changed (CoHostStatusEvent -> cohost.status.changed)
+    // 6a. LiveKit / Reverb Co-Host Accepted Trigger (CoHostAcceptedEvent -> cohost.accepted)
+    if (cleanName == 'cohost.accepted' ||
+        cleanName == 'CoHostAcceptedEvent' ||
+        cleanName.endsWith('CoHostAcceptedEvent') ||
+        cleanName == 'CoHostAccepted' ||
+        cleanName == 'live.cohost.accepted' ||
+        lowerName == 'cohost.accepted' ||
+        lowerName == 'cohostaccepted') {
+      _coHostAcceptedController.add(data);
+      _cohostStatusController.add(data);
+      _liveJoinResponseController.add(data);
+      return;
+    }
+
+    // 6b. Co-Host Status Changed (CoHostStatusEvent -> cohost.status.changed)
     if (cleanName == 'cohost.status.changed' ||
         cleanName == 'CoHostStatusEvent' ||
         cleanName.endsWith('CoHostStatusEvent') ||

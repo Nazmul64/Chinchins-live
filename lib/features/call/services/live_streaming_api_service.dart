@@ -411,38 +411,93 @@ class LiveStreamingApiService {
     return null;
   }
 
-  /// 7b. Viewer sends Co-Hosting request (Compatibility helper)
+  /// 7a. Generate LiveKit Room Token API (POST /api/live/get-token)
+  static Future<Map<String, dynamic>?> generateLiveKitToken({
+    required String roomName,
+    String role = 'viewer', // 'host', 'co_host', 'viewer'
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final url = Uri.parse(ApiConstants.liveGetToken);
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      final payload = {
+        'room_name': roomName,
+        'role': role,
+      };
+
+      final response = await http
+          .post(url, headers: headers, body: jsonEncode(payload))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map) {
+          final data = decoded['data'] ?? decoded;
+          return Map<String, dynamic>.from(data as Map);
+        }
+      }
+    } catch (e, st) {
+      AppLogger.error('GenerateLiveKitTokenError', e, st);
+    }
+    return null;
+  }
+
+  /// 7b. Viewer sends Co-Hosting request (POST /api/live/request-join & /api/live/cohost-action)
   static Future<Map<String, dynamic>?> requestJoinCoHost({
     dynamic roomId,
     dynamic liveStreamId,
   }) async {
+    final id = (roomId ?? liveStreamId)?.toString();
+    if (id == null) return null;
+
+    try {
+      final token = await AuthApiService.getToken();
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      final payload = {
+        'room_id': id,
+        'live_stream_id': id,
+      };
+
+      final response = await http
+          .post(Uri.parse(ApiConstants.liveRequestJoin), headers: headers, body: jsonEncode(payload))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body);
+        return decoded is Map<String, dynamic> ? decoded : Map<String, dynamic>.from(decoded as Map);
+      }
+    } catch (_) {}
+
+    // Fallback to cohostAction
     final savedUser = await AuthApiService.getSavedUser();
     final myUserId = savedUser?['id'] ?? savedUser?['account_id'];
     return cohostAction(
-      roomId: roomId ?? liveStreamId,
+      roomId: id,
       targetUserId: myUserId,
       action: 'invite',
     );
   }
 
-  /// 7c. Host responds to Co-Hosting request (Compatibility helper)
+  /// 7c. Host responds to Co-Hosting request (POST /api/live/respond-request & /api/live/accept-request)
   static Future<Map<String, dynamic>?> respondJoinCoHost({
     required dynamic requestId,
-    required String action,
+    required String action, // "accept" or "reject"
     dynamic roomId,
     dynamic liveStreamId,
     dynamic targetUserId,
   }) async {
-    if (targetUserId != null) {
-      return cohostAction(
-        roomId: roomId ?? liveStreamId,
-        targetUserId: targetUserId,
-        action: action,
-      );
-    }
     try {
       final token = await AuthApiService.getToken();
-      final url = Uri.parse(ApiConstants.liveAcceptRequest);
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -452,23 +507,43 @@ class LiveStreamingApiService {
       final payload = {
         'request_id': requestId,
         'action': action,
+        if (roomId != null) 'room_id': roomId.toString(),
       };
 
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 8));
+      final endpoints = [
+        ApiConstants.liveRespondRequest,
+        ApiConstants.liveAcceptRequest,
+      ];
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final decoded = jsonDecode(response.body);
-        return decoded is Map<String, dynamic> ? decoded : Map<String, dynamic>.from(decoded as Map);
+      for (final endpoint in endpoints) {
+        try {
+          final response = await http
+              .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 8));
+
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final decoded = jsonDecode(response.body);
+            return decoded is Map<String, dynamic> ? decoded : Map<String, dynamic>.from(decoded as Map);
+          }
+        } catch (_) {
+          continue;
+        }
       }
     } catch (e, st) {
       AppLogger.error('RespondJoinCoHostError', e, st);
     }
+
+    if (targetUserId != null) {
+      return cohostAction(
+        roomId: roomId ?? liveStreamId,
+        targetUserId: targetUserId,
+        action: action,
+      );
+    }
     return null;
   }
 
-  /// 7d. Host kicks guest from video grid (Compatibility helper)
+  /// 7d. Host kicks guest from video grid (POST /api/live/kick-guest)
   static Future<bool> kickGuest({
     dynamic roomId,
     dynamic liveStreamId,
