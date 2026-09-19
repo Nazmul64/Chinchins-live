@@ -1,15 +1,16 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import '../../../core/theme/app_colors.dart';
 
 class AnimatedCallButton extends StatefulWidget {
   final VoidCallback onTap;
+  final bool isLive;
   final double size;
 
   const AnimatedCallButton({
     super.key,
     required this.onTap,
-    this.size = 42.0,
+    this.isLive = true,
+    this.size = 46.0,
   });
 
   @override
@@ -17,46 +18,31 @@ class AnimatedCallButton extends StatefulWidget {
 }
 
 class _AnimatedCallButtonState extends State<AnimatedCallButton>
-    with TickerProviderStateMixin {
-  late AnimationController _pulseController;
-  late AnimationController _wobbleController;
-  late Animation<double> _pulseScaleAnimation;
-  late Animation<double> _pulseOpacityAnimation;
-  late Animation<double> _wobbleAnimation;
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _waveOpacity;
 
   @override
   void initState() {
     super.initState();
-
-    // Pulse & Ripple ring controller (Lottie-like sonar waves)
-    _pulseController = AnimationController(
+    _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat();
-
-    _pulseScaleAnimation = Tween<double>(begin: 1.0, end: 1.6).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeOutQuad),
-    );
-
-    _pulseOpacityAnimation = Tween<double>(begin: 0.7, end: 0.0).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeOutQuad),
-    );
-
-    // Wobble & bounce animation
-    _wobbleController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
+      duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
 
-    _wobbleAnimation = Tween<double>(begin: -0.07, end: 0.07).animate(
-      CurvedAnimation(parent: _wobbleController, curve: Curves.easeInOutSine),
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+
+    _waveOpacity = Tween<double>(begin: 0.9, end: 0.25).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
-    _wobbleController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -66,121 +52,161 @@ class _AnimatedCallButtonState extends State<AnimatedCallButton>
 
     return GestureDetector(
       onTap: widget.onTap,
-      child: SizedBox(
-        width: s * 1.5,
-        height: s * 1.5,
-        child: Center(
-          child: Stack(
-            alignment: Alignment.center,
-            clipBehavior: Clip.none,
-            children: [
-              // Outer Ripple Ring 1 (Lottie-like radar wave)
-              AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale: _pulseScaleAnimation.value,
-                    child: Container(
-                      width: s,
-                      height: s,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: AppColors.neonPink.withValues(alpha: _pulseOpacityAnimation.value),
-                          width: 2.0,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return SizedBox(
+            width: s + 22,
+            height: s + 10,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // 1. Concentric Soundwave / Broadcast Arcs on Left & Right (( ... ))
+                if (widget.isLive) ...[
+                  // Outer Wave Arcs
+                  CustomPaint(
+                    size: Size(s + 20 * _scaleAnimation.value, s),
+                    painter: _BroadcastWavePainter(
+                      color: const Color(0xFFFF007F).withValues(alpha: _waveOpacity.value * 0.7),
+                      radius: (s / 2) + 7 * _scaleAnimation.value,
+                      strokeWidth: 2.2,
+                    ),
+                  ),
+                  // Inner Wave Arcs
+                  CustomPaint(
+                    size: Size(s + 12, s),
+                    painter: _BroadcastWavePainter(
+                      color: const Color(0xFFFF2A6D).withValues(alpha: (_waveOpacity.value + 0.3).clamp(0.0, 1.0)),
+                      radius: (s / 2) + 3.5,
+                      strokeWidth: 2.0,
+                    ),
+                  ),
+                ],
+
+                // 2. Main Circular Glowing Live Camera Capsule Button
+                Transform.scale(
+                  scale: widget.isLive ? _scaleAnimation.value : 1.0,
+                  child: Container(
+                    width: s,
+                    height: s,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFFFF007F), // Vivid Neon Pink
+                          Color(0xFFFF2A6D), // Hot Pink
+                          Color(0xFFE91E63), // Vibrant Magenta
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 1.8,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFF007F).withValues(alpha: 0.65),
+                          blurRadius: 10 * _scaleAnimation.value,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 1),
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.neonPink.withValues(alpha: _pulseOpacityAnimation.value * 0.5),
-                            blurRadius: 8,
-                            spreadRadius: 2,
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          blurRadius: 6,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // White Video Camera Icon
+                          const Icon(
+                            Icons.videocam_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          const SizedBox(height: 1),
+                          // LIVE pill text
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF007F),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'LIVE',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 7.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.6,
+                                height: 1.0,
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  );
-                },
-              ),
-
-              // Outer Ripple Ring 2 (Staggered glow)
-              AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, child) {
-                  final delayedVal = (_pulseController.value + 0.5) % 1.0;
-                  final scale = 1.0 + (delayedVal * 0.4);
-                  final opacity = (1.0 - delayedVal) * 0.5;
-
-                  return Transform.scale(
-                    scale: scale,
-                    child: Container(
-                      width: s,
-                      height: s,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.neonPurple.withValues(alpha: opacity * 0.3),
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-              // Main Glowing Button with Wobble & Camera Icon
-              AnimatedBuilder(
-                animation: _wobbleAnimation,
-                builder: (context, child) {
-                  return Transform.rotate(
-                    angle: _wobbleAnimation.value * math.pi,
-                    child: Transform.scale(
-                      scale: 1.0 + (_wobbleAnimation.value.abs() * 0.08),
-                      child: Container(
-                        width: s,
-                        height: s,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            colors: [
-                              Colors.white,
-                              Color(0xFFFFF0F5),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.neonPink.withValues(alpha: 0.7),
-                              blurRadius: 12,
-                              spreadRadius: 2,
-                              offset: const Offset(0, 2),
-                            ),
-                            BoxShadow(
-                              color: const Color(0xFF9C27B0).withValues(alpha: 0.4),
-                              blurRadius: 18,
-                              spreadRadius: 3,
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              // Pulse aura inside icon
-                              Icon(
-                                Icons.videocam_rounded,
-                                color: const Color(0xFFE91E63),
-                                size: s * 0.58,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
+  }
+}
+
+/// Custom Painter for the (( )) broadcast wave arcs around the button
+class _BroadcastWavePainter extends CustomPainter {
+  final Color color;
+  final double radius;
+  final double strokeWidth;
+
+  _BroadcastWavePainter({
+    required this.color,
+    required this.radius,
+    required this.strokeWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final center = Offset(size.width / 2, size.height / 2);
+
+    // Left Arc
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      math.pi * 0.75, // from 135 deg
+      math.pi * 0.5,  // sweep 90 deg
+      false,
+      paint,
+    );
+
+    // Right Arc
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi * 0.25, // from -45 deg
+      math.pi * 0.5,   // sweep 90 deg
+      false,
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BroadcastWavePainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.radius != radius ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }
