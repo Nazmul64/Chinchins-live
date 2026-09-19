@@ -24,82 +24,8 @@ class LiveFeedView extends StatefulWidget {
 class _LiveFeedViewState extends State<LiveFeedView>
     with SingleTickerProviderStateMixin {
   List<Map<String, dynamic>> _activeStreams = [];
-  bool _isLoadingStreams = false;
+  bool _isLoadingStreams = true;
   late AnimationController _equalizerController;
-
-  // Fallback showcase streamers matching Screenshot 1
-  static final List<Map<String, dynamic>> _showcaseStreamers = [
-    {
-      'id': 'showcase_live_1',
-      'title': 'Chatting & Singing! 🎵',
-      'viewer_count': 128,
-      'cover_image': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
-      'host': {
-        'id': '101',
-        'name': 'cute pori',
-        'avatar_url': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-        'level': 6,
-        'country': 'Bangladesh',
-        'flag': '🇧🇩',
-      },
-    },
-    {
-      'id': 'showcase_live_2',
-      'title': 'Late Night Talk 🌙',
-      'viewer_count': 94,
-      'cover_image': 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=500&auto=format&fit=crop&q=80',
-      'host': {
-        'id': '102',
-        'name': 'Micca',
-        'avatar_url': 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&auto=format&fit=crop&q=80',
-        'level': 6,
-        'country': 'Philippines',
-        'flag': '🇵🇭',
-      },
-    },
-    {
-      'id': 'showcase_live_3',
-      'title': 'Chill Vibes with Anne ✨',
-      'viewer_count': 210,
-      'cover_image': 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=500&auto=format&fit=crop&q=80',
-      'host': {
-        'id': '103',
-        'name': 'Anne',
-        'avatar_url': 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200&auto=format&fit=crop&q=80',
-        'level': 7,
-        'country': 'Pakistan',
-        'flag': '🇵🇰',
-      },
-    },
-    {
-      'id': 'showcase_live_4',
-      'title': 'Dance & Music Party 💃',
-      'viewer_count': 76,
-      'cover_image': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500&auto=format&fit=crop&q=80',
-      'host': {
-        'id': '104',
-        'name': 'Sona',
-        'avatar_url': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&q=80',
-        'level': 8,
-        'country': 'India',
-        'flag': '🇮🇳',
-      },
-    },
-    {
-      'id': 'showcase_live_5',
-      'title': 'Voice & Stories 📖',
-      'viewer_count': 150,
-      'cover_image': 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=500&auto=format&fit=crop&q=80',
-      'host': {
-        'id': '105',
-        'name': 'Zoya',
-        'avatar_url': 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=200&auto=format&fit=crop&q=80',
-        'level': 5,
-        'country': 'Global',
-        'flag': '🌐',
-      },
-    },
-  ];
 
   @override
   void initState() {
@@ -129,7 +55,10 @@ class _LiveFeedViewState extends State<LiveFeedView>
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _isLoadingStreams = false);
+        setState(() {
+          _activeStreams = [];
+          _isLoadingStreams = false;
+        });
       }
     }
   }
@@ -173,16 +102,13 @@ class _LiveFeedViewState extends State<LiveFeedView>
 
   @override
   Widget build(BuildContext context) {
-    final allStreams = _activeStreams.isNotEmpty ? _activeStreams : _showcaseStreamers;
-
     return Column(
       children: [
-        // Sub-bar with grid layout switch (⊞) and Link / Filter button matching Screenshot 1
+        // Sub-bar with grid layout switch and Go Live button
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           child: Row(
             children: [
-              // Orange square grid switch button (Screenshot 1)
               Container(
                 width: 32,
                 height: 32,
@@ -198,7 +124,6 @@ class _LiveFeedViewState extends State<LiveFeedView>
               ),
               const SizedBox(width: 8),
 
-              // Link / Category pill (Screenshot 1)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
@@ -207,7 +132,7 @@ class _LiveFeedViewState extends State<LiveFeedView>
                   border: Border.all(color: Colors.white10),
                 ),
                 child: const Text(
-                  'Link',
+                  'Live',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
@@ -222,21 +147,28 @@ class _LiveFeedViewState extends State<LiveFeedView>
               GestureDetector(
                 onTap: _startHostBroadcast,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFFFF2A6D), Color(0xFF8B5CF6)],
                     ),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF2A6D).withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: const [
-                      Icon(Icons.videocam_rounded, color: Colors.white, size: 14),
+                      Icon(Icons.videocam_rounded, color: Colors.white, size: 15),
                       SizedBox(width: 4),
                       Text(
                         'Go Live',
-                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -246,126 +178,115 @@ class _LiveFeedViewState extends State<LiveFeedView>
           ),
         ),
 
-        // Live Broadcasters Grid with Hot Promotional Card matching Screenshot 1
+        // Live Broadcasters Grid or Dynamic Empty State
         Expanded(
           child: RefreshIndicator(
             color: AppColors.neonPink,
             onRefresh: _handleRefresh,
-            child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.72,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-              ),
-              itemCount: allStreams.length + 1, // +1 for the "🔥 Hot" card inserted into the grid
-              itemBuilder: (context, index) {
-                // Insert the "🔥 Hot" Category Card at index 2 (Screenshot 1)
-                if (index == 2) {
-                  return _buildHotPromoCard();
-                }
-
-                final streamIndex = index > 2 ? index - 1 : index;
-                final stream = allStreams[streamIndex % allStreams.length];
-                return _buildLiveStreamCard(context, stream, streamIndex);
-              },
-            ),
+            child: _isLoadingStreams && _activeStreams.isEmpty
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.neonPink),
+                  )
+                : _activeStreams.isEmpty
+                    ? _buildEmptyStreamsView()
+                    : GridView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 0.72,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                        ),
+                        itemCount: _activeStreams.length,
+                        itemBuilder: (context, index) {
+                          final stream = _activeStreams[index];
+                          return _buildLiveStreamCard(context, stream, index);
+                        },
+                      ),
           ),
         ),
       ],
     );
   }
 
-  // "🔥 Hot" Categories Card matching Screenshot 1 (Pretty, New, Sexy)
-  Widget _buildHotPromoCard() {
-    final categories = [
-      {
-        'title': 'Pretty',
-        'image': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      },
-      {
-        'title': 'New',
-        'image': 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-      },
-      {
-        'title': 'Sexy',
-        'image': 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&auto=format&fit=crop&q=80',
-      },
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF281C44), Color(0xFF1E1533)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFF8B5CF6).withValues(alpha: 0.25),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header: 🔥 Hot
-          Row(
-            children: const [
-              Text('🔥', style: TextStyle(fontSize: 14)),
-              SizedBox(width: 4),
-              Text(
-                'Hot',
+  Widget _buildEmptyStreamsView() {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      children: [
+        SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+        Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFFFF2A6D).withValues(alpha: 0.25),
+                      Colors.transparent,
+                    ],
+                  ),
+                  border: Border.all(
+                    color: const Color(0xFFFF2A6D).withValues(alpha: 0.4),
+                    width: 1.5,
+                  ),
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.live_tv_rounded,
+                    color: Color(0xFFFF2A6D),
+                    size: 46,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'No Live Broadcasts Right Now',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: 17,
                   fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                child: Text(
+                  'Be the first to go live and broadcast to everyone on Chinchins Live!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.65),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _startHostBroadcast,
+                icon: const Icon(Icons.videocam_rounded, size: 18),
+                label: const Text(
+                  'Start Live Stream',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF2A6D),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  elevation: 6,
+                  shadowColor: const Color(0xFFFF2A6D).withValues(alpha: 0.5),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-
-          // 3 Categories (Pretty, New, Sexy)
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: categories.map((cat) {
-                return Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: CachedImageLoader(
-                          imageUrl: cat['image']!,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      cat['title']!,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -374,11 +295,11 @@ class _LiveFeedViewState extends State<LiveFeedView>
     final hostModel = ModelProfile.fromJson({
       'id': (hostMap['id'] ?? stream['host_id'] ?? index).toString(),
       'account_id': (hostMap['account_id'] ?? hostMap['id'] ?? '').toString(),
-      'name': hostMap['display_name'] ?? hostMap['name'] ?? 'cute pori',
+      'name': hostMap['display_name'] ?? hostMap['name'] ?? stream['title'] ?? 'Live Host',
       'avatar_url': hostMap['avatar_url'] ?? stream['cover_image_url'] ?? stream['cover_image'] ?? '',
       'gender': hostMap['gender'] ?? 'female',
-      'location': hostMap['country'] ?? 'Bangladesh',
-      'level': hostMap['level'] ?? 6,
+      'location': hostMap['country'] ?? 'Global',
+      'level': hostMap['level'] ?? 1,
       ...hostMap,
     });
 

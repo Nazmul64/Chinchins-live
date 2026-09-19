@@ -31,10 +31,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
   bool _isCameraOff = false;
   bool _isCoHost = false;
 
-  final List<Map<String, String>> _liveMessages = [
-    {'user': 'Sara', 'text': 'Welcome to the live stream! 🌟'},
-    {'user': 'Alex', 'text': 'Super crystal clear video! 🔥'},
-  ];
+  final List<Map<String, String>> _liveMessages = [];
   final TextEditingController _chatController = TextEditingController();
 
   @override

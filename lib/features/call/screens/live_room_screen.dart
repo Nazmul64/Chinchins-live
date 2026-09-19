@@ -120,13 +120,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     super.initState();
     _activeLiveId = widget.liveId;
     _activeChannelName = widget.channelName ?? 'live_${widget.host.id}_${DateTime.now().millisecondsSinceEpoch}';
-    _viewerCount = 100 + _rnd.nextInt(150);
+    _viewerCount = 1;
 
-    _liveComments.addAll([
-      {'user': 'Sara', 'text': 'Hello everyone! ❤️', 'color': Colors.pinkAccent},
-      {'user': 'Alex', 'text': 'Welcome to live stream! 🔥', 'color': Colors.amberAccent},
-      {'user': 'Rohan', 'text': 'You look stunning! ✨', 'color': Colors.cyanAccent},
-    ]);
 
     if (_activeSession != null &&
         (_activeSession!.liveId == widget.liveId || _activeSession!.channelName == _activeChannelName)) {

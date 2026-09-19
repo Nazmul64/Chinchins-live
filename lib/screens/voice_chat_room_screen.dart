@@ -28,10 +28,7 @@ class _VoiceChatRoomScreenState extends State<VoiceChatRoomScreen> {
   bool isMuted = false;
   bool _amIOnSeat = false;
 
-  final List<String> _chatMessages = [
-    '🎉 Welcome to the Voice Party Room!',
-    'Grab a seat and chat with everyone!',
-  ];
+  final List<String> _chatMessages = [];
   final TextEditingController _chatController = TextEditingController();
 
   @override

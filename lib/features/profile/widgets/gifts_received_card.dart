@@ -23,82 +23,6 @@ class _GiftsReceivedCardState extends State<GiftsReceivedCard> {
   UserGiftsData? _giftsData;
   bool _isLoading = false;
 
-  // Showcase fallback items matching Screenshot 1 & 2
-  static final List<GiftItem> _showcaseGifts = [
-    GiftItem(
-      id: 'showcase_1',
-      name: 'Golden Dragon',
-      coins: 18880,
-      imageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80',
-      emoji: '🐉',
-      category: 'Luxury',
-      receivedCount: 2,
-    ),
-    GiftItem(
-      id: 'showcase_2',
-      name: 'Super Car',
-      coins: 9990,
-      imageUrl: 'https://images.unsplash.com/photo-1544829099-b9a0c07fad1a?w=200&auto=format&fit=crop&q=80',
-      emoji: '🏎️',
-      category: 'Luxury',
-      receivedCount: 50,
-    ),
-    GiftItem(
-      id: 'showcase_3',
-      name: 'Jet Plane',
-      coins: 6660,
-      imageUrl: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=200&auto=format&fit=crop&q=80',
-      emoji: '✈️',
-      category: 'Luxury',
-      receivedCount: 13,
-    ),
-    GiftItem(
-      id: 'showcase_4',
-      name: 'Fire Phoenix',
-      coins: 5550,
-      imageUrl: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=200&auto=format&fit=crop&q=80',
-      emoji: '🦅',
-      category: 'Luxury',
-      receivedCount: 20,
-    ),
-    GiftItem(
-      id: 'showcase_5',
-      name: 'Treasure Chest',
-      coins: 5000,
-      imageUrl: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=200&auto=format&fit=crop&q=80',
-      emoji: '📦',
-      category: 'Special',
-      receivedCount: 3,
-    ),
-    GiftItem(
-      id: 'showcase_6',
-      name: 'Magic Lamp',
-      coins: 4440,
-      imageUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=200&auto=format&fit=crop&q=80',
-      emoji: '🪔',
-      category: 'Special',
-      receivedCount: 12,
-    ),
-    GiftItem(
-      id: 'showcase_7',
-      name: 'Royal Prince',
-      coins: 3700,
-      imageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-      emoji: '🤴',
-      category: 'Popular',
-      receivedCount: 1,
-    ),
-    GiftItem(
-      id: 'showcase_8',
-      name: 'Romantic Couple',
-      coins: 3700,
-      imageUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&auto=format&fit=crop&q=80',
-      emoji: '💑',
-      category: 'Popular',
-      receivedCount: 7,
-    ),
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -146,7 +70,6 @@ class _GiftsReceivedCardState extends State<GiftsReceivedCard> {
   @override
   Widget build(BuildContext context) {
     final actualGifts = _giftsData?.profilePreviewGifts ?? [];
-    final displayGifts = actualGifts.isNotEmpty ? actualGifts : _showcaseGifts;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -204,7 +127,7 @@ class _GiftsReceivedCardState extends State<GiftsReceivedCard> {
                   ],
                 ),
 
-                // Glowing Shiny Heart matching Screenshot 1 & 2
+                // Glowing Shiny Heart
                 Container(
                   width: 38,
                   height: 38,
@@ -238,25 +161,58 @@ class _GiftsReceivedCardState extends State<GiftsReceivedCard> {
           ),
           const SizedBox(height: 12),
 
-          // 8-item Grid (2 rows x 4 columns) matching Screenshot 1 & 2
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: displayGifts.length > 8 ? 8 : displayGifts.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 10,
-              childAspectRatio: 0.72,
+          // Grid of actual gifts or Empty State
+          if (_isLoading && actualGifts.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: const CircularProgressIndicator(color: Color(0xFFFF2A6D)),
+              ),
+            )
+          else if (actualGifts.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.card_giftcard_rounded,
+                      color: Colors.white24,
+                      size: 36,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'No gifts received yet',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: actualGifts.length > 8 ? 8 : actualGifts.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 10,
+                childAspectRatio: 0.72,
+              ),
+              itemBuilder: (context, index) {
+                final gift = actualGifts[index];
+                return GestureDetector(
+                  onTap: _openFullGiftsReceivedScreen,
+                  child: _buildGiftSlot(gift),
+                );
+              },
             ),
-            itemBuilder: (context, index) {
-              final gift = displayGifts[index];
-              return GestureDetector(
-                onTap: _openFullGiftsReceivedScreen,
-                child: _buildGiftSlot(gift),
-              );
-            },
-          ),
         ],
       ),
     );
