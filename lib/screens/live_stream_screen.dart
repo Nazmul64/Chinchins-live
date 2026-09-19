@@ -33,6 +33,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
   final LiveKitService _liveKitService = LiveKitService();
   Room? _room;
   EventsListener<RoomEvent>? _listener;
+  List<VideoTrack> _activeVideos = [];
   bool _isMicMuted = false;
   bool _isCameraOff = false;
   bool _isCoHost = false;
@@ -49,6 +50,37 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
     _isCoHost = widget.isHost;
     _initLiveKit();
     _setupSignalingListeners();
+  }
+
+  void _updateVideoTracks() {
+    if (_room == null) {
+      if (mounted) setState(() => _activeVideos = []);
+      return;
+    }
+
+    final List<VideoTrack> tracks = [];
+
+    // Local video track (if published & not muted)
+    for (var pub in _room!.localParticipant?.videoTrackPublications ?? []) {
+      if (pub.track != null && pub.track is VideoTrack && !pub.muted) {
+        tracks.add(pub.track as VideoTrack);
+      }
+    }
+
+    // Remote participants' video tracks (host + co-hosts)
+    for (var participant in _room!.remoteParticipants.values) {
+      for (var pub in participant.videoTrackPublications) {
+        if (pub.track != null && pub.track is VideoTrack && !pub.muted) {
+          tracks.add(pub.track as VideoTrack);
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _activeVideos = tracks;
+      });
+    }
   }
 
   void _initLiveKit() async {
@@ -71,25 +103,16 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
     if (_room != null && mounted) {
       _listener = _room!.createListener();
       _listener!
-        ..on<TrackSubscribedEvent>((event) {
-          if (mounted) setState(() {});
-        })
-        ..on<TrackUnsubscribedEvent>((event) {
-          if (mounted) setState(() {});
-        })
-        ..on<LocalTrackPublishedEvent>((event) {
-          if (mounted) setState(() {});
-        })
-        ..on<LocalTrackUnpublishedEvent>((event) {
-          if (mounted) setState(() {});
-        })
-        ..on<ParticipantConnectedEvent>((event) {
-          if (mounted) setState(() {});
-        })
-        ..on<ParticipantDisconnectedEvent>((event) {
-          if (mounted) setState(() {});
-        });
-      setState(() {});
+        ..on<TrackSubscribedEvent>((event) => _updateVideoTracks())
+        ..on<TrackUnsubscribedEvent>((event) => _updateVideoTracks())
+        ..on<LocalTrackPublishedEvent>((event) => _updateVideoTracks())
+        ..on<LocalTrackUnpublishedEvent>((event) => _updateVideoTracks())
+        ..on<TrackMutedEvent>((event) => _updateVideoTracks())
+        ..on<TrackUnmutedEvent>((event) => _updateVideoTracks())
+        ..on<ParticipantConnectedEvent>((event) => _updateVideoTracks())
+        ..on<ParticipantDisconnectedEvent>((event) => _updateVideoTracks());
+
+      _updateVideoTracks();
     }
   }
 
@@ -104,6 +127,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
             _isCoHost = true;
           });
         }
+        _updateVideoTracks();
       }
     });
 
@@ -140,6 +164,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
     final next = !_isCameraOff;
     setState(() => _isCameraOff = next);
     await _liveKitService.setCameraEnabled(!next);
+    _updateVideoTracks();
   }
 
   void _sendMessage() {
@@ -176,48 +201,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
       );
     }
 
-    final localVideoTrack = _room!.localParticipant?.videoTrackPublications.firstOrNull?.track as VideoTrack?;
-    final remoteTracks = <VideoTrack>[];
-    for (var p in _room!.remoteParticipants.values) {
-      for (var pub in p.videoTrackPublications) {
-        if (pub.track != null && pub.track is VideoTrack) {
-          remoteTracks.add(pub.track as VideoTrack);
-        }
-      }
-    }
-
-    final isBroadcasting = widget.isHost || _isCoHost;
-    final List<Widget> videoWidgets = [];
-
-    if (isBroadcasting) {
-      if (localVideoTrack != null) {
-        videoWidgets.add(
-          VideoTrackRenderer(
-            localVideoTrack,
-            fit: VideoViewFit.cover,
-          ),
-        );
-      }
-      for (var track in remoteTracks) {
-        videoWidgets.add(
-          VideoTrackRenderer(
-            track,
-            fit: VideoViewFit.cover,
-          ),
-        );
-      }
-    } else {
-      // Viewer mode: only show remote tracks
-      for (var track in remoteTracks) {
-        videoWidgets.add(
-          VideoTrackRenderer(
-            track,
-            fit: VideoViewFit.cover,
-          ),
-        );
-      }
-    }
-
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
@@ -229,7 +212,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: videoWidgets.isEmpty
+                    child: _activeVideos.isEmpty
                         ? Stack(
                             fit: StackFit.expand,
                             children: [
@@ -247,24 +230,34 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                               ),
                             ],
                           )
-                        : videoWidgets.length == 1
+                        : _activeVideos.length == 1
                             ? ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
-                                child: videoWidgets.first,
+                                child: VideoTrackRenderer(
+                                  _activeVideos.first,
+                                  fit: VideoViewFit.cover,
+                                ),
                               )
                             : GridView.builder(
-                                padding: const EdgeInsets.all(4),
+                                padding: const EdgeInsets.all(2),
+                                physics: const NeverScrollableScrollPhysics(),
                                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                                   crossAxisCount: 2,
-                                  crossAxisSpacing: 4,
-                                  mainAxisSpacing: 4,
-                                  childAspectRatio: 1.0,
+                                  crossAxisSpacing: 2,
+                                  mainAxisSpacing: 2,
+                                  childAspectRatio: 0.75,
                                 ),
-                                itemCount: videoWidgets.length,
+                                itemCount: _activeVideos.length,
                                 itemBuilder: (context, index) {
                                   return ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: videoWidgets[index],
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      color: Colors.black,
+                                      child: VideoTrackRenderer(
+                                        _activeVideos[index],
+                                        fit: VideoViewFit.cover,
+                                      ),
+                                    ),
                                   );
                                 },
                               ),

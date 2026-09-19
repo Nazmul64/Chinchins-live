@@ -100,6 +100,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   
   // LiveKit RTC State
   Room? _liveKitRoom;
+  List<VideoTrack> _activeVideos = [];
   EventsListener<RoomEvent>? _liveKitListener;
   bool _isLiveKitConnected = false;
 
@@ -182,6 +183,69 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     _commentController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+
+  void _updateActiveVideoTracks() {
+    if (_liveKitRoom == null) {
+      if (mounted) setState(() => _activeVideos = []);
+      return;
+    }
+
+    final List<VideoTrack> tracks = [];
+
+    // Local video track (if published & not muted)
+    for (var pub in _liveKitRoom!.localParticipant?.videoTrackPublications ?? []) {
+      if (pub.track != null && pub.track is VideoTrack && !pub.muted) {
+        tracks.add(pub.track as VideoTrack);
+      }
+    }
+
+    // Remote participants' video tracks (host + co-hosts)
+    for (var participant in _liveKitRoom!.remoteParticipants.values) {
+      for (var pub in participant.videoTrackPublications) {
+        if (pub.track != null && pub.track is VideoTrack && !pub.muted) {
+          tracks.add(pub.track as VideoTrack);
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _activeVideos = tracks;
+      });
+    }
+  }
+
+  Future<void> _publishGuestCameraAndMic() async {
+    try {
+      await [Permission.camera, Permission.microphone].request();
+      if (_liveKitRoom != null) {
+        try {
+          await _liveKitRoom!.localParticipant?.setCameraEnabled(true);
+          await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(true);
+        } catch (e) {
+          debugPrint('[LiveRoomScreen] Direct guest publish failed: $e');
+        }
+
+        final hasVideo = _liveKitRoom!.localParticipant?.videoTrackPublications.any((p) => p.track != null && !p.muted) ?? false;
+        if (!hasVideo && _activeChannelName.isNotEmpty) {
+          final tokenRes = await LiveStreamingApiService.generateLiveKitToken(
+            roomName: _activeChannelName,
+            role: 'co_host',
+          );
+          if (tokenRes != null && tokenRes['livekit_token'] != null) {
+            await _liveKitRoom!.disconnect();
+            await _liveKitRoom!.connect('wss://chinchins.live/livekit', tokenRes['livekit_token']!);
+            await _liveKitRoom!.localParticipant?.setCameraEnabled(true);
+            await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(true);
+          }
+        }
+      }
+      _updateActiveVideoTracks();
+    } catch (e) {
+      debugPrint('[LiveRoomScreen] _publishGuestCameraAndMic error: $e');
+    }
   }
 
   Future<void> _destroyEngines() async {
@@ -357,24 +421,14 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
       _liveKitListener = _liveKitRoom!.createListener();
       _liveKitListener!
-        ..on<TrackSubscribedEvent>((event) {
-          if (mounted) setState(() {});
-        })
-        ..on<TrackUnsubscribedEvent>((event) {
-          if (mounted) setState(() {});
-        })
-        ..on<LocalTrackPublishedEvent>((event) {
-          if (mounted) setState(() {});
-        })
-        ..on<LocalTrackUnpublishedEvent>((event) {
-          if (mounted) setState(() {});
-        })
-        ..on<ParticipantConnectedEvent>((event) {
-          if (mounted) setState(() {});
-        })
-        ..on<ParticipantDisconnectedEvent>((event) {
-          if (mounted) setState(() {});
-        });
+        ..on<TrackSubscribedEvent>((event) => _updateActiveVideoTracks())
+        ..on<TrackUnsubscribedEvent>((event) => _updateActiveVideoTracks())
+        ..on<LocalTrackPublishedEvent>((event) => _updateActiveVideoTracks())
+        ..on<LocalTrackUnpublishedEvent>((event) => _updateActiveVideoTracks())
+        ..on<TrackMutedEvent>((event) => _updateActiveVideoTracks())
+        ..on<TrackUnmutedEvent>((event) => _updateActiveVideoTracks())
+        ..on<ParticipantConnectedEvent>((event) => _updateActiveVideoTracks())
+        ..on<ParticipantDisconnectedEvent>((event) => _updateActiveVideoTracks());
 
       await _liveKitRoom!.connect(serverUrl, token);
       _isLiveKitConnected = true;
@@ -384,15 +438,13 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         await Hardware.instance.setSpeakerphoneOn(true);
       } catch (_) {}
 
-      // Host publishes camera and microphone automatically
-      if (isHost) {
+      // Host or Co-Host publishes camera and microphone automatically
+      if (isHost || _isGuestConnected) {
         await _liveKitRoom!.localParticipant?.setCameraEnabled(true);
         await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(true);
       }
 
-      if (mounted) {
-        setState(() {});
-      }
+      _updateActiveVideoTracks();
     } catch (e) {
       debugPrint('[LiveRoomScreen] LiveKit connect error: $e');
     }
@@ -551,11 +603,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     _coHostAcceptedSub = signaling.onCoHostAccepted.listen((data) async {
       final guestUserId = data['guest_user_id'] ?? data['target_user_id'] ?? data['user_id'];
       if (guestUserId != null && guestUserId.toString() == _myUid.toString()) {
-        // Guest automatically enables camera & mic on LiveKit without black screen
-        if (_liveKitRoom != null) {
-          await _liveKitRoom!.localParticipant?.setCameraEnabled(true);
-          await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(true);
-        }
+        await _publishGuestCameraAndMic();
         if (_rtcEngine != null) {
           await _rtcEngine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
           await _rtcEngine!.startPreview();
@@ -2017,64 +2065,39 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   Widget _buildVideoGrid({bool isMini = false}) {
     // 1. Check LiveKit Tracks
     if (_liveKitRoom != null && _isLiveKitConnected) {
-      final localVideoTrack = _liveKitRoom!.localParticipant?.videoTrackPublications.firstOrNull?.track as VideoTrack?;
-      final remoteTracks = <VideoTrack>[];
-      for (var p in _liveKitRoom!.remoteParticipants.values) {
-        for (var pub in p.videoTrackPublications) {
-          if (pub.track != null && pub.track is VideoTrack) {
-            remoteTracks.add(pub.track as VideoTrack);
-          }
-        }
-      }
-
-      final isBroadcaster = widget.isHost || _isGuestConnected;
-      final allDisplayTracks = <VideoTrack>[];
-
-      if (isBroadcaster) {
-        if (localVideoTrack != null) {
-          allDisplayTracks.add(localVideoTrack);
-        }
-        allDisplayTracks.addAll(remoteTracks);
-      } else {
-        // Viewer mode: only display remote broadcaster video tracks
-        allDisplayTracks.addAll(remoteTracks);
-      }
-
-      if (allDisplayTracks.isEmpty) {
-        return _buildCoverFallback();
-      }
-
-      if (allDisplayTracks.length == 1) {
-        return BeautyFilterEngine.applyFilterToWidget(
-          filter: _currentFilter,
-          child: VideoTrackRenderer(
-            allDisplayTracks.first,
-            fit: VideoViewFit.cover,
-          ),
-        );
-      }
-
-      // Multi-Stream Co-Hosting Grid (2 or more participants)
-      return GridView.builder(
-        padding: const EdgeInsets.all(4),
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 4,
-          mainAxisSpacing: 4,
-          childAspectRatio: 1.0,
-        ),
-        itemCount: allDisplayTracks.length,
-        itemBuilder: (context, index) {
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+      if (_activeVideos.isNotEmpty) {
+        if (_activeVideos.length == 1) {
+          return BeautyFilterEngine.applyFilterToWidget(
+            filter: _currentFilter,
             child: VideoTrackRenderer(
-              allDisplayTracks[index],
+              _activeVideos.first,
               fit: VideoViewFit.cover,
             ),
           );
-        },
-      );
+        }
+
+        // Multi-Host 50/50 Split Screen Grid (Host + Guests)
+        return GridView.builder(
+          padding: EdgeInsets.zero,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: _activeVideos.length > 1 ? 2 : 1,
+            childAspectRatio: _activeVideos.length > 1 ? 0.75 : (9 / 16),
+            crossAxisSpacing: 2,
+            mainAxisSpacing: 2,
+          ),
+          itemCount: _activeVideos.length,
+          itemBuilder: (context, index) {
+            return Container(
+              color: Colors.black,
+              child: VideoTrackRenderer(
+                _activeVideos[index],
+                fit: VideoViewFit.cover,
+              ),
+            );
+          },
+        );
+      }
     }
 
     // 2. Agora RTC Engine Fallback Grid

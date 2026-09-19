@@ -22,13 +22,45 @@ class LiveViewerScreen extends StatefulWidget {
 class _LiveViewerScreenState extends State<LiveViewerScreen> {
   Room? _room;
   EventsListener<RoomEvent>? _listener;
-  VideoTrack? _remoteHostVideoTrack;
+  List<VideoTrack> _activeVideos = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _connectToHostStream();
+  }
+
+  void _updateVideoTracks() {
+    if (_room == null) {
+      if (mounted) setState(() => _activeVideos = []);
+      return;
+    }
+
+    final List<VideoTrack> tracks = [];
+
+    // Local video track (if published & not muted)
+    for (var pub in _room!.localParticipant?.videoTrackPublications ?? []) {
+      if (pub.track != null && pub.track is VideoTrack && !pub.muted) {
+        tracks.add(pub.track as VideoTrack);
+      }
+    }
+
+    // Remote participants' video tracks (host + co-hosts)
+    for (var participant in _room!.remoteParticipants.values) {
+      for (var pub in participant.videoTrackPublications) {
+        if (pub.track != null && pub.track is VideoTrack && !pub.muted) {
+          tracks.add(pub.track as VideoTrack);
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _activeVideos = tracks;
+        _isLoading = tracks.isEmpty;
+      });
+    }
   }
 
   Future<void> _connectToHostStream() async {
@@ -49,21 +81,14 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
 
     // 2. Setup track listeners
     _listener!
-      ..on<TrackSubscribedEvent>((event) {
-        if (event.track is VideoTrack) {
-          setState(() {
-            _remoteHostVideoTrack = event.track as VideoTrack;
-            _isLoading = false;
-          });
-        }
-      })
-      ..on<TrackUnsubscribedEvent>((event) {
-        if (event.track is VideoTrack) {
-          setState(() {
-            _remoteHostVideoTrack = null;
-          });
-        }
-      });
+      ..on<TrackSubscribedEvent>((event) => _updateVideoTracks())
+      ..on<TrackUnsubscribedEvent>((event) => _updateVideoTracks())
+      ..on<LocalTrackPublishedEvent>((event) => _updateVideoTracks())
+      ..on<LocalTrackUnpublishedEvent>((event) => _updateVideoTracks())
+      ..on<TrackMutedEvent>((event) => _updateVideoTracks())
+      ..on<TrackUnmutedEvent>((event) => _updateVideoTracks())
+      ..on<ParticipantConnectedEvent>((event) => _updateVideoTracks())
+      ..on<ParticipantDisconnectedEvent>((event) => _updateVideoTracks());
 
     try {
       // 3. Connect to LiveKit server
@@ -77,18 +102,8 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
         await Hardware.instance.setSpeakerphoneOn(true);
       } catch (_) {}
 
-      // 5. If host already published video before viewer connected
-      for (var participant in _room!.remoteParticipants.values) {
-        for (var pub in participant.videoTrackPublications) {
-          if (pub.track != null && pub.track is VideoTrack) {
-            setState(() {
-              _remoteHostVideoTrack = pub.track as VideoTrack;
-              _isLoading = false;
-            });
-            break;
-          }
-        }
-      }
+      // 5. Update existing tracks
+      _updateVideoTracks();
     } catch (e) {
       debugPrint('LiveKit Viewer Connection Error: $e');
     }
@@ -108,14 +123,10 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Video Renderer Layer
+          // Video Renderer Layer (1 video -> Full Screen; 2+ videos -> 50/50 Split Screen Grid)
           Positioned.fill(
-            child: _remoteHostVideoTrack != null
-                ? VideoTrackRenderer(
-                    _remoteHostVideoTrack!,
-                    fit: VideoViewFit.cover,
-                  )
-                : Stack(
+            child: _activeVideos.isEmpty
+                ? Stack(
                     fit: StackFit.expand,
                     children: [
                       if (widget.hostImageUrl.isNotEmpty)
@@ -134,7 +145,32 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
                           ),
                         ),
                     ],
-                  ),
+                  )
+                : _activeVideos.length == 1
+                    ? VideoTrackRenderer(
+                        _activeVideos.first,
+                        fit: VideoViewFit.cover,
+                      )
+                    : GridView.builder(
+                        padding: EdgeInsets.zero,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 0.75,
+                          crossAxisSpacing: 2,
+                          mainAxisSpacing: 2,
+                        ),
+                        itemCount: _activeVideos.length,
+                        itemBuilder: (context, index) {
+                          return Container(
+                            color: Colors.black,
+                            child: VideoTrackRenderer(
+                              _activeVideos[index],
+                              fit: VideoViewFit.cover,
+                            ),
+                          );
+                        },
+                      ),
           ),
 
           // Overlay UI (Header & Comments)
