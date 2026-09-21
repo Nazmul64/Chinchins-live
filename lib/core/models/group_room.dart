@@ -61,21 +61,38 @@ class RoomSeat {
   bool get isEmpty => userId == null || userId!.isEmpty || status == 'empty';
 
   factory RoomSeat.fromJson(Map<String, dynamic> json, int defaultIndex) {
-    final seatIdx = json['seat_index'] != null
-        ? (json['seat_index'] is int
-            ? json['seat_index'] as int
-            : int.tryParse(json['seat_index'].toString()) ?? defaultIndex)
-        : defaultIndex;
+    int seatIdx = defaultIndex;
+    if (json['seat_index'] != null) {
+      final rawIdx = int.tryParse(json['seat_index'].toString()) ?? defaultIndex;
+      if (rawIdx >= 1 && defaultIndex == 0 && rawIdx == 1) {
+        seatIdx = 0;
+      } else if (rawIdx >= 1 && rawIdx <= 16 && (json['seat_index'] is int || json['seat_index'] is String)) {
+        seatIdx = rawIdx > 0 ? (rawIdx - 1) : rawIdx;
+      } else {
+        seatIdx = rawIdx;
+      }
+    }
 
-    final userData = json['user'] is Map<String, dynamic>
-        ? json['user'] as Map<String, dynamic>
-        : (json['guest'] is Map<String, dynamic> ? json['guest'] as Map<String, dynamic> : null);
+    final userData = json['user_profile'] is Map<String, dynamic>
+        ? json['user_profile'] as Map<String, dynamic>
+        : (json['user'] is Map<String, dynamic>
+            ? json['user'] as Map<String, dynamic>
+            : (json['guest'] is Map<String, dynamic>
+                ? json['guest'] as Map<String, dynamic>
+                : (json['sender'] is Map<String, dynamic> ? json['sender'] as Map<String, dynamic> : null)));
 
-    final rawUserId = userData?['id']?.toString() ?? json['user_id']?.toString();
-    final isOccupied = json['is_occupied'] == true || (rawUserId != null && rawUserId.isNotEmpty && rawUserId != '0');
-    final role = json['role']?.toString() ?? (seatIdx == 0 || seatIdx == 1 ? 'host' : 'guest');
-    final isHostFlag = json['is_host'] == true || role.toLowerCase() == 'host' || (userData?['is_host'] == true);
-    final userLvl = userData?['level'] is int ? userData!['level'] as int : (int.tryParse(userData?['level']?.toString() ?? '1') ?? 1);
+    final rawUserId = userData?['id']?.toString() ?? json['user_id']?.toString() ?? json['id']?.toString();
+    final isOccupied = json['is_occupied'] == true ||
+        json['status'] == 'occupied' ||
+        (rawUserId != null && rawUserId.isNotEmpty && rawUserId != '0');
+    final role = json['role']?.toString() ?? (seatIdx == 0 ? 'host' : 'guest');
+    final isHostFlag = json['is_host'] == true ||
+        role.toLowerCase() == 'host' ||
+        (userData?['is_host'] == true) ||
+        (seatIdx == 0);
+    final userLvl = userData?['level'] is int
+        ? userData!['level'] as int
+        : (int.tryParse(userData?['level']?.toString() ?? json['level']?.toString() ?? '1') ?? 1);
 
     final parsedFrame = userData?['profile_base_frame']?.toString() ??
         userData?['frame_svg_url']?.toString() ??
@@ -87,12 +104,25 @@ class RoomSeat {
         ? parsedFrame
         : (isOccupied ? LevelBasesApiService.getFrameUrlForLevel(userLvl) : null);
 
+    final rawName = userData?['name']?.toString() ??
+        userData?['display_name']?.toString() ??
+        userData?['nickname']?.toString() ??
+        json['user_name']?.toString() ??
+        json['display_name']?.toString() ??
+        json['name']?.toString();
+
+    final rawAvatar = userData?['avatar_url']?.toString() ??
+        userData?['avatar']?.toString() ??
+        json['user_avatar']?.toString() ??
+        json['avatar_url']?.toString() ??
+        json['avatar']?.toString();
+
     return RoomSeat(
       seatIndex: seatIdx,
       userId: isOccupied ? rawUserId : null,
       accountId: userData?['account_id']?.toString() ?? json['account_id']?.toString(),
-      userName: userData?['name']?.toString() ?? userData?['nickname']?.toString() ?? json['user_name']?.toString() ?? (isOccupied ? 'User $rawUserId' : null),
-      userAvatar: userData?['avatar_url']?.toString() ?? userData?['avatar']?.toString() ?? json['user_avatar']?.toString(),
+      userName: rawName ?? (isOccupied ? 'User $rawUserId' : null),
+      userAvatar: rawAvatar,
       frameSvgUrl: finalFrameUrl,
       isHost: isHostFlag,
       isMuted: json['is_muted'] == true || json['is_mic_muted'] == true,
@@ -262,14 +292,32 @@ class GroupPartyRoom {
 
     final rawRoomType = json['room_type']?.toString() ?? json['type']?.toString();
 
+    final hostAvatarStr = hostData?['avatar_url']?.toString() ?? hostData?['avatar']?.toString() ?? json['host_avatar']?.toString() ?? json['room_cover']?.toString() ?? '';
+    final hostNameStr = hostData?['name']?.toString() ?? hostData?['nickname']?.toString() ?? json['host_name']?.toString() ?? 'Host';
+    final hostIdStr = hostData?['id']?.toString() ?? json['host_id']?.toString() ?? '0';
+
+    // Ensure Seat 0 (Seat #1) always has host information bound
+    if (parsedSeats.isNotEmpty) {
+      if (parsedSeats[0].userAvatar == null || parsedSeats[0].userAvatar!.isEmpty) {
+        parsedSeats[0] = parsedSeats[0].copyWith(
+          userId: hostIdStr,
+          userName: hostNameStr,
+          userAvatar: hostAvatarStr,
+          isHost: true,
+          status: 'occupied',
+          role: 'host',
+        );
+      }
+    }
+
     return GroupPartyRoom(
       id: json['id']?.toString() ?? '0',
       roomId: json['room_id']?.toString() ?? json['id']?.toString() ?? '',
       title: json['room_title']?.toString() ?? json['title']?.toString() ?? 'Live Party Room',
-      hostId: hostData?['id']?.toString() ?? json['host_id']?.toString() ?? '0',
+      hostId: hostIdStr,
       hostAccountId: hostData?['account_id']?.toString() ?? json['host_account_id']?.toString(),
-      hostName: hostData?['name']?.toString() ?? hostData?['nickname']?.toString() ?? json['host_name']?.toString() ?? 'Host',
-      hostAvatar: hostData?['avatar_url']?.toString() ?? hostData?['avatar']?.toString() ?? json['host_avatar']?.toString() ?? json['room_cover']?.toString() ?? '',
+      hostName: hostNameStr,
+      hostAvatar: hostAvatarStr,
       hostLevel: hostData?['level'] is int ? hostData!['level'] as int : (int.tryParse(hostData?['level']?.toString() ?? '1') ?? 1),
       hostIsVerified: hostData?['is_verified'] == true || hostData?['verified'] == 1,
       coverUrl: json['room_cover']?.toString() ?? json['cover_url']?.toString() ?? hostData?['avatar_url']?.toString() ?? '',
@@ -462,8 +510,36 @@ class PartyRoomMessage {
     required this.createdAt,
   });
 
-  factory PartyRoomMessage.fromJson(Map<String, dynamic> json) {
-    final senderData = json['sender'] is Map<String, dynamic> ? json['sender'] as Map<String, dynamic> : null;
+  factory PartyRoomMessage.fromJson(dynamic rawJson) {
+    Map<String, dynamic> json;
+    if (rawJson is Map) {
+      json = Map<String, dynamic>.from(rawJson);
+    } else {
+      return PartyRoomMessage(
+        id: DateTime.now().millisecondsSinceEpoch,
+        roomId: '',
+        type: 'text',
+        message: rawJson?.toString() ?? '',
+        createdAt: DateTime.now(),
+      );
+    }
+
+    // Unwrap if nested in 'message' or 'data'
+    if (json.containsKey('message') && json['message'] is Map) {
+      final nested = Map<String, dynamic>.from(json['message'] as Map);
+      if (nested.containsKey('id') || nested.containsKey('message') || nested.containsKey('sender_id')) {
+        json = nested;
+      }
+    } else if (json.containsKey('data') && json['data'] is Map) {
+      final nested = Map<String, dynamic>.from(json['data'] as Map);
+      if (nested.containsKey('id') || nested.containsKey('message') || nested.containsKey('sender_id')) {
+        json = nested;
+      }
+    }
+
+    final senderData = json['sender'] is Map<String, dynamic>
+        ? json['sender'] as Map<String, dynamic>
+        : (json['sender'] is Map ? Map<String, dynamic>.from(json['sender'] as Map) : (json['user'] is Map ? Map<String, dynamic>.from(json['user'] as Map) : null));
 
     DateTime date;
     try {
@@ -479,17 +555,39 @@ class PartyRoomMessage {
       });
     }
 
+    final msgContent = (json['message'] is String ? json['message'] as String : null) ??
+        json['text']?.toString() ??
+        json['body']?.toString() ??
+        '';
+
+    final senderNameParsed = senderData?['name']?.toString() ??
+        senderData?['display_name']?.toString() ??
+        senderData?['nickname']?.toString() ??
+        json['user_name']?.toString() ??
+        json['name']?.toString() ??
+        json['display_name']?.toString() ??
+        json['sender_name']?.toString() ??
+        'User';
+
+    final senderAvatarParsed = senderData?['avatar_url']?.toString() ??
+        senderData?['avatar']?.toString() ??
+        json['avatar_url']?.toString() ??
+        json['avatar']?.toString() ??
+        json['sender_avatar']?.toString() ??
+        json['user_avatar']?.toString() ??
+        '';
+
     return PartyRoomMessage(
-      id: json['id'] is int ? json['id'] as int : (int.tryParse(json['id']?.toString() ?? '0') ?? 0),
-      roomId: json['room_id']?.toString() ?? '',
-      type: json['type']?.toString() ?? (json['image_url'] != null ? 'image' : 'text'),
-      message: json['message']?.toString() ?? '',
-      imageUrl: json['image_url']?.toString() ?? json['image']?.toString() ?? json['file_url']?.toString(),
-      senderId: senderData?['id']?.toString() ?? json['sender_id']?.toString(),
-      senderAccountId: senderData?['account_id']?.toString() ?? json['sender_account_id']?.toString(),
-      senderName: senderData?['name']?.toString() ?? senderData?['nickname']?.toString() ?? json['sender_name']?.toString() ?? 'Guest',
-      senderAvatar: senderData?['avatar_url']?.toString() ?? senderData?['avatar']?.toString() ?? json['sender_avatar']?.toString(),
-      senderLevel: senderData?['level'] is int ? senderData!['level'] as int : (int.tryParse(senderData?['level']?.toString() ?? '1') ?? 1),
+      id: json['id'] is int ? json['id'] as int : (int.tryParse(json['id']?.toString() ?? '0') ?? DateTime.now().millisecondsSinceEpoch),
+      roomId: json['room_id']?.toString() ?? json['party_room_id']?.toString() ?? json['stream_id']?.toString() ?? '',
+      type: json['type']?.toString() ?? (json['image_url'] != null || json['image'] != null ? 'image' : 'text'),
+      message: msgContent,
+      imageUrl: json['image_url']?.toString() ?? json['image']?.toString() ?? json['file_url']?.toString() ?? json['media_url']?.toString(),
+      senderId: senderData?['id']?.toString() ?? json['sender_id']?.toString() ?? json['user_id']?.toString(),
+      senderAccountId: senderData?['account_id']?.toString() ?? json['sender_account_id']?.toString() ?? json['account_id']?.toString(),
+      senderName: senderNameParsed,
+      senderAvatar: senderAvatarParsed,
+      senderLevel: senderData?['level'] is int ? senderData!['level'] as int : (int.tryParse(senderData?['level']?.toString() ?? json['level']?.toString() ?? '1') ?? 1),
       senderIsVerified: senderData?['is_verified'] == true || senderData?['verified'] == 1 || json['sender_is_verified'] == true,
       reactions: parsedReactions,
       createdAt: date,
@@ -645,3 +743,7 @@ class PartyRoomRtcData {
     );
   }
 }
+
+/// Type alias for real-time chat room messages
+typedef ChatMessageModel = PartyRoomMessage;
+

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../../../core/services/app_cache_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../models/payment_option_model.dart';
@@ -25,12 +26,15 @@ class PaymentOptionsScreen extends StatefulWidget {
 class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
   List<PaymentOption> _options = [];
   String _selectedKey = 'reseller';
-  bool _isLoading = true;
+  bool _isLoading = false;
   bool _isProcessingGooglePlay = false;
 
   @override
   void initState() {
     super.initState();
+    if (AppCacheService.cachedGateways.isNotEmpty) {
+      _options = List.from(AppCacheService.cachedGateways);
+    }
     _loadPaymentOptions();
   }
 

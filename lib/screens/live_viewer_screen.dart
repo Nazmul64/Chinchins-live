@@ -117,60 +117,67 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
     super.dispose();
   }
 
+  Widget _buildMultiHostGrid(List<VideoTrack> activeTracks) {
+    if (activeTracks.isEmpty) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          if (widget.hostImageUrl.isNotEmpty)
+            Image.network(
+              widget.hostImageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(color: Colors.black),
+            )
+          else
+            Container(color: Colors.black),
+          Container(color: Colors.black45),
+          if (_isLoading)
+            const Center(
+              child: CircularProgressIndicator(
+                color: Colors.pinkAccent,
+              ),
+            ),
+        ],
+      );
+    }
+
+    if (activeTracks.length == 1) {
+      return VideoTrackRenderer(
+        activeTracks.first,
+        fit: VideoViewFit.cover,
+      );
+    }
+
+    return GridView.builder(
+      padding: EdgeInsets.zero,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 1.0,
+        crossAxisSpacing: 2,
+        mainAxisSpacing: 2,
+      ),
+      itemCount: activeTracks.length,
+      itemBuilder: (context, i) => Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.black,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: VideoTrackRenderer(activeTracks[i], fit: VideoViewFit.cover),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Video Renderer Layer (1 video -> Full Screen; 2+ videos -> 50/50 Split Screen Grid)
+          // Video Renderer Layer (4-5 Participants Multi-Host Grid)
           Positioned.fill(
-            child: _activeVideos.isEmpty
-                ? Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      if (widget.hostImageUrl.isNotEmpty)
-                        Image.network(
-                          widget.hostImageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(color: Colors.black),
-                        )
-                      else
-                        Container(color: Colors.black),
-                      Container(color: Colors.black45),
-                      if (_isLoading)
-                        const Center(
-                          child: CircularProgressIndicator(
-                            color: Colors.pinkAccent,
-                          ),
-                        ),
-                    ],
-                  )
-                : _activeVideos.length == 1
-                    ? VideoTrackRenderer(
-                        _activeVideos.first,
-                        fit: VideoViewFit.cover,
-                      )
-                    : GridView.builder(
-                        padding: EdgeInsets.zero,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 0.75,
-                          crossAxisSpacing: 2,
-                          mainAxisSpacing: 2,
-                        ),
-                        itemCount: _activeVideos.length,
-                        itemBuilder: (context, index) {
-                          return Container(
-                            color: Colors.black,
-                            child: VideoTrackRenderer(
-                              _activeVideos[index],
-                              fit: VideoViewFit.cover,
-                            ),
-                          );
-                        },
-                      ),
+            child: _buildMultiHostGrid(_activeVideos),
           ),
 
           // Overlay UI (Header & Comments)

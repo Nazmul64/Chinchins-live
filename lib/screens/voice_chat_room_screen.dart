@@ -39,6 +39,12 @@ class _VoiceChatRoomScreenState extends State<VoiceChatRoomScreen> {
   }
 
   void _connectVoiceRoom() async {
+    try {
+      await Hardware.instance.setSpeakerphoneOn(true);
+    } catch (e) {
+      debugPrint('VoiceChatRoomScreen speakerphone error: $e');
+    }
+
     _room = await _liveKitService.connectToRoom(
       token: widget.roomToken,
       isHost: widget.isHost,
@@ -46,6 +52,10 @@ class _VoiceChatRoomScreenState extends State<VoiceChatRoomScreen> {
     );
 
     if (_room != null && mounted) {
+      try {
+        await Hardware.instance.setSpeakerphoneOn(true);
+      } catch (_) {}
+
       _listener = _room!.createListener();
       _listener!
         ..on<ParticipantConnectedEvent>((event) {

@@ -2133,76 +2133,27 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       );
     }
 
-    if (videoTracks.length == 2) {
-      return Row(
-        children: [
-          Expanded(
-            child: VideoTrackRenderer(
-              videoTracks[0],
-              fit: VideoViewFit.cover,
-            ),
-          ),
-          const SizedBox(width: 2),
-          Expanded(
-            child: VideoTrackRenderer(
-              videoTracks[1],
-              fit: VideoViewFit.cover,
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Column(
-      children: [
-        // Upper Row: Host & 1st Co-Host (2 users, flex 3)
-        Expanded(
-          flex: 3,
-          child: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  margin: const EdgeInsets.all(1.5),
-                  child: VideoTrackRenderer(
-                    videoTracks[0],
-                    fit: VideoViewFit.cover,
-                  ),
-                ),
-              ),
-              if (videoTracks.length > 1)
-                Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.all(1.5),
-                    child: VideoTrackRenderer(
-                      videoTracks[1],
-                      fit: VideoViewFit.cover,
-                    ),
-                  ),
-                ),
-            ],
-          ),
+    return GridView.builder(
+      padding: EdgeInsets.zero,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 1.0,
+        crossAxisSpacing: 2,
+        mainAxisSpacing: 2,
+      ),
+      itemCount: videoTracks.length,
+      itemBuilder: (context, i) => Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.black,
         ),
-        // Lower Row: Remaining Co-Hosts (up to 3 users, flex 2)
-        if (videoTracks.length > 2)
-          Expanded(
-            flex: 2,
-            child: Row(
-              children: videoTracks
-                  .sublist(2, videoTracks.length > 5 ? 5 : videoTracks.length)
-                  .map((track) {
-                return Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.all(1.5),
-                    child: VideoTrackRenderer(
-                      track,
-                      fit: VideoViewFit.cover,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-      ],
+        clipBehavior: Clip.antiAlias,
+        child: VideoTrackRenderer(
+          videoTracks[i],
+          fit: VideoViewFit.cover,
+        ),
+      ),
     );
   }
 

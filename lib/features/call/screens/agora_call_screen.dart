@@ -1029,145 +1029,154 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
               ),
             ),
 
-            // 5. In-Call Live Chat Overlay (Floating Message Bubbles & Image Sharing)
+            // 5, 6, 7 & 8. ইন-কল লাইভ চ্যাট, কুইক মেসেজ এবং বটম কন্ট্রোল টুলবার (একক রেসপনসিভ কলাম)
             Positioned(
               left: 12,
-              bottom: 120,
-              right: 80,
-              child: InCallChatOverlay(
-                key: _chatKey,
-                callSessionId: widget.callId ?? widget.channelName,
-                receiverId: widget.model.id,
-                receiverName: widget.model.name,
-              ),
-            ),
-
-            // 6. In-call Sent Quick Message Toast
-            if (_sentMessageFeedback != null)
-              Positioned(
-                left: 20,
-                bottom: 140,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.65),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.5)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.favorite, color: AppColors.neonPink, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        _sentMessageFeedback!,
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            // 7. In-call Quick Messages Bar
-            Positioned(
-              left: 14,
-              right: 14,
-              bottom: 95,
-              child: SizedBox(
-                height: 34,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: _quickMessages.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (context, idx) {
-                    final msg = _quickMessages[idx];
-                    return GestureDetector(
-                      onTap: () => _sendQuickMessage(msg),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white24),
-                        ),
-                        child: Text(
-                          msg,
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-
-            // 8. Bottom Toolbar Controls (Mute, Camera, Flip, Hangup, Recharge)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 24,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  // Mute Mic Toggle
-                  _buildCircleButton(
-                    icon: _isAudioMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                    color: _isAudioMuted ? Colors.redAccent : Colors.white24,
-                    onTap: () {
-                      setState(() => _isAudioMuted = !_isAudioMuted);
-                      _engine?.muteLocalAudioStream(_isAudioMuted);
-                    },
-                  ),
-
-                  // Camera Toggle
-                  if (widget.isVideo)
-                    _buildCircleButton(
-                      icon: _isVideoOff ? Icons.videocam_off_rounded : Icons.videocam_rounded,
-                      color: _isVideoOff ? Colors.redAccent : Colors.white24,
-                      onTap: () {
-                        setState(() => _isVideoOff = !_isVideoOff);
-                        _engine?.muteLocalVideoStream(_isVideoOff);
-                      },
-                    ),
-
-                  // End Call Hangup
-                  GestureDetector(
-                    onTap: _handleUserHangup,
-                    child: Container(
-                      width: 60,
-                      height: 60,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFF2E63),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Color(0xFFFF2E63),
-                            blurRadius: 16,
-                            offset: Offset(0, 4),
+              right: 12,
+              bottom: 16,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // কুইক মেসেজ সেন্ড ফিডব্যাক টোস্ট
+                    if (_sentMessageFeedback != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.neonPink, width: 1),
                           ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.favorite, color: AppColors.neonPink, size: 14),
+                              const SizedBox(width: 6),
+                              Text(
+                                _sentMessageFeedback!,
+                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // ইন-কল লাইভ চ্যাট ওভারলে (বাম পাশে রেন্ডার হবে)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 64),
+                      child: InCallChatOverlay(
+                        key: _chatKey,
+                        callSessionId: widget.callId ?? widget.channelName,
+                        receiverId: widget.model.id,
+                        receiverName: widget.model.name,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // ইন-কল কুইক মেসেজ বার
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Row(
+                        children: [
+                          for (final msg in _quickMessages)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: GestureDetector(
+                                onTap: () => _sendQuickMessage(msg),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.65),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1),
+                                  ),
+                                  child: Text(
+                                    msg,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
-                      child: const Icon(Icons.call_end_rounded, color: Colors.white, size: 28),
                     ),
-                  ),
+                    const SizedBox(height: 12),
 
-                  // Switch Camera
-                  if (widget.isVideo)
-                    _buildCircleButton(
-                      icon: Icons.switch_camera_rounded,
-                      color: Colors.white24,
-                      onTap: () {
-                        _engine?.switchCamera();
-                      },
+                    // বটম টুলবার কন্ট্রোলস (Mute, Camera, Flip, Hangup, Recharge)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        // Mute Mic Toggle
+                        _buildCircleButton(
+                          icon: _isAudioMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                          color: _isAudioMuted ? Colors.redAccent : Colors.white24,
+                          onTap: () {
+                            setState(() => _isAudioMuted = !_isAudioMuted);
+                            _engine?.muteLocalAudioStream(_isAudioMuted);
+                          },
+                        ),
+
+                        // Camera Toggle
+                        if (widget.isVideo)
+                          _buildCircleButton(
+                            icon: _isVideoOff ? Icons.videocam_off_rounded : Icons.videocam_rounded,
+                            color: _isVideoOff ? Colors.redAccent : Colors.white24,
+                            onTap: () {
+                              setState(() => _isVideoOff = !_isVideoOff);
+                              _engine?.muteLocalVideoStream(_isVideoOff);
+                            },
+                          ),
+
+                        // End Call Hangup
+                        GestureDetector(
+                          onTap: _handleUserHangup,
+                          child: Container(
+                            width: 60,
+                            height: 60,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFF2E63),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Color(0xFFFF2E63),
+                                  blurRadius: 16,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(Icons.call_end_rounded, color: Colors.white, size: 28),
+                          ),
+                        ),
+
+                        // Switch Camera
+                        if (widget.isVideo)
+                          _buildCircleButton(
+                            icon: Icons.switch_camera_rounded,
+                            color: Colors.white24,
+                            onTap: () {
+                              _engine?.switchCamera();
+                            },
+                          ),
+
+                        // Recharge Sheet Button
+                        _buildCircleButton(
+                          icon: Icons.card_giftcard_rounded,
+                          color: AppColors.neonPink.withValues(alpha: 0.35),
+                          onTap: _showInCallRechargeSheet,
+                        ),
+                      ],
                     ),
-
-                  // Recharge Sheet Button
-                  _buildCircleButton(
-                    icon: Icons.card_giftcard_rounded,
-                    color: AppColors.neonPink.withValues(alpha: 0.35),
-                    onTap: _showInCallRechargeSheet,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 

@@ -749,20 +749,25 @@ class PartyRoomApiService {
     }
   }
 
-  /// 23. Audience Requests to Speak / Raise Hand (`POST /api/party-rooms/{id}/request-seat`)
-  static Future<Map<String, dynamic>> requestSeat(dynamic roomId) async {
+  /// 23. Audience Requests to Speak / Raise Hand (`POST /api/party-rooms/{id}/seat-requests`)
+  static Future<Map<String, dynamic>> requestSeat(dynamic roomId, {int? seatIndex}) async {
     try {
       final headers = await _getHeaders('application/json');
+      final payload = {
+        if (seatIndex != null) 'seat_index': seatIndex,
+      };
+
       final response = await http
           .post(
-            Uri.parse(ApiConstants.partyRoomRequestSeat(roomId)),
+            Uri.parse(ApiConstants.partyRoomSeatRequests(roomId)),
             headers: headers,
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 10));
 
       final json = jsonDecode(response.body);
       return {
-        'success': response.statusCode == 200 || (json is Map && json['success'] == true),
+        'success': response.statusCode == 200 || response.statusCode == 201 || (json is Map && json['success'] == true),
         'message': json is Map ? json['message'] ?? 'Seat request sent!' : 'Request sent',
         'data': json is Map ? json['data'] : null,
       };

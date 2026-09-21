@@ -30,6 +30,16 @@ class WalletApiService {
     return 0;
   }
 
+  /// Update in-memory cached coins optimistically (<0.01ms)
+  static void updateCachedCoins(int coins) {
+    if (_cachedBalance != null) {
+      _cachedBalance!['coins'] = coins;
+      _cachedBalance!['balance'] = coins;
+    } else {
+      _cachedBalance = {'coins': coins, 'balance': coins};
+    }
+  }
+
   /// 1. Get Wallet Balance, Total Deposited Coins, BDT Spent & Call Minutes (Instant L1/L2 SWR)
   static Future<Map<String, dynamic>?> getWalletBalance({bool forceRefresh = false}) async {
     if (!forceRefresh && _cachedBalance != null) {

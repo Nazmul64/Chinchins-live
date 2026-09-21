@@ -254,16 +254,18 @@ class SignalingService {
     if (_pusherClient == null || partyRoomId == null) return;
     final idStr = partyRoomId.toString().trim();
     if (idStr.isEmpty) return;
+    await _subscribeToChannel('party.' + idStr, isPrivate: false);
     await _subscribeToChannel('party-room.' + idStr, isPrivate: false);
     await _subscribeToChannel('private-party-room.' + idStr, isPrivate: true);
     await _subscribeToChannel('party-room-seat.' + idStr, isPrivate: false);
+    await _subscribeToChannel('presence-party.' + idStr, isPrivate: true);
     await _subscribeToChannel('presence-party-room.' + idStr, isPrivate: true);
   }
 
   Future<void> leavePartyRoom(dynamic partyRoomId) async {
     final idStr = partyRoomId?.toString().trim() ?? '';
     final toRemove = _activeChannels.keys.where((k) =>
-      k.contains('party-room.' + idStr) || (idStr.isEmpty && k.contains('party-room.'))
+      k.contains('party.' + idStr) || k.contains('party-room.' + idStr) || (idStr.isEmpty && (k.contains('party.') || k.contains('party-room.')))
     ).toList();
     for (final chName in toRemove) {
       try {
@@ -348,6 +350,9 @@ class SignalingService {
         chName.contains('stream.') ||
         chName.contains('live-room.') ||
         chName.contains('live-stream.') ||
+        chName.contains('party.') ||
+        chName.contains('party-room.') ||
+        chName.contains('presence-party.') ||
         chName.contains('live.');
 
     final isUserChatChannel = chName.contains('user-chat.') ||
@@ -364,6 +369,8 @@ class SignalingService {
         cleanName.endsWith('GiftSentEvent') ||
         cleanName == 'LiveGiftSentEvent' ||
         cleanName.endsWith('LiveGiftSentEvent') ||
+        cleanName == 'PartyRoomGiftEvent' ||
+        cleanName.endsWith('PartyRoomGiftEvent') ||
         cleanName == 'LiveGiftSent' ||
         cleanName == 'live.gift.sent' ||
         cleanName == 'live.gift' ||
@@ -412,9 +419,14 @@ class SignalingService {
       return;
     }
 
-    // 4. LIVE ROOM BROADCAST CHAT COMMENTS
+    // 4. LIVE / PARTY ROOM BROADCAST CHAT COMMENTS
     if (isLiveRoomChannel && (cleanName == 'message.sent' ||
         cleanName == 'chat.message' ||
+        cleanName == 'PartyRoomMessageSent' ||
+        cleanName.endsWith('PartyRoomMessageSent') ||
+        cleanName == 'PartyRoomMessageEvent' ||
+        cleanName.endsWith('PartyRoomMessageEvent') ||
+        cleanName == 'PartyRoomMessage' ||
         cleanName == 'LiveChatMessageEvent' ||
         cleanName.endsWith('LiveChatMessageEvent') ||
         cleanName == 'ChatMessageEvent' ||
@@ -422,6 +434,8 @@ class SignalingService {
         cleanName == 'LiveMessageSent' ||
         cleanName == 'live.message.sent' ||
         cleanName == 'live.message' ||
+        lowerName.contains('partymessage') ||
+        lowerName.contains('partyroommessage') ||
         lowerName == 'chat.message' ||
         lowerName == 'message.sent')) {
       _liveMessageSentController.add(data);

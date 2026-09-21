@@ -93,7 +93,8 @@ class _VoicePartySeatWidgetState extends State<VoicePartySeatWidget>
 
   @override
   Widget build(BuildContext context) {
-    final hasUser = widget.avatarUrl != null && widget.avatarUrl!.isNotEmpty;
+    final hasUser = (widget.userName != null && widget.userName!.isNotEmpty) ||
+        (widget.avatarUrl != null && widget.avatarUrl!.isNotEmpty);
     final cleanFrame = widget.frameSvgUrl != null && widget.frameSvgUrl!.isNotEmpty
         ? CachedImageLoader.normalize(widget.frameSvgUrl!)
         : null;
@@ -171,24 +172,35 @@ class _VoicePartySeatWidgetState extends State<VoicePartySeatWidget>
 
                   // Circular Avatar or Empty "+" Slot
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: hasUser ? const Color(0xFF1E293B) : const Color(0xFF1E1B4B),
                       border: Border.all(
                         color: widget.isSpeaking
                             ? const Color(0xFF00FF88)
-                            : (widget.isHost ? const Color(0xFFFFD700) : borderColor),
-                        width: 1.5,
+                            : (widget.isHost ? Colors.orange : borderColor),
+                        width: widget.isHost || widget.isSpeaking ? 2.0 : 1.5,
                       ),
                     ),
                     child: ClipOval(
                       child: hasUser
-                          ? CachedImageLoader(
-                              imageUrl: widget.avatarUrl!,
-                              fit: BoxFit.cover,
-                            )
+                          ? ((widget.avatarUrl != null && widget.avatarUrl!.isNotEmpty)
+                              ? CachedImageLoader(
+                                  imageUrl: widget.avatarUrl!,
+                                  fit: BoxFit.cover,
+                                )
+                              : Center(
+                                  child: Text(
+                                    widget.userName?.isNotEmpty == true ? widget.userName![0].toUpperCase() : 'U',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ))
                           : (widget.isLocked
                               ? const Center(
                                   child: Icon(Icons.lock_rounded, color: AppColors.gemYellow, size: 18),
@@ -264,17 +276,17 @@ class _VoicePartySeatWidgetState extends State<VoicePartySeatWidget>
             ),
             const SizedBox(height: 4),
 
-            // Username or "Your Seat"
+            // Username or "Seat X"
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 68),
               child: Text(
-                hasUser ? (widget.userName ?? 'User') : 'Your Seat',
+                hasUser ? (widget.userName ?? 'User') : 'Seat ${widget.seatIndex}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 10.5,
+                  fontSize: 11,
                   fontWeight: hasUser ? FontWeight.bold : FontWeight.w600,
                   shadows: const [
                     Shadow(color: Colors.black87, blurRadius: 4),
@@ -285,47 +297,46 @@ class _VoicePartySeatWidgetState extends State<VoicePartySeatWidget>
             const SizedBox(height: 2),
 
             // Role Badge: 👑 Host / 👤 Speaker / Join Now
-            if (hasUser)
+            if (widget.isHost)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.orange,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  "Host",
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              )
+            else if (hasUser)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                 decoration: BoxDecoration(
-                  color: widget.isHost
-                      ? const Color(0xFF78350F).withValues(alpha: 0.85)
-                      : const Color(0xFF312E81).withValues(alpha: 0.85),
+                  color: const Color(0xFF312E81).withValues(alpha: 0.85),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: widget.isHost
-                        ? const Color(0xFFFFD700).withValues(alpha: 0.6)
-                        : const Color(0xFF818CF8).withValues(alpha: 0.4),
+                    color: const Color(0xFF818CF8).withValues(alpha: 0.4),
                     width: 0.6,
                   ),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (widget.isHost) ...[
-                      const Text('👑', style: TextStyle(fontSize: 8)),
-                      const SizedBox(width: 2),
-                      const Text(
-                        'Host',
-                        style: TextStyle(
-                          color: Color(0xFFFFD700),
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    Icon(Icons.mic_rounded, color: Color(0xFF93C5FD), size: 9),
+                    SizedBox(width: 1.5),
+                    Text(
+                      'Speaker',
+                      style: TextStyle(
+                        color: Color(0xFFE2E8F0),
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w600,
                       ),
-                    ] else ...[
-                      const Icon(Icons.person_rounded, color: Color(0xFF93C5FD), size: 9),
-                      const SizedBox(width: 1.5),
-                      const Text(
-                        'Speaker',
-                        style: TextStyle(
-                          color: Color(0xFFE2E8F0),
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                    ),
                   ],
                 ),
               )

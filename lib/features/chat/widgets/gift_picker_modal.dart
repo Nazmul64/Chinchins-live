@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/models/gift_item.dart';
+import '../../../core/services/app_cache_service.dart';
 import '../../../core/services/gifts_api_service.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../wallet/services/wallet_api_service.dart';
@@ -70,6 +71,18 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
     _userCoins = cached;
     _formattedBalance = GiftItem.formatCoinValue(cached);
     _categories = GiftsApiService.getPredefinedGiftCategories();
+
+    // ⚡ Zero-Loading: Initialize from in-memory RAM cache immediately
+    if (AppCacheService.cachedGifts.isNotEmpty) {
+      _allGifts = List.from(AppCacheService.cachedGifts);
+      _filterGiftsByCategory(_selectedCategory);
+      _isLoading = false;
+    } else {
+      _allGifts = GiftsApiService.getFallbackGifts();
+      _filterGiftsByCategory(_selectedCategory);
+      _isLoading = false;
+    }
+
     _loadCatalogAndBalance();
   }
 
@@ -110,8 +123,10 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
         if (defMult != null && _multipliers.contains(defMult)) {
           _selectedQuantity = defMult;
         }
-        _allGifts = list;
-        _filterGiftsByCategory(_selectedCategory);
+        if (list.isNotEmpty) {
+          _allGifts = list;
+          _filterGiftsByCategory(_selectedCategory);
+        }
         _isLoading = false;
       });
     }
@@ -171,60 +186,39 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
 
     // Check balance
     if (_userCoins < totalCost) {
-      // Insufficient balance -> Prompt Recharge Sheet
       _openRechargeSheet();
       return;
     }
 
-    setState(() => _isSending = true);
+    final previousCoins = _userCoins;
 
-    // Call RESTful Send Gift API
-    if (widget.receiverId != null) {
-      final giftId = gift.giftId > 0 ? gift.giftId : int.tryParse(gift.id) ?? 1;
-      final res = await GiftsApiService.sendGift(
-        receiverId: widget.receiverId,
-        giftId: giftId,
-        quantity: _selectedQuantity,
-        context: widget.streamId != null ? 'live_stream' : 'chat',
-        streamId: widget.streamId,
-      );
-
-      if (res['status'] == false && (res['code'] == 402 || res['shortage'] != null)) {
-        if (!mounted) return;
-        setState(() => _isSending = false);
-        _openRechargeSheet();
-        return;
-      }
-    }
-
-    if (!mounted) return;
+    // ⚡ 1. Optimistic UI: Deduct coins instantly & trigger callback without waiting for network
     setState(() {
       _userCoins -= totalCost;
       _formattedBalance = GiftItem.formatCoinValue(_userCoins);
       _isSending = false;
     });
+    WalletApiService.updateCachedCoins(_userCoins);
 
     widget.onGiftSelected(gift);
-    Navigator.pop(context); // Close tray
+    Navigator.pop(context); // Close tray immediately (0 latency)
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Text(gift.emoji, style: const TextStyle(fontSize: 18)),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Sent ${gift.name} (x$_selectedQuantity) 🎁',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: const Color(0xFFF43F5E),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    // ⚡ 2. Asynchronously dispatch gift API call in background worker
+    if (widget.receiverId != null) {
+      final giftId = gift.giftId > 0 ? gift.giftId : int.tryParse(gift.id) ?? 1;
+      GiftsApiService.sendGift(
+        receiverId: widget.receiverId,
+        giftId: giftId,
+        quantity: _selectedQuantity,
+        context: widget.streamId != null ? 'live_stream' : 'chat',
+        streamId: widget.streamId,
+      ).then((res) {
+        if (res['status'] == false && (res['code'] == 402 || res['code'] == 'INSUFFICIENT_BALANCE' || res['shortage'] != null)) {
+          // Revert balance on server failure
+          WalletApiService.updateCachedCoins(previousCoins);
+        }
+      }).catchError((_) {});
+    }
   }
 
   /// Render SVG gift artwork or beautiful emoji fallback (never purple person placeholder!)

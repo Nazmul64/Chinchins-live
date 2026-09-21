@@ -277,11 +277,14 @@ class InCallChatOverlayState extends State<InCallChatOverlay> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1. Floating Message Bubbles List (Max height 160)
+        // 1. Floating Message Bubbles List (Max height 140)
         if (_messages.isNotEmpty)
           Container(
-            constraints: const BoxConstraints(maxHeight: 160, maxWidth: 280),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            constraints: BoxConstraints(
+              maxHeight: 140,
+              maxWidth: MediaQuery.of(context).size.width * 0.72,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
             child: ListView.builder(
               controller: _scrollController,
               shrinkWrap: true,
@@ -350,10 +353,9 @@ class InCallChatOverlayState extends State<InCallChatOverlay> {
         if (_isChatOpen) ...[
           const SizedBox(height: 6),
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.8),
+              color: Colors.black.withValues(alpha: 0.85),
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.7), width: 1.2),
             ),

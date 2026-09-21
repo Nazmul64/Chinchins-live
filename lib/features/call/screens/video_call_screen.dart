@@ -1052,56 +1052,54 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 ),
               ),
 
-              // ৫. ইন-কল লাইভ চ্যাট ওভারলে (বাম পাশে)
+              // ৫. ইন-কল লাইভ চ্যাট, কুইক মেসেজ এবং বটম কন্ট্রোল (একক রেসপনসিভ কলাম)
               Positioned(
-                left: 12,
-                bottom: 120,
-                right: 80,
-                child: InCallChatOverlay(
-                  key: _chatKey,
-                  callSessionId: widget.callId ?? widget.channelName,
-                  receiverId: widget.model.id,
-                  receiverName: widget.model.name,
-                ),
-              ),
-
-              // ৬. সেন্ড করা কুইক মেসেজের ফ্লোটিং টোস্ট
-              if (_sentMessageFeedback != null)
-                Positioned(
-                  bottom: 125,
-                  left: 20,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.neonPink, width: 1),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.check_circle_rounded, color: AppColors.onlineGreen, size: 14),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Sent: "$_sentMessageFeedback"',
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-              // ৭. বটম কুইক মেসেজ চিপস ও সুইচ অফ পাওয়ার বাটন
-              Positioned(
-                bottom: 24,
-                left: 16,
-                right: 16,
+                left: 14,
+                right: 14,
+                bottom: 12,
                 child: SafeArea(
                   top: false,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // কুইক মেসেজ সেন্ড ফিডব্যাক টোস্ট
+                      if (_sentMessageFeedback != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.neonPink, width: 1),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.check_circle_rounded, color: AppColors.onlineGreen, size: 14),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Sent: "$_sentMessageFeedback"',
+                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                      // ইন-কল লাইভ চ্যাট ওভারলে (বাম পাশে রেন্ডার হবে যাতে ডানের বোতামগুলো ওভারল্যাপ না হয়)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 64),
+                        child: InCallChatOverlay(
+                          key: _chatKey,
+                          callSessionId: widget.callId ?? widget.channelName,
+                          receiverId: widget.model.id,
+                          receiverName: widget.model.name,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
                       // কুইক চ্যাট চিপস রো
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
@@ -1115,9 +1113,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.55),
+                                    color: Colors.black.withValues(alpha: 0.65),
                                     borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1),
+                                    border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1),
                                   ),
                                   child: Text(
                                     msg,

@@ -238,6 +238,7 @@ class ApiConstants {
   static String get checkMessagesPermission => '$baseUrl/messages/check-permission';
 
   // Gifts & Rewards Endpoints
+  static String get gifts => '$baseUrl/gifts';
   static String get giftsCatalog => '$baseUrl/gifts';
   static String get giftsStore => '$baseUrl/gifts/catalog';
   static String giftsReceived(dynamic userId) => '$baseUrl/gifts/received/$userId';

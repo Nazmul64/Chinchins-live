@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/gift_item.dart';
+import '../../../core/services/app_cache_service.dart';
 import '../../../core/services/gifts_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
@@ -64,7 +65,18 @@ class _InCallGiftSheetState extends State<InCallGiftSheet> {
   void initState() {
     super.initState();
     _userCoins = WalletApiService.getCachedCoins();
-    _gifts = GiftsApiService.getFallbackGifts();
+
+    // ⚡ Zero-Loading: Instant catalog from in-memory RAM cache
+    if (AppCacheService.cachedGifts.isNotEmpty) {
+      _gifts = List.from(AppCacheService.cachedGifts);
+      _selectedGift = _gifts.first;
+    } else {
+      _gifts = GiftsApiService.getFallbackGifts();
+      if (_gifts.isNotEmpty) {
+        _selectedGift = _gifts.first;
+      }
+    }
+
     _loadCatalog();
   }
 
@@ -77,77 +89,53 @@ class _InCallGiftSheetState extends State<InCallGiftSheet> {
           _selectedGift = _gifts.first;
         }
       });
-    } else if (_selectedGift == null && _gifts.isNotEmpty) {
-      setState(() {
-        _selectedGift = _gifts.first;
-      });
     }
   }
 
   Future<void> _sendSelectedGift() async {
-    if (_selectedGift == null || _isSending) return;
+    if (_selectedGift == null) return;
 
     final totalRequired = _selectedGift!.coins * _selectedQuantity;
     if (_userCoins < totalRequired) {
-      // Prompt recharge
       RechargeGemsSheet.show(context);
       return;
     }
 
-    setState(() => _isSending = true);
+    final previousCoins = _userCoins;
 
-    try {
-      final res = await GiftsApiService.sendGift(
-        receiverId: widget.receiverId,
-        giftId: _selectedGift!.giftId,
-        quantity: _selectedQuantity,
-        context: widget.contextType,
-        streamId: widget.streamId?.toString() ?? (widget.contextType == 'live' ? widget.callSessionId?.toString() : null),
-        callSessionId: widget.callSessionId,
-      );
+    // ⚡ 1. Optimistic UI: Deduct coins instantly & trigger animation immediately
+    setState(() {
+      _userCoins = (_userCoins - totalRequired).clamp(0, 999999999);
+    });
+    WalletApiService.updateCachedCoins(_userCoins);
 
-      if ((res['status'] == true || res['success'] == true) && mounted) {
-        setState(() {
-          _userCoins = (_userCoins - totalRequired).clamp(0, 999999999);
-        });
+    final anim = ActiveGiftAnimation(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      giftName: _selectedGift!.name,
+      giftEmoji: _selectedGift!.emoji,
+      giftIconUrl: _selectedGift!.iconUrl,
+      senderName: 'You',
+      coins: totalRequired,
+      combo: _selectedQuantity,
+    );
 
-        final dynamic giftData = res['gift_data'] ?? res['data'];
-        final dynamic giftObj = (giftData is Map) ? giftData['gift'] : null;
-        final String? animUrl = (giftObj is Map)
-            ? (giftObj['animation_url'] ?? giftObj['image_url'] ?? giftObj['icon_url'])
-            : ((giftData is Map) ? giftData['animation_url'] : _selectedGift!.iconUrl);
+    widget.onGiftSent?.call(anim);
+    Navigator.pop(context); // 0-latency instant modal dismissal
 
-        final anim = ActiveGiftAnimation(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          giftName: _selectedGift!.name,
-          giftEmoji: _selectedGift!.emoji,
-          giftIconUrl: animUrl ?? _selectedGift!.iconUrl,
-          senderName: 'You',
-          coins: totalRequired,
-          combo: _selectedQuantity,
-        );
-
-        widget.onGiftSent?.call(anim);
-        Navigator.pop(context);
-      } else if (res['code'] == 422 || res['code'] == 'INSUFFICIENT_BALANCE' || (res['message']?.toString().toLowerCase().contains('recharge') ?? false)) {
-        if (mounted) {
-          RechargeGemsSheet.show(context);
-        }
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(res['message'] ?? 'Unable to send gift.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+    // ⚡ 2. Asynchronously dispatch gift API call in background worker
+    GiftsApiService.sendGift(
+      receiverId: widget.receiverId,
+      giftId: _selectedGift!.giftId,
+      quantity: _selectedQuantity,
+      context: widget.contextType,
+      streamId: widget.streamId?.toString() ?? (widget.contextType == 'live' ? widget.callSessionId?.toString() : null),
+      callSessionId: widget.callSessionId,
+    ).then((res) {
+      if (res['status'] == false && (res['code'] == 422 || res['code'] == 'INSUFFICIENT_BALANCE' || (res['message']?.toString().toLowerCase().contains('recharge') ?? false))) {
+        // Revert coins if server rejects
+        WalletApiService.updateCachedCoins(previousCoins);
       }
-    } catch (e) {
-      debugPrint('Error sending gift: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isSending = false);
-      }
-    }
+    }).catchError((_) {});
   }
 
   @override
