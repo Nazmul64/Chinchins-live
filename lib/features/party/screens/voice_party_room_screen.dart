@@ -60,10 +60,6 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
   Timer? _pollingTimer;
   Timer? _billingTimer;
 
-  // Sound Equalizer Animation Controllers
-  late List<AnimationController> _equalizerControllers;
-  late List<Animation<double>> _equalizerAnimations;
-
   @override
   void initState() {
     super.initState();
@@ -88,19 +84,6 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
       );
     }
 
-    // Initialize 4-bar sound equalizer animation
-    _equalizerControllers = List.generate(
-      4,
-      (i) => AnimationController(
-        vsync: this,
-        duration: Duration(milliseconds: 300 + (i * 120)),
-      )..repeat(reverse: true),
-    );
-    _equalizerAnimations = _equalizerControllers.map((controller) {
-      return Tween<double>(begin: 4.0, end: 14.0).animate(
-        CurvedAnimation(parent: controller, curve: Curves.easeInOut),
-      );
-    }).toList();
 
     _initUserData();
     _joinRoomOnServer();
@@ -205,12 +188,29 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
       }
 
       final isSpeaker = _amIOnSeat || _isHost;
-      final token = widget.room.rtc?.token ?? '';
+      String token = _currentRoom.rtc?.livekitToken ??
+          _currentRoom.rtc?.token ??
+          widget.room.rtc?.livekitToken ??
+          widget.room.rtc?.token ??
+          '';
+      String livekitUrl = _currentRoom.rtc?.livekitUrl ??
+          widget.room.rtc?.livekitUrl ??
+          'wss://chinchins.live/livekit';
+
+      if (token.isEmpty) {
+        final fresh = await PartyRoomApiService.getPartyRoomDetails(widget.room.id);
+        if (fresh != null) {
+          if (mounted) setState(() => _currentRoom = fresh);
+          token = fresh.rtc?.livekitToken ?? fresh.rtc?.token ?? '';
+          livekitUrl = fresh.rtc?.livekitUrl ?? livekitUrl;
+        }
+      }
 
       _room = await _liveKitService.connectToRoom(
         token: token.isNotEmpty ? token : 'party_voice_${widget.room.id}',
         isHost: isSpeaker,
         isAudioOnly: true,
+        customServerUrl: livekitUrl,
       );
 
       if (_room != null && mounted) {
@@ -455,10 +455,6 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
     _billingTimer?.cancel();
     _chatController.dispose();
     _scrollController.dispose();
-
-    for (final c in _equalizerControllers) {
-      c.dispose();
-    }
 
     _liveKitListener?.dispose();
     _liveKitService.disconnect();
@@ -905,9 +901,6 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
                 // TOP APP BAR (Host info, Viewer count, Guest Requests badge, Leave)
                 _buildTopAppBar(),
 
-                // CHANNEL SUB-HEADER (Equalizer & Live Audio pill)
-                _buildChannelSubHeader(),
-
                 // 8-SEAT STAGE GRID (2 rows x 4 columns)
                 _buildVoiceStageGrid(),
 
@@ -934,8 +927,8 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
 
   /// 1. Top Bar Widget (Responsive Layout without Share button)
   Widget _buildTopAppBar() {
-    final roomHostAvatar = _currentRoom.hostAvatar;
-    final roomHostName = _currentRoom.hostName.isNotEmpty ? _currentRoom.hostName : 'Host';
+    final roomHostAvatar = _currentRoom.hostAvatar.isNotEmpty ? _currentRoom.hostAvatar : widget.room.hostAvatar;
+    final roomHostName = _currentRoom.hostName.isNotEmpty ? _currentRoom.hostName : (widget.room.hostName.isNotEmpty ? widget.room.hostName : 'Host');
     final activeAudienceCount = _currentRoom.audienceCount;
 
     return Padding(
@@ -950,7 +943,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
           ),
           const SizedBox(width: 8),
 
-          // Host Profile Picture
+          // Host Profile Picture (Dynamic database image)
           CircleAvatar(
             radius: 20,
             backgroundColor: const Color(0xFF1E293B),
@@ -1057,78 +1050,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
     }
   }
 
-  /// 2. Channel Sub Header
-  Widget _buildChannelSubHeader() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFF131A26).withValues(alpha: 0.8),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF1E293B)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.mic_none_rounded, color: Color(0xFF00E5FF), size: 16),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              '${_currentRoom.tag.isNotEmpty ? _currentRoom.tag : "লাইভ চ্যাট রুম (চ্যানেল-৭১)"} • সবার জন্য উন্মুক্ত',
-              style: const TextStyle(color: Colors.white70, fontSize: 11.5, fontWeight: FontWeight.w500),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 6),
-
-          // Equalizer Animated Bars
-          Row(
-            children: List.generate(4, (i) {
-              return AnimatedBuilder(
-                animation: _equalizerAnimations[i],
-                builder: (context, child) {
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 1),
-                    width: 2.5,
-                    height: _equalizerAnimations[i].value,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFA855F7),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  );
-                },
-              );
-            }),
-          ),
-          const SizedBox(width: 6),
-
-          // "Live Audio" Pill
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF7C3AED), Color(0xFFA855F7)],
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.graphic_eq_rounded, color: Colors.white, size: 11),
-                SizedBox(width: 3),
-                Text(
-                  'Live Audio',
-                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 3. Voice Stage Grid (8 Seats: 2 rows x 4 columns)
+  /// 2. Voice Stage Grid (8 Seats: 2 rows x 4 columns)
   Widget _buildVoiceStageGrid() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1142,7 +1064,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
               (index) => Expanded(
                 child: RoomSeatWidget(
                   seat: _seats[index],
-                  isTopGifter: index == 6, // Arif top gifter
+                  isTopGifter: false,
                   onTap: () => _handleSeatTap(index),
                 ),
               ),
@@ -1157,7 +1079,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
               (index) => Expanded(
                 child: RoomSeatWidget(
                   seat: _seats[index + 4],
-                  isTopGifter: (index + 4) == 6,
+                  isTopGifter: false,
                   onTap: () => _handleSeatTap(index + 4),
                 ),
               ),
@@ -1168,7 +1090,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
     );
   }
 
-  /// 4. Speaking Ticker Bar
+  /// 3. Speaking Ticker Bar
   Widget _buildSpeakingTickerBar() {
     final isAnyoneSpeaking = _activeSpeakerName != null && _activeSpeakerName!.isNotEmpty;
 
@@ -1196,24 +1118,25 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFF2A1F40),
-              borderRadius: BorderRadius.circular(8),
+          if (_topGifterName != null && _topGifterName!.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A1F40),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('👑', style: TextStyle(fontSize: 10)),
+                  const SizedBox(width: 3),
+                  Text(
+                    'Top Gifter: $_topGifterName 🎁',
+                    style: const TextStyle(color: Color(0xFFFFD700), fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('👑', style: TextStyle(fontSize: 10)),
-                const SizedBox(width: 3),
-                Text(
-                  'Top Gifter: $_topGifterName 🎁',
-                  style: const TextStyle(color: Color(0xFFFFD700), fontSize: 10, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

@@ -250,9 +250,31 @@ class GroupPartyRoom {
     this.rtc,
   });
 
-  factory GroupPartyRoom.fromJson(Map<String, dynamic> json) {
-    final hostData = json['host'] is Map<String, dynamic> ? json['host'] as Map<String, dynamic> : null;
-    final rawSeats = json['seats'];
+  factory GroupPartyRoom.fromJson(Map<String, dynamic> rawJson) {
+    Map<String, dynamic> json = rawJson;
+    if (rawJson['room'] is Map<String, dynamic>) {
+      json = Map<String, dynamic>.from(rawJson['room'] as Map<String, dynamic>);
+      if (rawJson['token'] != null && json['token'] == null) json['token'] = rawJson['token'];
+      if (rawJson['livekit_token'] != null && json['livekit_token'] == null) json['livekit_token'] = rawJson['livekit_token'];
+      if (rawJson['livekit_url'] != null && json['livekit_url'] == null) json['livekit_url'] = rawJson['livekit_url'];
+      if (rawJson['can_publish'] != null && json['can_publish'] == null) json['can_publish'] = rawJson['can_publish'];
+    } else if (rawJson['data'] is Map<String, dynamic>) {
+      final innerData = rawJson['data'] as Map<String, dynamic>;
+      if (innerData['room'] is Map<String, dynamic>) {
+        json = Map<String, dynamic>.from(innerData['room'] as Map<String, dynamic>);
+      } else {
+        json = innerData;
+      }
+      if (rawJson['token'] != null && json['token'] == null) json['token'] = rawJson['token'];
+      if (rawJson['livekit_token'] != null && json['livekit_token'] == null) json['livekit_token'] = rawJson['livekit_token'];
+      if (rawJson['livekit_url'] != null && json['livekit_url'] == null) json['livekit_url'] = rawJson['livekit_url'];
+      if (rawJson['can_publish'] != null && json['can_publish'] == null) json['can_publish'] = rawJson['can_publish'];
+    }
+
+    final hostData = json['host'] is Map<String, dynamic>
+        ? json['host'] as Map<String, dynamic>
+        : (rawJson['host'] is Map<String, dynamic> ? rawJson['host'] as Map<String, dynamic> : null);
+    final rawSeats = json['seats'] ?? rawJson['seats'];
     final List<RoomSeat> parsedSeats = [];
     final maxSeatsCount = json['max_seats'] is int ? json['max_seats'] as int : (int.tryParse(json['max_seats']?.toString() ?? '10') ?? 10);
 
@@ -275,7 +297,7 @@ class GroupPartyRoom {
 
     // Parse audience avatars if any
     final List<String> avatars = [];
-    final rawAudience = json['audience'] ?? json['audience_avatars'] ?? json['members'];
+    final rawAudience = json['audience'] ?? json['audience_avatars'] ?? json['members'] ?? rawJson['audience'];
     if (rawAudience is List) {
       for (final a in rawAudience) {
         if (a is String && a.isNotEmpty) {
@@ -288,42 +310,60 @@ class GroupPartyRoom {
 
     final rtcData = json['rtc'] is Map<String, dynamic>
         ? PartyRoomRtcData.fromJson(json['rtc'] as Map<String, dynamic>)
-        : null;
+        : ((json['livekit_token'] != null || json['token'] != null || json['livekit_url'] != null || rawJson['livekit_token'] != null || rawJson['token'] != null)
+            ? PartyRoomRtcData.fromJson(json)
+            : null);
 
-    final rawRoomType = json['room_type']?.toString() ?? json['type']?.toString();
+    final rawRoomType = json['room_type']?.toString() ?? json['type']?.toString() ?? rawJson['room_type']?.toString();
 
-    final hostAvatarStr = hostData?['avatar_url']?.toString() ?? hostData?['avatar']?.toString() ?? json['host_avatar']?.toString() ?? json['room_cover']?.toString() ?? '';
-    final hostNameStr = hostData?['name']?.toString() ?? hostData?['nickname']?.toString() ?? json['host_name']?.toString() ?? 'Host';
-    final hostIdStr = hostData?['id']?.toString() ?? json['host_id']?.toString() ?? '0';
+    final hostAvatarStr = hostData?['avatar_url']?.toString() ??
+        hostData?['avatar']?.toString() ??
+        json['host_avatar_url']?.toString() ??
+        json['host_avatar']?.toString() ??
+        json['room_cover']?.toString() ??
+        json['avatar_url']?.toString() ??
+        rawJson['host_avatar']?.toString() ??
+        '';
+    final hostNameStr = hostData?['name']?.toString() ??
+        hostData?['display_name']?.toString() ??
+        hostData?['nickname']?.toString() ??
+        json['host_name']?.toString() ??
+        json['display_name']?.toString() ??
+        rawJson['host_name']?.toString() ??
+        'Host';
+    final hostIdStr = hostData?['id']?.toString() ?? json['host_id']?.toString() ?? rawJson['host_id']?.toString() ?? '0';
 
     // Ensure Seat 0 (Seat #1) always has host information bound
     if (parsedSeats.isNotEmpty) {
-      if (parsedSeats[0].userAvatar == null || parsedSeats[0].userAvatar!.isEmpty) {
-        parsedSeats[0] = parsedSeats[0].copyWith(
-          userId: hostIdStr,
-          userName: hostNameStr,
-          userAvatar: hostAvatarStr,
-          isHost: true,
-          status: 'occupied',
-          role: 'host',
-        );
-      }
+      final existingAvatar = parsedSeats[0].userAvatar;
+      final existingName = parsedSeats[0].userName;
+      final finalAvatar = (hostAvatarStr.isNotEmpty) ? hostAvatarStr : (existingAvatar ?? '');
+      final finalName = (hostNameStr.isNotEmpty && hostNameStr != 'Host') ? hostNameStr : (existingName ?? hostNameStr);
+
+      parsedSeats[0] = parsedSeats[0].copyWith(
+        userId: hostIdStr != '0' ? hostIdStr : (parsedSeats[0].userId ?? hostIdStr),
+        userName: finalName,
+        userAvatar: finalAvatar,
+        isHost: true,
+        status: 'occupied',
+        role: 'host',
+      );
     }
 
     return GroupPartyRoom(
-      id: json['id']?.toString() ?? '0',
-      roomId: json['room_id']?.toString() ?? json['id']?.toString() ?? '',
-      title: json['room_title']?.toString() ?? json['title']?.toString() ?? 'Live Party Room',
+      id: json['id']?.toString() ?? rawJson['id']?.toString() ?? '0',
+      roomId: json['room_id']?.toString() ?? json['id']?.toString() ?? rawJson['id']?.toString() ?? '',
+      title: json['room_title']?.toString() ?? json['title']?.toString() ?? rawJson['room_title']?.toString() ?? 'Live Party Room',
       hostId: hostIdStr,
       hostAccountId: hostData?['account_id']?.toString() ?? json['host_account_id']?.toString(),
       hostName: hostNameStr,
       hostAvatar: hostAvatarStr,
       hostLevel: hostData?['level'] is int ? hostData!['level'] as int : (int.tryParse(hostData?['level']?.toString() ?? '1') ?? 1),
       hostIsVerified: hostData?['is_verified'] == true || hostData?['verified'] == 1,
-      coverUrl: json['room_cover']?.toString() ?? json['cover_url']?.toString() ?? hostData?['avatar_url']?.toString() ?? '',
-      channelName: json['channel_name']?.toString() ?? 'party_${json['room_id'] ?? json['id']}',
+      coverUrl: json['room_cover']?.toString() ?? json['cover_url']?.toString() ?? hostAvatarStr,
+      channelName: json['channel_name']?.toString() ?? 'party_${json['room_id'] ?? json['id'] ?? rawJson['id']}',
       roomType: PartyRoomType.fromString(rawRoomType),
-      tag: json['topic_tag']?.toString() ?? json['tag']?.toString() ?? 'Singing 🎤',
+      tag: json['topic_tag']?.toString() ?? json['tag']?.toString() ?? 'Chat',
       maxSeats: maxSeatsCount,
       occupiedSeats: json['occupied_seats'] is int ? json['occupied_seats'] as int : (int.tryParse(json['occupied_seats']?.toString() ?? '1') ?? 1),
       audienceCount: json['online_members'] is int
@@ -722,28 +762,42 @@ class PartyRoomRtcData {
   final String driver;
   final String channelName;
   final String? token;
+  final String? livekitToken;
+  final String? livekitUrl;
   final String? appId;
   final String role;
+  final bool canPublish;
 
   const PartyRoomRtcData({
     required this.driver,
     required this.channelName,
     this.token,
+    this.livekitToken,
+    this.livekitUrl,
     this.appId,
     this.role = 'host',
+    this.canPublish = true,
   });
 
   factory PartyRoomRtcData.fromJson(Map<String, dynamic> json) {
+    final t = json['token']?.toString() ?? json['livekit_token']?.toString() ?? json['rtc_token']?.toString();
+    final lt = json['livekit_token']?.toString() ?? json['token']?.toString();
+    final lu = json['livekit_url']?.toString() ?? 'wss://chinchins.live/livekit';
+
     return PartyRoomRtcData(
-      driver: json['driver']?.toString() ?? 'agora',
-      channelName: json['channel_name']?.toString() ?? '',
-      token: json['token']?.toString(),
+      driver: json['driver']?.toString() ?? 'livekit',
+      channelName: json['channel_name']?.toString() ?? json['room_name']?.toString() ?? '',
+      token: t,
+      livekitToken: lt,
+      livekitUrl: lu,
       appId: json['app_id']?.toString(),
       role: json['role']?.toString() ?? 'host',
+      canPublish: json['can_publish'] != false,
     );
   }
 }
 
 /// Type alias for real-time chat room messages
 typedef ChatMessageModel = PartyRoomMessage;
+
 
