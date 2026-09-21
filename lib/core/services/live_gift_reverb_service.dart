@@ -97,6 +97,9 @@ class LiveGiftReverbService {
         'presence-stream.$cleanStreamId',
         'live-stream.$cleanStreamId',
         'live-room.$cleanStreamId',
+        'party.$cleanStreamId',
+        'party-room.$cleanStreamId',
+        'presence-party.$cleanStreamId',
       ];
 
       for (final channelName in channelNames) {
@@ -125,6 +128,12 @@ class LiveGiftReverbService {
             _processEventData(event.data, cleanStreamId);
           });
           _channelSubscriptions[channelName]!.add(sub3);
+
+          // Bind to "PartyRoomGiftEvent" and "PartyRoomMessageEvent"
+          final sub4 = channel.bind('PartyRoomGiftEvent').listen((event) {
+            _processEventData(event.data, cleanStreamId);
+          });
+          _channelSubscriptions[channelName]!.add(sub4);
         } else {
           _subscribedChannels[channelName]!.subscribeIfNotUnsubscribed();
         }
@@ -136,7 +145,12 @@ class LiveGiftReverbService {
 
   /// Unsubscribe from live room
   Future<void> unsubscribeFromLiveRoom(String streamId) async {
-    final cleanStreamId = streamId.replaceAll('live-stream.', '').replaceAll('presence-stream.', '').replaceAll('stream.', '');
+    final cleanStreamId = streamId
+        .replaceAll('live-stream.', '')
+        .replaceAll('presence-stream.', '')
+        .replaceAll('stream.', '')
+        .replaceAll('party.', '')
+        .replaceAll('party-room.', '');
     _roomListeners.remove(cleanStreamId);
 
     if (_activeStreamId == cleanStreamId) {
@@ -148,6 +162,9 @@ class LiveGiftReverbService {
       'presence-stream.$cleanStreamId',
       'live-stream.$cleanStreamId',
       'live-room.$cleanStreamId',
+      'party.$cleanStreamId',
+      'party-room.$cleanStreamId',
+      'presence-party.$cleanStreamId',
     ];
 
     for (final channelName in channelNames) {

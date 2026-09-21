@@ -482,6 +482,7 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
         streamId: widget.room.id,
         receiverId: targetId.toString(),
         onGiftSelected: (gift) async {
+          final messenger = ScaffoldMessenger.of(context);
           final res = await PartyRoomApiService.sendGift(
             widget.room.id,
             giftId: gift.giftId > 0 ? gift.giftId : (int.tryParse(gift.id) ?? 1),
@@ -491,7 +492,7 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
 
           if (!mounted) return;
           if (res['insufficient_balance'] == true) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            messenger.showSnackBar(
               SnackBar(
                 content: const Text('Insufficient gems balance! Please top up to send gifts.'),
                 backgroundColor: const Color(0xFFFF1744),
