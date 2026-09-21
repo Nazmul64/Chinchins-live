@@ -6,12 +6,14 @@ class RoomSeatWidget extends StatelessWidget {
   final RoomSeat seat;
   final VoidCallback onTap;
   final bool isVideoGrid;
+  final bool isTopGifter;
 
   const RoomSeatWidget({
     super.key,
     required this.seat,
     required this.onTap,
     this.isVideoGrid = false,
+    this.isTopGifter = false,
   });
 
   @override
@@ -25,9 +27,10 @@ class RoomSeatWidget extends StatelessWidget {
       isMuted: seat.isMuted,
       isLocked: seat.status == 'locked',
       isHost: seat.isHost,
+      isTopGifter: isTopGifter,
+      level: seat.level,
       coinsReceived: seat.coinsReceived,
       onTap: onTap,
     );
   }
 }
-

@@ -335,6 +335,11 @@ class ApiConstants {
   static String partyRoomSendMessage(dynamic id) => '$baseUrl/party-rooms/$id/messages/send';
   static String partyRoomSendGift(dynamic id) => '$baseUrl/party-rooms/$id/send-gift';
   static String partyRoomDeductInterval(dynamic id) => '$baseUrl/party-rooms/$id/deduct-interval';
+  static String partyRoomSpeaking(dynamic id) => '$baseUrl/party-rooms/$id/speaking';
+  static String partyRoomSeatRequests(dynamic id) => '$baseUrl/party-rooms/$id/seat-requests';
+  static String partyRoomRespondSeatRequest(dynamic id, dynamic requestId) => '$baseUrl/party-rooms/$id/seat-requests/$requestId/respond';
+  static String partyRoomRequestSeat(dynamic id) => '$baseUrl/party-rooms/$id/request-seat';
+  static String partyRoomMuteSeat(dynamic id) => '$baseUrl/party-rooms/$id/mute-seat';
 }
 
 

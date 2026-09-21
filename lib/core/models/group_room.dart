@@ -442,6 +442,8 @@ class PartyRoomMessage {
   final String? senderName;
   final String? senderAvatar;
   final int senderLevel;
+  final bool senderIsVerified;
+  final Map<String, int> reactions;
   final DateTime createdAt;
 
   const PartyRoomMessage({
@@ -455,6 +457,8 @@ class PartyRoomMessage {
     this.senderName,
     this.senderAvatar,
     this.senderLevel = 1,
+    this.senderIsVerified = false,
+    this.reactions = const {},
     required this.createdAt,
   });
 
@@ -468,6 +472,13 @@ class PartyRoomMessage {
       date = DateTime.now();
     }
 
+    final Map<String, int> parsedReactions = {};
+    if (json['reactions'] is Map) {
+      json['reactions'].forEach((k, v) {
+        parsedReactions[k.toString()] = v is int ? v : (int.tryParse(v.toString()) ?? 0);
+      });
+    }
+
     return PartyRoomMessage(
       id: json['id'] is int ? json['id'] as int : (int.tryParse(json['id']?.toString() ?? '0') ?? 0),
       roomId: json['room_id']?.toString() ?? '',
@@ -479,6 +490,90 @@ class PartyRoomMessage {
       senderName: senderData?['name']?.toString() ?? senderData?['nickname']?.toString() ?? json['sender_name']?.toString() ?? 'Guest',
       senderAvatar: senderData?['avatar_url']?.toString() ?? senderData?['avatar']?.toString() ?? json['sender_avatar']?.toString(),
       senderLevel: senderData?['level'] is int ? senderData!['level'] as int : (int.tryParse(senderData?['level']?.toString() ?? '1') ?? 1),
+      senderIsVerified: senderData?['is_verified'] == true || senderData?['verified'] == 1 || json['sender_is_verified'] == true,
+      reactions: parsedReactions,
+      createdAt: date,
+    );
+  }
+
+  PartyRoomMessage copyWith({
+    int? id,
+    String? roomId,
+    String? type,
+    String? message,
+    String? imageUrl,
+    String? senderId,
+    String? senderAccountId,
+    String? senderName,
+    String? senderAvatar,
+    int? senderLevel,
+    bool? senderIsVerified,
+    Map<String, int>? reactions,
+    DateTime? createdAt,
+  }) {
+    return PartyRoomMessage(
+      id: id ?? this.id,
+      roomId: roomId ?? this.roomId,
+      type: type ?? this.type,
+      message: message ?? this.message,
+      imageUrl: imageUrl ?? this.imageUrl,
+      senderId: senderId ?? this.senderId,
+      senderAccountId: senderAccountId ?? this.senderAccountId,
+      senderName: senderName ?? this.senderName,
+      senderAvatar: senderAvatar ?? this.senderAvatar,
+      senderLevel: senderLevel ?? this.senderLevel,
+      senderIsVerified: senderIsVerified ?? this.senderIsVerified,
+      reactions: reactions ?? this.reactions,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+}
+
+class PartyRoomSeatRequest {
+  final dynamic id;
+  final dynamic requestId;
+  final dynamic userId;
+  final String accountId;
+  final String name;
+  final String avatarUrl;
+  final int level;
+  final int coins;
+  final String status;
+  final DateTime createdAt;
+
+  const PartyRoomSeatRequest({
+    required this.id,
+    required this.requestId,
+    required this.userId,
+    required this.accountId,
+    required this.name,
+    required this.avatarUrl,
+    this.level = 1,
+    this.coins = 0,
+    this.status = 'pending',
+    required this.createdAt,
+  });
+
+  factory PartyRoomSeatRequest.fromJson(Map<String, dynamic> json) {
+    DateTime date;
+    try {
+      date = json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : DateTime.now();
+    } catch (_) {
+      date = DateTime.now();
+    }
+
+    final userData = json['user'] is Map<String, dynamic> ? json['user'] as Map<String, dynamic> : null;
+
+    return PartyRoomSeatRequest(
+      id: json['id'] ?? json['request_id'],
+      requestId: json['request_id'] ?? json['id'] ?? json['invitation_id'],
+      userId: json['user_id'] ?? userData?['id'],
+      accountId: json['account_id']?.toString() ?? userData?['account_id']?.toString() ?? '',
+      name: json['name']?.toString() ?? json['display_name']?.toString() ?? userData?['name']?.toString() ?? 'User',
+      avatarUrl: json['avatar_url']?.toString() ?? json['avatar']?.toString() ?? userData?['avatar_url']?.toString() ?? '',
+      level: json['level'] is int ? json['level'] as int : (int.tryParse(json['level']?.toString() ?? '1') ?? 1),
+      coins: json['coins'] is int ? json['coins'] as int : (int.tryParse(json['coins']?.toString() ?? '0') ?? 0),
+      status: json['status']?.toString() ?? 'pending',
       createdAt: date,
     );
   }

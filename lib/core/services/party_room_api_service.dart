@@ -673,4 +673,124 @@ class PartyRoomApiService {
       };
     }
   }
+
+  /// 20. Notify Real-Time Speaking Wave State (`POST /api/party-rooms/{id}/speaking`)
+  static Future<bool> notifySpeakingState(dynamic roomId, {required bool isSpeaking}) async {
+    try {
+      final headers = await _getHeaders('application/json');
+      final payload = {'is_speaking': isSpeaking};
+
+      final response = await http
+          .post(
+            Uri.parse(ApiConstants.partyRoomSpeaking(roomId)),
+            headers: headers,
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 4));
+
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 21. Get Speaker Requests Queue for Host (`GET /api/party-rooms/{id}/seat-requests`)
+  static Future<List<PartyRoomSeatRequest>> getSeatRequests(dynamic roomId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http
+          .get(Uri.parse(ApiConstants.partyRoomSeatRequests(roomId)), headers: headers)
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        List? list;
+        if (json is Map && json['data'] is List) {
+          list = json['data'] as List;
+        } else if (json is List) {
+          list = json;
+        }
+
+        if (list != null) {
+          return list
+              .whereType<Map<String, dynamic>>()
+              .map((e) => PartyRoomSeatRequest.fromJson(e))
+              .toList();
+        }
+      }
+    } catch (e) {
+      AppLogger.error('PartyRoomGetSeatRequests', e);
+    }
+    return [];
+  }
+
+  /// 22. Host Responds to Seat Request: Accept / Reject (`POST /api/party-rooms/{id}/seat-requests/{requestId}/respond`)
+  static Future<Map<String, dynamic>> respondSeatRequest(dynamic roomId, dynamic requestId, {required String action}) async {
+    try {
+      final headers = await _getHeaders('application/json');
+      final payload = {'action': action.toLowerCase()};
+
+      final response = await http
+          .post(
+            Uri.parse(ApiConstants.partyRoomRespondSeatRequest(roomId, requestId)),
+            headers: headers,
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      final json = jsonDecode(response.body);
+      return {
+        'success': response.statusCode == 200 || (json is Map && json['success'] == true),
+        'message': json is Map ? json['message'] ?? 'Responded to request' : 'Responded',
+        'data': json is Map ? json['data'] : null,
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Error: $e'};
+    }
+  }
+
+  /// 23. Audience Requests to Speak / Raise Hand (`POST /api/party-rooms/{id}/request-seat`)
+  static Future<Map<String, dynamic>> requestSeat(dynamic roomId) async {
+    try {
+      final headers = await _getHeaders('application/json');
+      final response = await http
+          .post(
+            Uri.parse(ApiConstants.partyRoomRequestSeat(roomId)),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      final json = jsonDecode(response.body);
+      return {
+        'success': response.statusCode == 200 || (json is Map && json['success'] == true),
+        'message': json is Map ? json['message'] ?? 'Seat request sent!' : 'Request sent',
+        'data': json is Map ? json['data'] : null,
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Error sending request: $e'};
+    }
+  }
+
+  /// 24. Host Mutes Speaker Seat (`POST /api/party-rooms/{id}/mute-seat`)
+  static Future<bool> muteSeat(dynamic roomId, {required int seatIndex, required bool isMuted}) async {
+    try {
+      final headers = await _getHeaders('application/json');
+      final payload = {
+        'seat_index': seatIndex,
+        'is_muted': isMuted,
+      };
+
+      final response = await http
+          .post(
+            Uri.parse(ApiConstants.partyRoomMuteSeat(roomId)),
+            headers: headers,
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
 }
