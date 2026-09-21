@@ -131,4 +131,65 @@ class NotificationApiService {
       return {'status': false, 'message': e.toString()};
     }
   }
+
+  /// Check Firebase FCM connection status on Laravel backend (/api/fcm/status)
+  static Future<Map<String, dynamic>> checkFcmStatus() async {
+    try {
+      final token = await AuthApiService.getToken();
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await http
+          .get(Uri.parse(ApiConstants.fcmStatus), headers: headers)
+          .timeout(const Duration(seconds: 10));
+
+      final decoded = jsonDecode(response.body);
+      AppLogger.info('FcmStatus', 'Status check response: ${response.statusCode}');
+      return decoded is Map<String, dynamic>
+          ? decoded
+          : {'status': response.statusCode == 200, 'connected': response.statusCode == 200};
+    } catch (e, st) {
+      AppLogger.error('FcmStatusError', e, st);
+      return {'status': false, 'connected': false, 'message': e.toString()};
+    }
+  }
+
+  /// Trigger instant test push notification from Laravel backend (/api/fcm/test-push)
+  static Future<Map<String, dynamic>> sendFcmTestPush({
+    String title = '🎉 ChinChins Live Test Push',
+    String body = 'Firebase Push Notification connected successfully! 🚀',
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final payload = {
+        'title': title,
+        'body': body,
+      };
+
+      final response = await http
+          .post(
+            Uri.parse(ApiConstants.fcmTestPush),
+            headers: headers,
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      final decoded = jsonDecode(response.body);
+      AppLogger.info('FcmTestPush', 'Test push response: ${response.statusCode}');
+      return decoded is Map<String, dynamic>
+          ? decoded
+          : {'status': response.statusCode == 200};
+    } catch (e, st) {
+      AppLogger.error('FcmTestPushError', e, st);
+      return {'status': false, 'message': e.toString()};
+    }
+  }
 }

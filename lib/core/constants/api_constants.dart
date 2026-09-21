@@ -262,7 +262,10 @@ class ApiConstants {
   static String get appDeviceRegister => '$baseUrl/app/device/register';
   static String get deviceRegister => '$baseUrl/device/register';
 
-  // Real-Time Notifications & Push Engine
+  // Real-Time Notifications & Push Engine (FCM & In-App)
+  static String get updateFcmToken => '$baseUrl/update-fcm-token';
+  static String get fcmStatus => '$baseUrl/fcm/status';
+  static String get fcmTestPush => '$baseUrl/fcm/test-push';
   static String get notifications => '$baseUrl/notifications';
   static String get userNotifications => '$baseUrl/user/notifications';
   static String get testPushNotification => '$baseUrl/notifications/test-push';

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/services/signaling_service.dart';
+import '../../../core/services/device_registration_service.dart';
 
 class AuthApiService {
   static const String _keyToken = 'auth_token';
@@ -39,6 +40,13 @@ class AuthApiService {
           ? nickname.trim()
           : (cleanFirst.isNotEmpty ? cleanFirst : derivedName);
 
+      final deviceId = await DeviceRegistrationService.getOrCreateDeviceId();
+      final fcmToken = await DeviceRegistrationService.getFcmToken() ?? 'chinchins_push_token_${deviceId.substring(0, 8)}';
+      String deviceType = 'android';
+      if (Platform.isIOS) {
+        deviceType = 'ios';
+      }
+
       final Map<String, dynamic> requestPayload = {
         'name': derivedName,
         'nickname': derivedNickname,
@@ -53,6 +61,10 @@ class AuthApiService {
         'level': 0,
         'charm_level': 1,
         'is_active': 1,
+        'fcm_token': fcmToken,
+        'device_token': fcmToken,
+        'device_type': deviceType,
+        'device_id': deviceId,
       };
 
       if (email != null && email.trim().isNotEmpty) {
@@ -177,12 +189,23 @@ class AuthApiService {
   }) async {
     try {
       final cleanId = identifier.trim();
+      final deviceId = await DeviceRegistrationService.getOrCreateDeviceId();
+      final fcmToken = await DeviceRegistrationService.getFcmToken() ?? 'chinchins_push_token_${deviceId.substring(0, 8)}';
+      String deviceType = 'android';
+      if (Platform.isIOS) {
+        deviceType = 'ios';
+      }
+
       final Map<String, dynamic> requestPayload = {
         'phone': cleanId,
         'email': cleanId,
         'identifier': cleanId,
         'login': cleanId,
         'password': password,
+        'fcm_token': fcmToken,
+        'device_token': fcmToken,
+        'device_type': deviceType,
+        'device_id': deviceId,
       };
 
       final body = jsonEncode(requestPayload);
@@ -222,6 +245,9 @@ class AuthApiService {
 
         if (token != null) {
           await _saveSession(token: token.toString(), user: user);
+          // Sync device and FCM token with backend in background
+          DeviceRegistrationService.updateFcmToken(fcmToken: fcmToken);
+          DeviceRegistrationService.registerDevice(fcmToken: fcmToken, userId: user?['id'] ?? user?['user_id']);
         }
 
         return {

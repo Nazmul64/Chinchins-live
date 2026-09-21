@@ -104,11 +104,65 @@ class DeviceRegistrationService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final decoded = jsonDecode(response.body);
         AppLogger.info('DeviceRegister', 'Device successfully registered: $deviceId');
+        // Also sync with /api/update-fcm-token if user is logged in
+        if (token != null && token.isNotEmpty) {
+          updateFcmToken(fcmToken: activeFcmToken);
+        }
         return decoded is Map<String, dynamic> ? decoded : {'status': true};
       }
     } catch (e, st) {
       AppLogger.error('DeviceRegisterError', e, st);
     }
     return null;
+  }
+
+  /// Sync FCM push notification token with Laravel backend (/api/update-fcm-token)
+  static Future<Map<String, dynamic>> updateFcmToken({
+    String? fcmToken,
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final deviceId = await getOrCreateDeviceId();
+      final activeFcmToken = fcmToken ??
+          (await getFcmToken()) ??
+          'chinchins_push_token_${deviceId.substring(0, 8)}';
+
+      String deviceType = 'android';
+      if (Platform.isIOS) {
+        deviceType = 'ios';
+      } else if (Platform.isWindows) {
+        deviceType = 'windows';
+      } else if (Platform.isMacOS) {
+        deviceType = 'macos';
+      }
+
+      final payload = {
+        'fcm_token': activeFcmToken,
+        'device_type': deviceType,
+        'device_brand': Platform.isAndroid ? 'Android' : (Platform.isIOS ? 'Apple' : 'Desktop'),
+        'device_model': Platform.isAndroid ? 'Android Smartphone' : (Platform.isIOS ? 'iPhone' : 'PC'),
+      };
+
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await http
+          .post(
+            Uri.parse(ApiConstants.updateFcmToken),
+            headers: headers,
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      final decoded = jsonDecode(response.body);
+      AppLogger.info('UpdateFcmToken', 'Token sync response: ${response.statusCode}');
+      return decoded is Map<String, dynamic> ? decoded : {'status': response.statusCode == 200};
+    } catch (e, st) {
+      AppLogger.error('UpdateFcmTokenError', e, st);
+      return {'status': false, 'message': e.toString()};
+    }
   }
 }
