@@ -728,15 +728,41 @@ class PartyRoomApiService {
   static Future<Map<String, dynamic>> respondSeatRequest(dynamic roomId, dynamic requestId, {required String action}) async {
     try {
       final headers = await _getHeaders('application/json');
-      final payload = {'action': action.toLowerCase()};
+      final payload = {
+        'action': action.toLowerCase(),
+        'request_id': requestId,
+      };
 
-      final response = await http
+      // Try primary endpoint /seat-requests/$requestId/respond
+      http.Response response = await http
           .post(
             Uri.parse(ApiConstants.partyRoomRespondSeatRequest(roomId, requestId)),
             headers: headers,
             body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 404 || response.statusCode == 405) {
+        // Fallback to /respond-seat-request
+        response = await http
+            .post(
+              Uri.parse('${ApiConstants.partyRooms}/$roomId/respond-seat-request'),
+              headers: headers,
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 10));
+      }
+
+      if (response.statusCode == 404 || response.statusCode == 405) {
+        // Fallback to /seat-requests/respond
+        response = await http
+            .post(
+              Uri.parse('${ApiConstants.partyRooms}/$roomId/seat-requests/respond'),
+              headers: headers,
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 10));
+      }
 
       final json = jsonDecode(response.body);
       return {
@@ -749,7 +775,7 @@ class PartyRoomApiService {
     }
   }
 
-  /// 23. Audience Requests to Speak / Raise Hand (`POST /api/party-rooms/{id}/seat-requests`)
+  /// 23. Audience Requests to Speak / Raise Hand (`POST /api/party-rooms/{id}/request-seat` or `/seat-requests`)
   static Future<Map<String, dynamic>> requestSeat(dynamic roomId, {int? seatIndex}) async {
     try {
       final headers = await _getHeaders('application/json');
@@ -757,13 +783,25 @@ class PartyRoomApiService {
         if (seatIndex != null) 'seat_index': seatIndex,
       };
 
-      final response = await http
+      // 1. Try POST /api/party-rooms/$id/request-seat
+      http.Response response = await http
           .post(
-            Uri.parse(ApiConstants.partyRoomSeatRequests(roomId)),
+            Uri.parse(ApiConstants.partyRoomRequestSeat(roomId)),
             headers: headers,
             body: jsonEncode(payload),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 8));
+
+      // 2. If not supported, try POST /api/party-rooms/$id/seat-requests
+      if (response.statusCode == 404 || response.statusCode == 405) {
+        response = await http
+            .post(
+              Uri.parse(ApiConstants.partyRoomSeatRequests(roomId)),
+              headers: headers,
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 8));
+      }
 
       final json = jsonDecode(response.body);
       return {

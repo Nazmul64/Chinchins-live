@@ -217,6 +217,8 @@ class LiveGiftReverbService {
 
           // 4. Seat Request Events
           final seatRequestEvents = [
+            'SeatRequestReceivedEvent',
+            '.SeatRequestReceivedEvent',
             'SeatRequestEvent',
             '.SeatRequestEvent',
             'seat.requested',

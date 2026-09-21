@@ -98,33 +98,20 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
           (_giftOverlayKey.currentState as dynamic)?.playGift(giftEvent);
           setState(() {
             _topGifterName = giftEvent.senderName;
-            _messages.add(PartyRoomMessage(
-              id: DateTime.now().millisecondsSinceEpoch,
-              roomId: widget.room.id,
-              type: 'gift',
-              message: '🎁 ${giftEvent.senderName} sent ${giftEvent.giftName}! (💎 ${giftEvent.coinsSpent})',
-              senderName: giftEvent.senderName,
-              senderAvatar: giftEvent.senderAvatar,
-              createdAt: DateTime.now(),
-            ));
           });
-          _scrollChatToBottom();
+          _addMessageSafely(PartyRoomMessage(
+            id: DateTime.now().millisecondsSinceEpoch,
+            roomId: widget.room.id,
+            type: 'gift',
+            message: '🎁 ${giftEvent.senderName} sent ${giftEvent.giftName}! (💎 ${giftEvent.coinsSpent})',
+            senderName: giftEvent.senderName,
+            senderAvatar: giftEvent.senderAvatar,
+            createdAt: DateTime.now(),
+          ));
         }
       },
       onMessageReceived: (message) {
-        if (mounted) {
-          setState(() {
-            final exists = _messages.any((m) =>
-                m.id == message.id ||
-                (m.message == message.message &&
-                    m.senderName == message.senderName &&
-                    DateTime.now().difference(m.createdAt).inSeconds < 4));
-            if (!exists) {
-              _messages.add(message);
-            }
-          });
-          _scrollChatToBottom();
-        }
+        _addMessageSafely(message);
       },
       onSeatUpdated: (seatData) {
         if (mounted) {
@@ -133,7 +120,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
       },
       onSeatRequested: (reqData) {
         if (mounted && _isHost) {
-          _checkPendingRequests();
+          _handleIncomingSeatRequest(reqData);
         }
       },
     );
@@ -148,6 +135,75 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
     _billingTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       _runMinuteBilling();
     });
+  }
+
+  void _addMessageSafely(PartyRoomMessage newMessage) {
+    if (!mounted) return;
+    final isExist = _messages.any((msg) =>
+        msg.id == newMessage.id ||
+        (msg.message == newMessage.message &&
+            msg.senderName == newMessage.senderName &&
+            DateTime.now().difference(msg.createdAt).inSeconds.abs() < 3));
+
+    if (!isExist) {
+      setState(() {
+        _messages.add(newMessage);
+      });
+      _scrollChatToBottom();
+    }
+  }
+
+  void _handleIncomingSeatRequest(Map<String, dynamic> reqData) {
+    _checkPendingRequests();
+    if (!mounted || !_isHost) return;
+
+    final reqId = reqData['request_id'] ?? reqData['id'] ?? reqData['invitation_id'];
+    final uName = reqData['user_name'] ?? reqData['name'] ?? (reqData['user'] is Map ? (reqData['user']['display_name'] ?? reqData['user']['name']) : 'একজন দর্শক');
+    final sIdx = reqData['seat_index'] ?? 2;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF131A26),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('সিট রিকোয়েস্ট 🎙️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Text('$uName সিট $sIdx-এ বসতে চান।', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              if (reqId != null) {
+                await PartyRoomApiService.respondSeatRequest(widget.room.id, reqId, action: 'reject');
+                _checkPendingRequests();
+              }
+            },
+            child: const Text('Reject', style: TextStyle(color: Colors.redAccent)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              shape: const StadiumBorder(),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              if (reqId != null) {
+                final res = await PartyRoomApiService.respondSeatRequest(widget.room.id, reqId, action: 'accept');
+                if (res['success'] == true) {
+                  _refreshRoomState();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('$uName-এর রিকোয়েস্ট গ্রহণ করা হয়েছে')),
+                    );
+                  }
+                }
+                _checkPendingRequests();
+              }
+            },
+            child: const Text('Accept', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _initUserData() async {
@@ -500,10 +556,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
       createdAt: DateTime.now(),
     );
 
-    setState(() {
-      _messages.add(localMsg);
-    });
-    _scrollChatToBottom();
+    _addMessageSafely(localMsg);
 
     await PartyRoomApiService.sendMessage(widget.room.id, message: text);
   }
