@@ -101,7 +101,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
 
     // Ensure loudspeaker is on
     try {
-      await Hardware.instance.setSpeakerphoneOn(true);
+      await AudioManager.instance.setSpeakerOutputPreferred(true);
     } catch (e) {
       debugPrint('LiveStreamScreen speakerphone error: $e');
     }
@@ -268,7 +268,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: _cohostRequests.length,
-                      separatorBuilder: (_, __) => const Divider(color: Colors.white10),
+                      separatorBuilder: (_, _) => const Divider(color: Colors.white10),
                       itemBuilder: (context, index) {
                         final req = _cohostRequests[index];
                         final name = req['user_name'] ?? 'Viewer';

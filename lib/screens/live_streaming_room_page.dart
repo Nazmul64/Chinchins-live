@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
-import 'package:http/http.dart' as http;
 
 class LiveStreamingRoomPage extends StatefulWidget {
   final String roomName;
@@ -10,12 +9,12 @@ class LiveStreamingRoomPage extends StatefulWidget {
   final String currentUserName;
 
   const LiveStreamingRoomPage({
-    Key? key,
+    super.key,
     required this.roomName,
     required this.liveKitToken,
     required this.isHost,
     required this.currentUserName,
-  }) : super(key: key);
+  });
 
   @override
   State<LiveStreamingRoomPage> createState() => _LiveStreamingRoomPageState();
@@ -30,7 +29,6 @@ class _LiveStreamingRoomPageState extends State<LiveStreamingRoomPage> {
   
   final List<Map<String, String>> _chatMessages = [];
   final TextEditingController _msgController = TextEditingController();
-  bool _isMicOn = true;
   bool _isCoHost = false;
 
   final String liveKitUri = 'wss://chinchins.live/livekit';
@@ -205,7 +203,7 @@ class _LiveStreamingRoomPageState extends State<LiveStreamingRoomPage> {
   @override
   Widget build(BuildContext context) {
     final allVideos = [
-      if (_localVideoTrack != null) _localVideoTrack!,
+      if (_localVideoTrack != null) _localVideoTrack as VideoTrack,
       ..._remoteVideoTracks,
     ];
 

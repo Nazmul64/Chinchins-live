@@ -40,7 +40,7 @@ class _VoiceChatRoomScreenState extends State<VoiceChatRoomScreen> {
 
   void _connectVoiceRoom() async {
     try {
-      await Hardware.instance.setSpeakerphoneOn(true);
+      await AudioManager.instance.setSpeakerOutputPreferred(true);
     } catch (e) {
       debugPrint('VoiceChatRoomScreen speakerphone error: $e');
     }
@@ -53,7 +53,7 @@ class _VoiceChatRoomScreenState extends State<VoiceChatRoomScreen> {
 
     if (_room != null && mounted) {
       try {
-        await Hardware.instance.setSpeakerphoneOn(true);
+        await AudioManager.instance.setSpeakerOutputPreferred(true);
       } catch (_) {}
 
       _listener = _room!.createListener();

@@ -33,7 +33,9 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
 
   void _updateVideoTracks() {
     if (_room == null) {
-      if (mounted) setState(() => _activeVideos = []);
+      if (mounted) {
+        setState(() => _activeVideos = []);
+      }
       return;
     }
 
@@ -58,7 +60,6 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
     if (mounted) {
       setState(() {
         _activeVideos = tracks;
-        _isLoading = tracks.isEmpty;
       });
     }
   }
@@ -66,9 +67,9 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
   Future<void> _connectToHostStream() async {
     // 1. Ensure loud speakerphone is on
     try {
-      await Hardware.instance.setSpeakerphoneOn(true);
+      await AudioManager.instance.setSpeakerOutputPreferred(true);
     } catch (e) {
-      debugPrint('LiveKit Hardware Speakerphone Error: $e');
+      debugPrint('LiveKit Audio Speakerphone Error: $e');
     }
 
     _room = Room(
@@ -99,7 +100,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
 
       // 4. Double check speakerphone after connection
       try {
-        await Hardware.instance.setSpeakerphoneOn(true);
+        await AudioManager.instance.setSpeakerOutputPreferred(true);
       } catch (_) {}
 
       // 5. Update existing tracks
