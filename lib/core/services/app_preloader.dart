@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../constants/api_constants.dart';
 import '../../features/auth/services/auth_api_service.dart';
 import 'fast_api_client.dart';
+import 'local_vault.dart';
 
 /// 🚀 AppPreloader: Global Instant Preloader & In-Memory Config (Zero-Loading UI)
 class AppPreloader {
@@ -17,6 +18,8 @@ class AppPreloader {
 
     try {
       await FastApiClient.init();
+      await LocalVault.init();
+
       final token = await AuthApiService.getToken();
       final headers = <String, String>{
         'Accept': 'application/json',
@@ -30,6 +33,7 @@ class AppPreloader {
           final data = jsonDecode(res.body);
           if (data is Map) {
             globalConfig = Map<String, dynamic>.from(data['data'] ?? data);
+            await LocalVault.syncBootstrapData(globalConfig);
           }
         }
       } catch (_) {}
@@ -43,6 +47,7 @@ class AppPreloader {
         _fetchWithdrawOptions(headers),
       ], eagerError: false).timeout(const Duration(seconds: 6), onTimeout: () => []);
 
+      await LocalVault.syncBootstrapData(globalConfig);
       _isInitialized = true;
     } catch (e) {
       debugPrint('[AppPreloader] initAppData error: $e');
