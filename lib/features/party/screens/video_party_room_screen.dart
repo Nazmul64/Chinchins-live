@@ -68,16 +68,13 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
       onGiftReceived: (giftEvent) {
         if (mounted) {
           (_giftOverlayKey.currentState as dynamic)?.playGift(giftEvent);
-          setState(() {
-            _chatMessages.add(PartyRoomMessage(
-              id: DateTime.now().millisecondsSinceEpoch,
-              roomId: widget.room.id,
-              type: 'gift',
-              message: '🎁 ${giftEvent.senderName} sent ${giftEvent.giftName}! (💎 ${giftEvent.coinsSpent})',
-              createdAt: DateTime.now(),
-            ));
-          });
-          _scrollToBottom();
+          _appendMessageSafely(PartyRoomMessage(
+            id: DateTime.now().millisecondsSinceEpoch,
+            roomId: widget.room.id,
+            type: 'gift',
+            message: '🎁 ${giftEvent.senderName} sent ${giftEvent.giftName}! (💎 ${giftEvent.coinsSpent})',
+            createdAt: DateTime.now(),
+          ));
         }
       },
     );
@@ -134,6 +131,22 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
           createdAt: DateTime.now(),
         ));
       });
+    }
+  }
+
+  void _appendMessageSafely(PartyRoomMessage msg) {
+    if (!mounted) return;
+    final exists = _chatMessages.any((m) =>
+        m.id == msg.id ||
+        (m.message == msg.message &&
+            m.senderName == msg.senderName &&
+            DateTime.now().difference(m.createdAt).inSeconds.abs() < 3));
+
+    if (!exists) {
+      setState(() {
+        _chatMessages.add(msg);
+      });
+      _scrollToBottom();
     }
   }
 

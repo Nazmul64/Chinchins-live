@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../core/services/app_preloader.dart';
 import '../../../core/theme/app_colors.dart';
 import '../services/withdraw_api_service.dart';
 
@@ -19,7 +20,7 @@ class WithdrawScreen extends StatefulWidget {
 class _WithdrawScreenState extends State<WithdrawScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  bool _isLoading = true;
+  bool _isLoading = false;
   bool _isSubmitting = false;
 
   List<Map<String, dynamic>> _paymentMethods = [];
@@ -50,8 +51,56 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   @override
   void initState() {
     super.initState();
+    // ⚡ Zero-Loading: Instant population from RAM/Disk cache
+    final cached = WithdrawApiService.getCachedWithdrawInfoSync();
+    if (cached != null) {
+      _applyWithdrawData(cached);
+      _isLoading = false;
+    } else if (AppPreloader.withdrawMethods.isNotEmpty) {
+      _paymentMethods = List<Map<String, dynamic>>.from(
+        AppPreloader.withdrawMethods.map((m) => m is Map ? Map<String, dynamic>.from(m) : {'name': m.toString(), 'code': m.toString().toLowerCase()})
+      );
+      if (_paymentMethods.isNotEmpty) {
+        _selectedMethod = _paymentMethods.first;
+      }
+      _isLoading = false;
+    } else {
+      _isLoading = true;
+    }
+
     _fetchWithdrawInfo();
     _coinsController.addListener(_onCoinsChanged);
+  }
+
+  void _applyWithdrawData(Map<String, dynamic> data) {
+    final userData = data['user'] is Map ? data['user'] as Map<String, dynamic> : null;
+    final methods = data['payment_methods'] is List ? List<Map<String, dynamic>>.from(data['payment_methods']) : <Map<String, dynamic>>[];
+
+    _minCoins = _parseInt(data['min_withdraw_coins'], 1000);
+    _maxCoins = _parseInt(data['max_withdraw_coins'], 100000);
+    _commissionPercent = _parseDouble(data['commission_percent'], 5.0);
+    _ratePerBdt = _parseDouble(data['rate_per_bdt'], 10.0);
+    if (_ratePerBdt <= 0) _ratePerBdt = 10.0;
+    _rateText = data['rate_text']?.toString() ?? '100 Coins = ৳10.00 BDT';
+    _noticeText = data['notice']?.toString() ?? 'Withdrawals are processed manually within 1-24 hours.';
+
+    if (userData != null) {
+      _userCoins = _parseInt(userData['coins'], 0);
+      if (_accountNumberController.text.isEmpty && userData['phone'] != null) {
+        _accountNumberController.text = userData['phone'].toString();
+      }
+    }
+
+    if (methods.isNotEmpty) {
+      _paymentMethods = methods;
+      _selectedMethod ??= methods.first;
+    }
+
+    if (_coinsController.text.isNotEmpty) {
+      _recalculate();
+    } else if (_minCoins > 0 && _userCoins >= _minCoins) {
+      _coinsController.text = _minCoins.toString();
+    }
   }
 
   @override
@@ -84,44 +133,17 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   }
 
   Future<void> _fetchWithdrawInfo() async {
-    setState(() => _isLoading = true);
+    if (_paymentMethods.isEmpty) {
+      setState(() => _isLoading = true);
+    }
     final data = await WithdrawApiService.getWithdrawInfo();
 
     if (mounted) {
       if (data != null) {
-        final userData = data['user'] is Map ? data['user'] as Map<String, dynamic> : null;
-        final methods = data['payment_methods'] is List ? List<Map<String, dynamic>>.from(data['payment_methods']) : <Map<String, dynamic>>[];
-
         setState(() {
-          _minCoins = _parseInt(data['min_withdraw_coins'], 1000);
-          _maxCoins = _parseInt(data['max_withdraw_coins'], 100000);
-          _commissionPercent = _parseDouble(data['commission_percent'], 5.0);
-          _ratePerBdt = _parseDouble(data['rate_per_bdt'], 10.0);
-          if (_ratePerBdt <= 0) _ratePerBdt = 10.0;
-          _rateText = data['rate_text']?.toString() ?? '100 Coins = ৳10.00 BDT';
-          _noticeText = data['notice']?.toString() ?? 'Withdrawals are processed manually within 1-24 hours.';
-
-          if (userData != null) {
-            _userCoins = _parseInt(userData['coins'], 0);
-            if (_accountNumberController.text.isEmpty && userData['phone'] != null) {
-              _accountNumberController.text = userData['phone'].toString();
-            }
-          }
-
-          _paymentMethods = methods;
-          if (methods.isNotEmpty) {
-            _selectedMethod = methods.first;
-          }
-
+          _applyWithdrawData(data);
           _isLoading = false;
         });
-
-        // Initial default calculation if coins entered
-        if (_coinsController.text.isNotEmpty) {
-          _recalculate();
-        } else if (_minCoins > 0 && _userCoins >= _minCoins) {
-          _coinsController.text = _minCoins.toString();
-        }
       } else {
         setState(() => _isLoading = false);
       }

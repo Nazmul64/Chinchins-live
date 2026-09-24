@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart' hide VideoDimensions;
@@ -11,6 +12,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../auth/services/auth_api_service.dart';
+import '../../wallet/services/wallet_api_service.dart';
+import '../../wallet/widgets/recharge_gems_sheet.dart';
 import '../services/beauty_filter_engine.dart';
 import '../services/call_api_service.dart';
 import '../services/live_streaming_api_service.dart';
@@ -20,6 +23,7 @@ import '../widgets/camera_filter_tray.dart';
 import '../widgets/in_call_profile_sheet.dart';
 import '../widgets/in_call_gift_sheet.dart';
 import '../widgets/gift_animation_overlay.dart';
+import '../widgets/top_gift_alert_banner.dart';
 import '../../../core/services/gifts_api_service.dart';
 
 class ActiveLiveSession {
@@ -82,6 +86,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   static ActiveLiveSession? _activeSession;
 
   final GlobalKey<GiftAnimationOverlayState> _giftAnimKey = GlobalKey<GiftAnimationOverlayState>();
+  final GlobalKey<TopGiftBannerOverlayState> _topGiftBannerKey = GlobalKey<TopGiftBannerOverlayState>();
   final List<Map<String, dynamic>> _liveComments = [];
   final TextEditingController _commentController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -97,6 +102,19 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   Timer? _roseComboTimer;
   dynamic _activeLiveId;
   String _activeChannelName = '';
+
+  // Host Private Call State
+  bool _isHostOnPrivateCall = false;
+  StreamSubscription? _privateCallStatusSub;
+  StreamSubscription? _incomingCallSub;
+  StreamSubscription? _callAcceptedSub;
+  StreamSubscription? _callEndedSub;
+
+  // PK Battle State
+  int _hostPkScore = 1450;
+  int _challengerPkScore = 980;
+  int _pkSecondsRemaining = 180;
+  Timer? _pkBattleTimer;
   
   // LiveKit RTC State
   Room? _liveKitRoom;
@@ -134,6 +152,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     super.initState();
     _activeLiveId = widget.liveId;
     _activeChannelName = widget.channelName ?? 'live_${widget.host.id}_${DateTime.now().millisecondsSinceEpoch}';
+    _startPkBattleTimer();
 
     if (_activeSession != null &&
         (_activeSession!.liveId == widget.liveId || _activeSession!.channelName == _activeChannelName)) {
@@ -157,6 +176,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
   @override
   void dispose() {
+    _pkBattleTimer?.cancel();
+    _privateCallStatusSub?.cancel();
+    _incomingCallSub?.cancel();
+    _callAcceptedSub?.cancel();
+    _callEndedSub?.cancel();
     _roseComboTimer?.cancel();
     _msgSub?.cancel();
     _giftSub?.cancel();
@@ -185,6 +209,93 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     _commentController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _startPkBattleTimer() {
+    _pkBattleTimer?.cancel();
+    _pkBattleTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_pkSecondsRemaining > 0) {
+        setState(() {
+          _pkSecondsRemaining--;
+        });
+      } else {
+        setState(() {
+          _pkSecondsRemaining = 180; // reset for next round
+        });
+      }
+    });
+  }
+
+  /// Instant Zero-Loading Video Call to Host
+  void _handleDirectVideoCallToHost() {
+    // 1. Instant local cached coin check (0ms loading!)
+    final cachedCoins = WalletApiService.getCachedCoins();
+    const callRate = 100; // 100 coins/min minimum
+
+    if (cachedCoins < callRate) {
+      RechargeGemsSheet.show(context);
+      return;
+    }
+
+    // 2. Sufficient balance: initiate private 1-on-1 dynamic call immediately
+    StreamingService.startDynamicCall(
+      context: context,
+      model: widget.host,
+      channelName: 'call_${widget.host.id}_${DateTime.now().millisecondsSinceEpoch}',
+      callType: 'video',
+    );
+  }
+
+  /// Host Pause Live Stream for 1-on-1 Private Call (Live Room remains active!)
+  Future<void> _pauseLiveStreamForPrivateCall() async {
+    if (!widget.isHost) return;
+    try {
+      if (_liveKitRoom != null) {
+        await _liveKitRoom!.localParticipant?.setCameraEnabled(false);
+        await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(false);
+      }
+      if (_rtcEngine != null) {
+        await _rtcEngine!.muteLocalAudioStream(true);
+        await _rtcEngine!.muteLocalVideoStream(true);
+      }
+      SignalingService().sendHostPrivateCallStatus(
+        liveRoomId: _activeLiveId ?? widget.host.id,
+        isOnPrivateCall: true,
+      );
+      if (mounted) {
+        setState(() => _isHostOnPrivateCall = true);
+      }
+    } catch (e) {
+      debugPrint('[LiveRoomScreen] Pause for private call error: $e');
+    }
+  }
+
+  /// Host Resume Live Stream after Private Call Ends
+  Future<void> _resumeLiveStreamFromPrivateCall() async {
+    if (!widget.isHost) return;
+    try {
+      if (_liveKitRoom != null) {
+        await _liveKitRoom!.localParticipant?.setCameraEnabled(!_isCameraOff);
+        await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(!_isAudioMuted);
+      }
+      if (_rtcEngine != null) {
+        await _rtcEngine!.muteLocalAudioStream(_isAudioMuted);
+        await _rtcEngine!.muteLocalVideoStream(_isCameraOff);
+      }
+      SignalingService().sendHostPrivateCallStatus(
+        liveRoomId: _activeLiveId ?? widget.host.id,
+        isOnPrivateCall: false,
+      );
+      if (mounted) {
+        setState(() => _isHostOnPrivateCall = false);
+      }
+    } catch (e) {
+      debugPrint('[LiveRoomScreen] Resume from private call error: $e');
+    }
   }
 
 
@@ -412,11 +523,26 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         roomOptions: const RoomOptions(
           adaptiveStream: true,
           dynacast: true,
-          defaultAudioPublishOptions: AudioPublishOptions(
-            name: 'microphone',
+          defaultCameraCaptureOptions: CameraCaptureOptions(
+            cameraPosition: CameraPosition.front,
+            params: VideoParameters(
+              dimensions: VideoDimensionsPresets.h720_169,
+              encoding: VideoEncoding(
+                maxBitrate: 2500 * 1000, // 2.5 Mbps Crystal Clear HD
+                maxFramerate: 30,
+              ),
+            ),
           ),
           defaultVideoPublishOptions: VideoPublishOptions(
             simulcast: true,
+            videoCodec: 'VP8',
+            videoEncoding: VideoEncoding(
+              maxBitrate: 2500 * 1000,
+              maxFramerate: 30,
+            ),
+          ),
+          defaultAudioPublishOptions: AudioPublishOptions(
+            name: 'microphone',
           ),
         ),
       );
@@ -611,11 +737,18 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         final giftData = data['gift_data'] ?? data['gift'];
         final giftName = (giftData is Map ? giftData['name'] : null) ?? data['gift_name'] ?? 'Super Gift';
         final senderName = (data['sender'] is Map ? data['sender']['name'] : null) ?? data['sender_name'] ?? data['user_name'] ?? 'Viewer';
+        final senderAvatar = (data['sender'] is Map ? data['sender']['avatar_url'] : null) ?? data['sender_avatar']?.toString() ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100';
+        final receiverName = data['receiver_name'] ?? widget.host.name;
+        final count = data['count'] ?? data['gift_count'] ?? 1;
         final coins = data['total_coins'] ?? (giftData is Map ? giftData['coin_price'] : null) ?? data['coins'] ?? 100;
         final animUrl = (giftData is Map ? (giftData['animation_asset_url'] ?? giftData['icon_url']) : null) ?? data['animation_url']?.toString() ?? data['animation_asset_url']?.toString() ?? data['image_url']?.toString();
+        final giftIcon = (giftData is Map ? giftData['icon_url'] : null) ?? data['gift_icon']?.toString() ?? 'https://img.icons8.com/color/96/diamond-heart.png';
+
+        final parsedCoins = (coins is int ? coins : (int.tryParse('$coins') ?? 100));
 
         setState(() {
-          _diamondsEarned += (coins is int ? coins : (int.tryParse('$coins') ?? 100));
+          _diamondsEarned += parsedCoins;
+          _hostPkScore += parsedCoins;
           _liveComments.add({
             'user': 'System',
             'text': '🎁 $senderName sent a $giftName ($coins 💎)!',
@@ -624,11 +757,23 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         });
         _scrollToBottom();
 
+        // 1. Trigger Fullscreen Animation
         _giftAnimKey.currentState?.playGiftAnimationDynamic(
           giftName: giftName,
           animationUrl: animUrl,
           senderName: senderName,
-          coins: coins is int ? coins : (int.tryParse('$coins') ?? 100),
+          coins: parsedCoins,
+        );
+
+        // 2. Trigger Floating Top Gift Alert Banner (Auto-dismisses in 4s)
+        _topGiftBannerKey.currentState?.showGiftBanner(
+          TopGiftAlertBannerData(
+            senderName: senderName,
+            senderAvatar: senderAvatar,
+            receiverName: receiverName,
+            giftIcon: giftIcon,
+            count: '$count',
+          ),
         );
       }
     });
@@ -822,6 +967,26 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         });
       }
     });
+
+    // 9. Real-Time Host 1-on-1 Private Call Status (.host.private_call)
+    _privateCallStatusSub = signaling.onHostPrivateCallStatus.listen((data) {
+      if (mounted) {
+        final isPaused = data['is_on_private_call'] == true || data['isPaused'] == true;
+        setState(() {
+          _isHostOnPrivateCall = isPaused;
+        });
+      }
+    });
+
+    // 10. Auto pause/resume when Host is in a 1-on-1 private call
+    if (widget.isHost) {
+      _callAcceptedSub = signaling.onCallAccepted.listen((data) {
+        _pauseLiveStreamForPrivateCall();
+      });
+      _callEndedSub = signaling.onCallEnded.listen((data) {
+        _resumeLiveStreamFromPrivateCall();
+      });
+    }
   }
 
   void _showCoHostInviteReceivedDialog(Map<String, dynamic> data) {
@@ -1463,6 +1628,13 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
               // 3. Top Floating Header: Host Capsule, Viewer Count, LIVE Badge, Follow, Top 1 Fan, Avatar Stack, Options, Close
               _buildTopFloatingHeader(),
 
+              // 3.1. Floating Top Gift Alert Banner (Auto-dismisses in 4s)
+              Positioned(
+                top: 76,
+                left: 12,
+                child: TopGiftBannerOverlay(key: _topGiftBannerKey),
+              ),
+
               // 4. Live Chat Floating Stream (Bottom-Left)
               _buildFloatingChatStream(),
 
@@ -1545,6 +1717,19 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
+                                    const SizedBox(width: 3),
+                                    // Host Level Capsule
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.8),
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(colors: [Color(0xFF7C4DFF), Color(0xFF651FFF)]),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'Lv.7',
+                                        style: TextStyle(color: Colors.white, fontSize: 7.5, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
                                     const SizedBox(width: 2),
                                     const Icon(Icons.check_circle_rounded, color: Color(0xFFFF1744), size: 10),
                                   ],
@@ -1616,10 +1801,36 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
                 const SizedBox(width: 4),
 
-                // 2. Right Side Controls (Viewers, 3-dots, Close) - Fixed, won't overflow
+                // 2. Right Side Controls (More Live, Viewers, 3-dots, Close)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // "More Live >" Button matching Screenshot 3
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).maybePop();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black45,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white24, width: 0.6),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'More Live',
+                              style: TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold),
+                            ),
+                            Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 12),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+
                     // Top Viewer Avatars Stack
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -1867,10 +2078,23 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // User Level Badge matching Screenshot 3
+                    Container(
+                      margin: const EdgeInsets.only(right: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.6),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFF7C4DFF), Color(0xFF651FFF)]),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'Lv.3',
+                        style: TextStyle(color: Colors.white, fontSize: 7.5, fontWeight: FontWeight.bold),
+                      ),
+                    ),
                     Text(
                       userName,
                       style: TextStyle(
-                        color: isMe ? const Color(0xFFFF5252) : Colors.white,
+                        color: isMe ? const Color(0xFFFF5252) : const Color(0xFFFFD54F),
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),
@@ -2043,6 +2267,17 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
             ),
             const SizedBox(width: 8),
 
+            // Direct 1-on-1 Video Call Button (for Viewers with instant zero-loading balance check)
+            if (!widget.isHost) ...[
+              _buildCircleActionItem(
+                icon: Icons.videocam_rounded,
+                label: 'Call',
+                color: const Color(0xFF00E5FF),
+                onTap: _handleDirectVideoCallToHost,
+              ),
+              const SizedBox(width: 6),
+            ],
+
             // Gift Button
             _buildCircleActionItem(
               icon: Icons.card_giftcard_rounded,
@@ -2120,8 +2355,300 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     );
   }
 
+  /// 50/50 PK Battle Dynamic Split Screen (Host on Left, Co-Host on Right + Center PK VS Badge & Countdown)
+  Widget _buildPkBattleSplitScreen({
+    required Widget leftWidget,
+    required Widget rightWidget,
+  }) {
+    final totalScore = (_hostPkScore + _challengerPkScore) == 0 ? 1 : (_hostPkScore + _challengerPkScore);
+    final hostRatio = (_hostPkScore / totalScore).clamp(0.15, 0.85);
+
+    final minutes = (_pkSecondsRemaining ~/ 60).toString().padLeft(2, '0');
+    final seconds = (_pkSecondsRemaining % 60).toString().padLeft(2, '0');
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 1. 50/50 Split Screen Video Row
+        Row(
+          children: [
+            // Left Video: Host
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: BorderSide(color: const Color(0xFF00C9FF).withValues(alpha: 0.8), width: 1.5),
+                  ),
+                ),
+                child: ClipRect(
+                  child: BeautyFilterEngine.applyFilterToWidget(
+                    filter: _currentFilter,
+                    child: leftWidget,
+                  ),
+                ),
+              ),
+            ),
+
+            // Right Video: Challenger / Co-Host
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(color: const Color(0xFFFF1744).withValues(alpha: 0.8), width: 1.5),
+                  ),
+                ),
+                child: ClipRect(
+                  child: rightWidget,
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        // 2. PK Battle Top Score Gauge Bar (Cyan Host vs Crimson Challenger)
+        Positioned(
+          top: 100,
+          left: 16,
+          right: 16,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Scores Row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Host Score
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFF00C9FF), Color(0xFF0072FF)]),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(color: const Color(0xFF00C9FF).withValues(alpha: 0.4), blurRadius: 6),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('👑 ', style: TextStyle(fontSize: 10)),
+                        Text(
+                          '$_hostPkScore',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Challenger Score
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFFFF1744), Color(0xFFFF007F)]),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(color: const Color(0xFFFF1744).withValues(alpha: 0.4), blurRadius: 6),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$_challengerPkScore',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
+                        ),
+                        const Text(' ⚔️', style: TextStyle(fontSize: 10)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+
+              // Dynamic Dual Progress Bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  height: 6,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: (hostRatio * 100).toInt(),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(colors: [Color(0xFF00C9FF), Color(0xFF0072FF)]),
+                          ),
+                        ),
+                      ),
+                      Container(width: 2, color: Colors.white),
+                      Expanded(
+                        flex: ((1.0 - hostRatio) * 100).toInt(),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(colors: [Color(0xFFFF1744), Color(0xFFFF007F)]),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // 3. Center PK Badge & Countdown Timer
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Glowing Neon PK Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF007F), Color(0xFFFF6F00)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF007F).withValues(alpha: 0.7),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: const Text(
+                  'PK VS',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    letterSpacing: 1.2,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+
+              // Countdown Timer Capsule
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.75),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white38, width: 0.8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.timer_outlined, color: Colors.amber, size: 11),
+                    const SizedBox(width: 3),
+                    Text(
+                      '$minutes:$seconds',
+                      style: const TextStyle(
+                        color: Colors.amber,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Host on 1-on-1 Private Call Blurred Cover for Audience (Live Room & Chat remain active!)
+  Widget _buildHostOnPrivateCallView() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 1. Blurred Avatar Background
+        CachedImageLoader(
+          imageUrl: widget.host.avatarUrl,
+          fit: BoxFit.cover,
+        ),
+        BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            color: Colors.black.withValues(alpha: 0.65),
+          ),
+        ),
+
+        // 2. Center Private Call Status Card
+        Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1435).withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.5), width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF00E5FF).withValues(alpha: 0.2),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Glowing Lock Icon
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF00E5FF), Color(0xFF7C4DFF)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF00E5FF).withValues(alpha: 0.5),
+                        blurRadius: 14,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.lock_rounded, color: Colors.white, size: 28),
+                ),
+                const SizedBox(height: 14),
+
+                const Text(
+                  'Host is on a private call',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 6),
+
+                const Text(
+                  'The live stream will resume automatically when the call ends.\nLive chat and gifts remain active! 💬🎁',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   /// Dynamic Multi-Video Grid (Host + Co-Hosts)
-    /// 5-User Dynamic Grid Layout (Top 2 users with flex 3, Bottom up to 3 users with flex 2)
+  /// 5-User Dynamic Grid Layout (Top 2 users with flex 3, Bottom up to 3 users with flex 2)
   Widget buildFiveUserGrid(List<VideoTrack> videoTracks) {
     if (videoTracks.length == 1) {
       return BeautyFilterEngine.applyFilterToWidget(
@@ -2130,6 +2657,13 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
           videoTracks[0],
           fit: VideoViewFit.cover,
         ),
+      );
+    }
+
+    if (videoTracks.length == 2) {
+      return _buildPkBattleSplitScreen(
+        leftWidget: VideoTrackRenderer(videoTracks[0], fit: VideoViewFit.cover),
+        rightWidget: VideoTrackRenderer(videoTracks[1], fit: VideoViewFit.cover),
       );
     }
 
@@ -2157,7 +2691,12 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     );
   }
 
-Widget _buildVideoGrid({bool isMini = false}) {
+  Widget _buildVideoGrid({bool isMini = false}) {
+    // 0. Check if host is on a 1-on-1 private call (for Viewers)
+    if (_isHostOnPrivateCall && !widget.isHost) {
+      return _buildHostOnPrivateCallView();
+    }
+
     // 1. Check LiveKit Tracks
     if (_liveKitRoom != null && _isLiveKitConnected) {
       if (_activeVideos.isNotEmpty) {
@@ -2179,32 +2718,27 @@ Widget _buildVideoGrid({bool isMini = false}) {
             ),
           );
         } else {
-          return Row(
-            children: [
-              Expanded(
-                child: BeautyFilterEngine.applyFilterToWidget(
-                  filter: _currentFilter,
-                  child: AgoraVideoView(
-                    controller: VideoViewController(
+          return _buildPkBattleSplitScreen(
+            leftWidget: AgoraVideoView(
+              controller: VideoViewController(
+                rtcEngine: _rtcEngine!,
+                canvas: const VideoCanvas(uid: 0),
+              ),
+            ),
+            rightWidget: _guestUid != null
+                ? AgoraVideoView(
+                    controller: VideoViewController.remote(
                       rtcEngine: _rtcEngine!,
-                      canvas: const VideoCanvas(uid: 0),
+                      canvas: VideoCanvas(uid: _guestUid!),
+                      connection: RtcConnection(channelId: _activeChannelName),
+                    ),
+                  )
+                : Container(
+                    color: Colors.grey[900],
+                    child: const Center(
+                      child: Text('Connecting Guest...', style: TextStyle(color: Colors.white70)),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: _guestUid != null
-                    ? AgoraVideoView(
-                        controller: VideoViewController.remote(
-                          rtcEngine: _rtcEngine!,
-                          canvas: VideoCanvas(uid: _guestUid!),
-                          connection: RtcConnection(channelId: _activeChannelName),
-                        ),
-                      )
-                    : Container(color: Colors.grey[900], child: const Center(child: Text('Connecting Guest...', style: TextStyle(color: Colors.white70)))),
-              ),
-            ],
           );
         }
       } else {
@@ -2222,29 +2756,22 @@ Widget _buildVideoGrid({bool isMini = false}) {
                 )
               : _buildCoverFallback();
         } else {
-          return Row(
-            children: [
-              Expanded(
-                child: _hostUid != null
-                    ? AgoraVideoView(
-                        controller: VideoViewController.remote(
-                          rtcEngine: _rtcEngine!,
-                          canvas: VideoCanvas(uid: _hostUid!),
-                          connection: RtcConnection(channelId: _activeChannelName),
-                        ),
-                      )
-                    : _buildCoverFallback(),
+          return _buildPkBattleSplitScreen(
+            leftWidget: _hostUid != null
+                ? AgoraVideoView(
+                    controller: VideoViewController.remote(
+                      rtcEngine: _rtcEngine!,
+                      canvas: VideoCanvas(uid: _hostUid!),
+                      connection: RtcConnection(channelId: _activeChannelName),
+                    ),
+                  )
+                : _buildCoverFallback(),
+            rightWidget: AgoraVideoView(
+              controller: VideoViewController(
+                rtcEngine: _rtcEngine!,
+                canvas: const VideoCanvas(uid: 0),
               ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: AgoraVideoView(
-                  controller: VideoViewController(
-                    rtcEngine: _rtcEngine!,
-                    canvas: const VideoCanvas(uid: 0),
-                  ),
-                ),
-              ),
-            ],
+            ),
           );
         }
       }

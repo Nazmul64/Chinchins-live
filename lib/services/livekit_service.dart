@@ -43,11 +43,26 @@ class LiveKitService {
       roomOptions: const RoomOptions(
         adaptiveStream: true,
         dynacast: true,
-        defaultAudioPublishOptions: AudioPublishOptions(
-          name: 'microphone',
+        defaultCameraCaptureOptions: CameraCaptureOptions(
+          cameraPosition: CameraPosition.front,
+          params: VideoParameters(
+            dimensions: VideoDimensionsPresets.h720_169,
+            encoding: VideoEncoding(
+              maxBitrate: 2500 * 1000, // 2.5 Mbps High Definition
+              maxFramerate: 30,
+            ),
+          ),
         ),
         defaultVideoPublishOptions: VideoPublishOptions(
           simulcast: true,
+          videoCodec: 'VP8',
+          videoEncoding: VideoEncoding(
+            maxBitrate: 2500 * 1000,
+            maxFramerate: 30,
+          ),
+        ),
+        defaultAudioPublishOptions: AudioPublishOptions(
+          name: 'microphone',
         ),
       ),
     );
@@ -85,6 +100,53 @@ class LiveKitService {
     await _room!.localParticipant?.setMicrophoneEnabled(true);
     if (!isAudioOnly) {
       await _room!.localParticipant?.setCameraEnabled(true);
+    }
+  }
+
+  /// Create explicit HD Camera Track (720p/1080p 30fps)
+  Future<LocalVideoTrack?> createCameraTrack({
+    CameraPosition cameraPosition = CameraPosition.front,
+    VideoDimensions dimensions = VideoDimensionsPresets.h720_169,
+    int maxBitrate = 2500 * 1000,
+    int maxFramerate = 30,
+  }) async {
+    try {
+      final track = await LocalVideoTrack.createCameraTrack(
+        CameraCaptureOptions(
+          cameraPosition: cameraPosition,
+          params: VideoParameters(
+            dimensions: dimensions,
+            encoding: VideoEncoding(
+              maxBitrate: maxBitrate,
+              maxFramerate: maxFramerate,
+            ),
+          ),
+        ),
+      );
+      return track;
+    } catch (e) {
+      debugPrint('LiveKit CreateCameraTrack Error: $e');
+      return null;
+    }
+  }
+
+  /// Publish video track with HD Simulcast & VideoPublishOptions
+  Future<void> publishVideoTrack(
+    LocalVideoTrack track, {
+    bool simulcast = true,
+    String videoCodec = 'VP8',
+  }) async {
+    if (_room == null) return;
+    try {
+      await _room!.localParticipant?.publishVideoTrack(
+        track,
+        publishOptions: VideoPublishOptions(
+          simulcast: simulcast,
+          videoCodec: videoCodec,
+        ),
+      );
+    } catch (e) {
+      debugPrint('LiveKit PublishVideoTrack Error: $e');
     }
   }
 

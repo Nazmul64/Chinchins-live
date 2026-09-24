@@ -40,6 +40,28 @@ class WalletApiService {
     }
   }
 
+  /// Instant Synchronous Payment Methods Lookup (0ms)
+  static List<Map<String, dynamic>> getCachedPaymentMethodsSync() {
+    if (_cachedPaymentMethods.isNotEmpty) return _cachedPaymentMethods;
+    final syncData = FastApiClient.getCachedSync(ApiConstants.paymentMethods);
+    if (syncData is Map && syncData['data'] is List) {
+      _cachedPaymentMethods = List<Map<String, dynamic>>.from(syncData['data']);
+      return _cachedPaymentMethods;
+    }
+    return [];
+  }
+
+  /// Instant Synchronous Coin Packages Lookup (0ms)
+  static List<Map<String, dynamic>> getCachedPackagesSync() {
+    if (_cachedPackages.isNotEmpty) return _cachedPackages;
+    final syncData = FastApiClient.getCachedSync(ApiConstants.coinPackages);
+    if (syncData is Map && syncData['data'] is List) {
+      _cachedPackages = List<Map<String, dynamic>>.from(syncData['data']);
+      return _cachedPackages;
+    }
+    return [];
+  }
+
   /// 1. Get Wallet Balance, Total Deposited Coins, BDT Spent & Call Minutes (Instant L1/L2 SWR)
   static Future<Map<String, dynamic>?> getWalletBalance({bool forceRefresh = false}) async {
     if (!forceRefresh && _cachedBalance != null) {

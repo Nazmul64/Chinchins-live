@@ -37,6 +37,17 @@ class _DepositScreenState extends State<DepositScreen> {
   @override
   void initState() {
     super.initState();
+    final cached = WalletApiService.getCachedPaymentMethodsSync();
+    if (cached.isNotEmpty) {
+      _paymentMethods = cached;
+      final targetId = widget.selectedPackage['payment_method_id'];
+      final targetCode = widget.selectedPackage['payment_method_code'] ?? widget.selectedPackage['code'];
+      _selectedMethod = cached.firstWhere(
+        (m) => (targetId != null && m['id'] == targetId) || (targetCode != null && m['code'] == targetCode),
+        orElse: () => cached.first,
+      );
+      _isLoadingMethods = false;
+    }
     _fetchPaymentMethods();
   }
 
@@ -49,7 +60,9 @@ class _DepositScreenState extends State<DepositScreen> {
   }
 
   Future<void> _fetchPaymentMethods() async {
-    setState(() => _isLoadingMethods = true);
+    if (_paymentMethods.isEmpty) {
+      setState(() => _isLoadingMethods = true);
+    }
     final methods = await WalletApiService.getPaymentMethods();
     if (mounted) {
       setState(() {

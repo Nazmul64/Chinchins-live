@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
 
@@ -23,7 +24,6 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
   Room? _room;
   EventsListener<RoomEvent>? _listener;
   List<VideoTrack> _activeVideos = [];
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -122,6 +122,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
       return Stack(
         fit: StackFit.expand,
         children: [
+          // 1. Blurred Background Cover
           if (widget.hostImageUrl.isNotEmpty)
             Image.network(
               widget.hostImageUrl,
@@ -129,14 +130,78 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
               errorBuilder: (context, error, stackTrace) => Container(color: Colors.black),
             )
           else
-            Container(color: Colors.black),
-          Container(color: Colors.black45),
-          if (_isLoading)
-            const Center(
-              child: CircularProgressIndicator(
-                color: Colors.pinkAccent,
-              ),
+            Container(color: const Color(0xFF0D0B14)),
+
+          // 2. Glass Blur Effect
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              color: Colors.black.withValues(alpha: 0.45),
             ),
+          ),
+
+          // 3. Central Host Avatar with Glowing Ring
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.pinkAccent, width: 2.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.pinkAccent.withValues(alpha: 0.4),
+                        blurRadius: 20,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: widget.hostImageUrl.isNotEmpty
+                        ? Image.network(widget.hostImageUrl, fit: BoxFit.cover)
+                        : const Icon(Icons.person, size: 48, color: Colors.white70),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (widget.hostName != null && widget.hostName!.isNotEmpty)
+                  Text(
+                    widget.hostName!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.pinkAccent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Connecting HD Stream...',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ],
       );
     }

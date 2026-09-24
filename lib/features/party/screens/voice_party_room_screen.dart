@@ -1103,43 +1103,63 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
     }
   }
 
-  /// 2. Voice Stage Grid (8 Seats: 2 rows x 4 columns)
+  /// 2. Voice Stage Grid (Responsive on Phones & Tablets)
   Widget _buildVoiceStageGrid() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth > 600;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-      child: Column(
-        children: [
-          // Row 1 (Seats 0 to 3)
-          Row(
-            children: List.generate(
-              4,
-              (index) => Expanded(
-                child: RoomSeatWidget(
-                  seat: _seats[index],
-                  isTopGifter: false,
-                  onTap: () => _handleSeatTap(index),
-                ),
+      child: isTablet
+          ? GridView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              shrinkWrap: true,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: screenWidth > 900 ? 8 : 6,
+                childAspectRatio: 0.85,
+                crossAxisSpacing: 6,
+                mainAxisSpacing: 6,
               ),
-            ),
-          ),
-          const SizedBox(height: 2),
+              itemCount: _seats.length,
+              itemBuilder: (ctx, index) => RoomSeatWidget(
+                seat: _seats[index],
+                isTopGifter: false,
+                onTap: () => _handleSeatTap(index),
+              ),
+            )
+          : Column(
+              children: [
+                // Row 1 (Seats 0 to 3)
+                Row(
+                  children: List.generate(
+                    4,
+                    (index) => Expanded(
+                      child: RoomSeatWidget(
+                        seat: _seats[index],
+                        isTopGifter: false,
+                        onTap: () => _handleSeatTap(index),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
 
-          // Row 2 (Seats 4 to 7)
-          Row(
-            children: List.generate(
-              4,
-              (index) => Expanded(
-                child: RoomSeatWidget(
-                  seat: _seats[index + 4],
-                  isTopGifter: false,
-                  onTap: () => _handleSeatTap(index + 4),
+                // Row 2 (Seats 4 to 7)
+                Row(
+                  children: List.generate(
+                    4,
+                    (index) => Expanded(
+                      child: RoomSeatWidget(
+                        seat: _seats[index + 4],
+                        isTopGifter: false,
+                        onTap: () => _handleSeatTap(index + 4),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 

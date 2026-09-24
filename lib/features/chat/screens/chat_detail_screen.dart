@@ -110,23 +110,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             partnerName: widget.thread.name,
             partnerAvatar: _partnerAvatar,
           );
-          
-          final exists = _messages.any((m) => 
-            (m.id.isNotEmpty && m.id == newMsg.id) ||
-            (m.text == newMsg.text && m.time == newMsg.time && m.isFromMe == newMsg.isFromMe)
-          );
-
-          if (!exists) {
-            setState(() {
-              _messages.add(newMsg);
-            });
-            _scrollToBottom();
-          }
+          _appendMessageSafely(newMsg);
         }
       } catch (e) {
         debugPrint('[ChatDetailScreen] Direct message stream error: $e');
       }
     });
+  }
+
+  /// Safe message append with client-side deduplication (prevents 2-3x duplicate messages)
+  void _appendMessageSafely(ChatMessage newMsg) {
+    if (!mounted) return;
+    final existsIndex = _messages.indexWhere((m) =>
+        (m.id.isNotEmpty && newMsg.id.isNotEmpty && m.id == newMsg.id) ||
+        (m.text == newMsg.text && m.isFromMe == newMsg.isFromMe && (m.id.startsWith('msg_') || m.id == newMsg.id)));
+
+    if (existsIndex != -1) {
+      setState(() {
+        _messages[existsIndex] = newMsg;
+      });
+    } else {
+      setState(() {
+        _messages.add(newMsg);
+      });
+      _scrollToBottom();
+    }
   }
 
   Future<void> _loadCallConfig() async {

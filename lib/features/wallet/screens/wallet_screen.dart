@@ -32,6 +32,18 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this, initialIndex: widget.initialTabIndex);
+
+    // ⚡ Zero-Loading: Instant population from RAM/Disk cache
+    final cachedPackages = WalletApiService.getCachedPackagesSync();
+    if (cachedPackages.isNotEmpty) {
+      _packages = cachedPackages;
+      _isLoadingPackages = false;
+    }
+    final cachedMethods = WalletApiService.getCachedPaymentMethodsSync();
+    if (cachedMethods.isNotEmpty) {
+      _paymentMethods = cachedMethods;
+    }
+
     _loadAllWalletData();
   }
 
@@ -48,7 +60,9 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   }
 
   Future<void> _fetchBalance() async {
-    setState(() => _isLoadingBalance = true);
+    if (_walletData == null) {
+      setState(() => _isLoadingBalance = true);
+    }
     final data = await WalletApiService.getWalletBalance();
     if (mounted) {
       setState(() {
@@ -59,7 +73,9 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   }
 
   Future<void> _fetchPackages() async {
-    setState(() => _isLoadingPackages = true);
+    if (_packages.isEmpty) {
+      setState(() => _isLoadingPackages = true);
+    }
     final packages = await WalletApiService.getCoinPackages();
     final methods = await WalletApiService.getPaymentMethods();
     if (mounted) {

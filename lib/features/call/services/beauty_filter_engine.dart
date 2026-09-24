@@ -32,13 +32,13 @@ class FilterPreset {
     this.tintOpacity = 0.0,
   });
 
-  /// Generate a 4x5 ColorMatrix for GPU-accelerated real-time color grading
+  /// Generate a 4x5 ColorMatrix for GPU-accelerated real-time color grading (TikTok / Bigo style)
   List<double> toColorMatrix() {
-    final b = (brightness - 1.0) * 255;
+    final b = (brightness - 1.0) * 80;
     final c = contrast;
     final s = saturation;
-    final w = whitening * 30.0; // Skin whitening luminance boost
-    final r = rosy * 25.0; // Rosy blush red-tone boost
+    final w = whitening * 12.0; // Clean skin whitening luminance boost without wash-out
+    final r = rosy * 10.0;      // Natural rosy blush tone
 
     // Lum weights for saturation
     const lr = 0.2126;
@@ -49,10 +49,14 @@ class FilterPreset {
     final sg = (1 - s) * lg;
     final sb = (1 - s) * lb;
 
+    final redOffset = (b + w + (r * 1.2)).clamp(-50.0, 50.0);
+    final greenOffset = (b + w + (r * 0.4)).clamp(-50.0, 50.0);
+    final blueOffset = (b + w + (r * 0.5)).clamp(-50.0, 50.0);
+
     return <double>[
-      (sr + s) * c, sg * c, sb * c, 0, b + w + r,
-      sr * c, (sg + s) * c, sb * c, 0, b + w + (r * 0.3),
-      sr * c, sg * c, (sb + s) * c, 0, b + w + (r * 0.2),
+      (sr + s) * c, sg * c, sb * c, 0, redOffset,
+      sr * c, (sg + s) * c, sb * c, 0, greenOffset,
+      sr * c, sg * c, (sb + s) * c, 0, blueOffset,
       0, 0, 0, 1, 0,
     ];
   }
@@ -84,13 +88,11 @@ class BeautyFilterEngine {
       category: 'beauty',
       icon: Icons.face_retouching_natural_rounded,
       smoothness: 0.65,
-      brightness: 1.15,
-      contrast: 1.05,
-      saturation: 1.10,
-      whitening: 0.40,
-      rosy: 0.25,
-      tintColor: Color(0xFFFFD1DC),
-      tintOpacity: 0.08,
+      brightness: 1.05,
+      contrast: 1.02,
+      saturation: 1.04,
+      whitening: 0.35,
+      rosy: 0.30,
     ),
     FilterPreset(
       id: 'smooth_skin',
@@ -99,11 +101,11 @@ class BeautyFilterEngine {
       category: 'beauty',
       icon: Icons.spa_rounded,
       smoothness: 0.85,
-      brightness: 1.08,
-      contrast: 1.02,
-      saturation: 1.05,
-      whitening: 0.50,
-      rosy: 0.15,
+      brightness: 1.04,
+      contrast: 1.01,
+      saturation: 1.02,
+      whitening: 0.40,
+      rosy: 0.20,
     ),
     FilterPreset(
       id: 'rosy_cheeks',
@@ -112,13 +114,11 @@ class BeautyFilterEngine {
       category: 'beauty',
       icon: Icons.favorite_rounded,
       smoothness: 0.50,
-      brightness: 1.10,
-      contrast: 1.08,
-      saturation: 1.25,
-      whitening: 0.30,
-      rosy: 0.55,
-      tintColor: Color(0xFFFF4081),
-      tintOpacity: 0.10,
+      brightness: 1.06,
+      contrast: 1.04,
+      saturation: 1.10,
+      whitening: 0.25,
+      rosy: 0.50,
     ),
     FilterPreset(
       id: 'warm_sunshine',
@@ -127,13 +127,11 @@ class BeautyFilterEngine {
       category: 'color',
       icon: Icons.wb_sunny_rounded,
       smoothness: 0.30,
-      brightness: 1.12,
-      contrast: 1.10,
-      saturation: 1.18,
-      whitening: 0.20,
+      brightness: 1.05,
+      contrast: 1.05,
+      saturation: 1.08,
+      whitening: 0.15,
       rosy: 0.20,
-      tintColor: Color(0xFFFFB300),
-      tintOpacity: 0.12,
     ),
     FilterPreset(
       id: 'cool_breeze',
@@ -142,11 +140,9 @@ class BeautyFilterEngine {
       category: 'color',
       icon: Icons.ac_unit_rounded,
       smoothness: 0.20,
-      brightness: 1.06,
-      contrast: 1.05,
-      saturation: 0.95,
-      tintColor: Color(0xFF00E5FF),
-      tintOpacity: 0.10,
+      brightness: 1.03,
+      contrast: 1.02,
+      saturation: 0.98,
     ),
     FilterPreset(
       id: 'vintage_film',
@@ -156,10 +152,8 @@ class BeautyFilterEngine {
       icon: Icons.camera_roll_rounded,
       smoothness: 0.15,
       brightness: 1.02,
-      contrast: 1.15,
-      saturation: 0.85,
-      tintColor: Color(0xFF8D6E63),
-      tintOpacity: 0.12,
+      contrast: 1.08,
+      saturation: 0.90,
     ),
     FilterPreset(
       id: 'cyber_neon',
@@ -168,15 +162,13 @@ class BeautyFilterEngine {
       category: 'effects',
       icon: Icons.bolt_rounded,
       smoothness: 0.40,
-      brightness: 1.20,
-      contrast: 1.30,
-      saturation: 1.40,
-      tintColor: Color(0xFFE040FB),
-      tintOpacity: 0.14,
+      brightness: 1.10,
+      contrast: 1.15,
+      saturation: 1.25,
     ),
   ];
 
-  /// Wraps any video widget with the active beauty filter shader, color matrix, and whitening/rosy overlay
+  /// Smoothly renders video with real-time ColorFilter matrix without destructive overlays or face darkening
   static Widget applyFilterToWidget({
     required Widget child,
     required FilterPreset filter,
@@ -185,39 +177,9 @@ class BeautyFilterEngine {
       return child;
     }
 
-    final matrix = filter.toColorMatrix();
-
-    Widget filtered = ColorFiltered(
-      colorFilter: ColorFilter.matrix(matrix),
+    return ColorFiltered(
+      colorFilter: ColorFilter.matrix(filter.toColorMatrix()),
       child: child,
     );
-
-    // Apply Soft Beauty Glow & Rosy Skin layer if whitening or tint is present
-    if (filter.whitening > 0 || filter.tintOpacity > 0) {
-      filtered = Stack(
-        fit: StackFit.passthrough,
-        children: [
-          filtered,
-          if (filter.whitening > 0)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(
-                  color: Colors.white.withValues(alpha: (filter.whitening * 0.08).clamp(0.0, 0.18)),
-                ),
-              ),
-            ),
-          if (filter.tintOpacity > 0 && filter.tintColor != Colors.transparent)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(
-                  color: filter.tintColor.withValues(alpha: filter.tintOpacity),
-                ),
-              ),
-            ),
-        ],
-      );
-    }
-
-    return filtered;
   }
 }

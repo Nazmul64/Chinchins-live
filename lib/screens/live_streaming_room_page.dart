@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:http/http.dart' as http;
@@ -42,7 +42,31 @@ class _LiveStreamingRoomPageState extends State<LiveStreamingRoomPage> {
   }
 
   Future<void> _connectToLiveKit() async {
-    _room = Room();
+    _room = Room(
+      roomOptions: const RoomOptions(
+        adaptiveStream: true,
+        dynacast: true,
+        defaultCameraCaptureOptions: CameraCaptureOptions(
+          cameraPosition: CameraPosition.front,
+          params: VideoParameters(
+            dimensions: VideoDimensionsPresets.h720_169,
+            encoding: VideoEncoding(
+              maxBitrate: 2500 * 1000,
+              maxFramerate: 30,
+            ),
+          ),
+        ),
+        defaultVideoPublishOptions: VideoPublishOptions(
+          simulcast: true,
+          videoCodec: 'VP8',
+          videoEncoding: VideoEncoding(
+            maxBitrate: 2500 * 1000,
+            maxFramerate: 30,
+          ),
+        ),
+        defaultAudioPublishOptions: AudioPublishOptions(name: 'mic'),
+      ),
+    );
     _listener = _room!.createListener();
 
     _setupLiveKitListeners();
@@ -52,12 +76,6 @@ class _LiveStreamingRoomPageState extends State<LiveStreamingRoomPage> {
       await _room!.connect(
         liveKitUri,
         widget.liveKitToken,
-        roomOptions: const RoomOptions(
-          adaptiveStream: true,
-          dynacast: true,
-          defaultAudioPublishOptions: AudioPublishOptions(name: 'mic'),
-          defaultVideoPublishOptions: VideoPublishOptions(simulcast: true),
-        ),
       );
 
       // ২. হোস্ট হলে সাথে সাথে ক্যামেরা এবং মাইক চালু করা (সবাই যেন কথা শুনতে পায়)

@@ -2,12 +2,42 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import '../../../core/constants/api_constants.dart';
+import '../../../core/services/fast_api_client.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../auth/services/auth_api_service.dart';
 
 class WithdrawApiService {
-  /// 1. Get Withdrawal Configuration, Limits, User Balance & Payout Methods
-  static Future<Map<String, dynamic>?> getWithdrawInfo() async {
+  static Map<String, dynamic>? _cachedWithdrawInfo;
+
+  /// Instant Synchronous Lookup for 0ms page load
+  static Map<String, dynamic>? getCachedWithdrawInfoSync() {
+    if (_cachedWithdrawInfo != null) return _cachedWithdrawInfo;
+    final syncData = FastApiClient.getCachedSync(ApiConstants.withdrawInfo);
+    if (syncData is Map && syncData['data'] is Map) {
+      _cachedWithdrawInfo = Map<String, dynamic>.from(syncData['data']);
+      return _cachedWithdrawInfo;
+    }
+    return null;
+  }
+
+  /// 1. Get Withdrawal Configuration, Limits, User Balance & Payout Methods (Instant SWR)
+  static Future<Map<String, dynamic>?> getWithdrawInfo({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedWithdrawInfo != null) {
+      _syncWithdrawInfoInBackground();
+      return _cachedWithdrawInfo;
+    }
+
+    final localCached = await FastApiClient.getCached(ApiConstants.withdrawInfo);
+    if (localCached is Map && localCached['status'] == true && localCached['data'] != null) {
+      _cachedWithdrawInfo = Map<String, dynamic>.from(localCached['data']);
+      _syncWithdrawInfoInBackground();
+      return _cachedWithdrawInfo;
+    }
+
+    return await _syncWithdrawInfoInBackground();
+  }
+
+  static Future<Map<String, dynamic>?> _syncWithdrawInfoInBackground() async {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
@@ -20,31 +50,20 @@ class WithdrawApiService {
       if (token != null) headers['Authorization'] = 'Bearer $token';
       if (userId != null) headers['X-User-Id'] = userId;
 
-      AppLogger.request(
-        method: 'GET',
-        url: url.toString(),
-        headers: headers,
-      );
-
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 12));
-
-      AppLogger.response(
-        method: 'GET',
-        url: url.toString(),
-        statusCode: response.statusCode,
-        body: response.body,
-      );
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded['status'] == true && decoded['data'] is Map) {
-          return decoded['data'] as Map<String, dynamic>;
+          await FastApiClient.putCache(ApiConstants.withdrawInfo, decoded);
+          _cachedWithdrawInfo = Map<String, dynamic>.from(decoded['data']);
+          return _cachedWithdrawInfo;
         }
       }
     } catch (e, st) {
       AppLogger.error('WithdrawInfoError', e, st);
     }
-    return null;
+    return _cachedWithdrawInfo;
   }
 
   /// 2. Dynamic Real-time Calculation / Preview API

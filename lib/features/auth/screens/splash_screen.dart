@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../core/services/app_cache_service.dart';
+import '../../../core/services/app_preloader.dart';
 import '../../../core/services/fast_api_client.dart';
 import '../../../core/services/preloader_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -46,6 +48,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     await FastApiClient.init();
     final token = await AuthApiService.getToken();
     final savedUser = await AuthApiService.getSavedUser();
+
+    // Kick off global static pre-fetch (gifts, payment gateways, coin packages) in parallel
+    unawaited(AppCacheService.prefetchAllStaticData());
+    unawaited(AppPreloader.initAppData());
 
     // If authenticated, kick off background session & essential preloading in parallel immediately
     if (token != null && token.isNotEmpty) {

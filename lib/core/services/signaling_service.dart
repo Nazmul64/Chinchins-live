@@ -86,6 +86,8 @@ class SignalingService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _viewerCountUpdatedController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _hostPrivateCallStatusController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get onIncomingCall => _incomingCallController.stream;
   Stream<Map<String, dynamic>> get onCallAccepted => _callAcceptedController.stream;
@@ -111,6 +113,17 @@ class SignalingService {
   Stream<Map<String, dynamic>> get onLiveLike => _liveLikeController.stream;
   Stream<Map<String, dynamic>> get onSeatRequest => _seatRequestController.stream;
   Stream<Map<String, dynamic>> get onViewerCountUpdated => _viewerCountUpdatedController.stream;
+  Stream<Map<String, dynamic>> get onHostPrivateCallStatus => _hostPrivateCallStatusController.stream;
+
+  void sendHostPrivateCallStatus({
+    required dynamic liveRoomId,
+    required bool isOnPrivateCall,
+  }) {
+    _hostPrivateCallStatusController.add({
+      'live_room_id': liveRoomId,
+      'is_on_private_call': isOnPrivateCall,
+    });
+  }
 
   EndpointAuthorizableChannelTokenAuthorizationDelegate<PrivateChannelAuthorizationData>
       _getAuthDelegate() {
