@@ -46,18 +46,18 @@ class LiveKitService {
         defaultCameraCaptureOptions: CameraCaptureOptions(
           cameraPosition: CameraPosition.front,
           params: VideoParameters(
-            dimensions: VideoDimensionsPresets.h720_169,
+            dimensions: VideoDimensionsPresets.h1080_169, // Full HD 1080p
             encoding: VideoEncoding(
-              maxBitrate: 2500 * 1000, // 2.5 Mbps High Definition
+              maxBitrate: 3500 * 1000, // 3.5 Mbps Full HD
               maxFramerate: 30,
             ),
           ),
         ),
         defaultVideoPublishOptions: VideoPublishOptions(
           simulcast: true,
-          videoCodec: 'VP8',
+          videoCodec: 'H264',
           videoEncoding: VideoEncoding(
-            maxBitrate: 2500 * 1000,
+            maxBitrate: 3500 * 1000,
             maxFramerate: 30,
           ),
         ),

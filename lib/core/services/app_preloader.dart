@@ -121,8 +121,22 @@ class AppPreloader {
 
   static List get paymentMethods => (globalConfig['payment_methods'] as List?) ?? [];
   static List get gifts => (globalConfig['gifts_catalog'] as List?) ?? (globalConfig['gifts'] as List?) ?? [];
+  static List get giftsCatalog => gifts;
   static List get coinPackages => (globalConfig['coin_packages'] as List?) ?? (globalConfig['packages'] as List?) ?? [];
   static List get levelBadges => (globalConfig['level_badges'] as List?) ?? (globalConfig['levels'] as List?) ?? [];
+  static List get vipFrames => (globalConfig['vip_frames'] as List?) ?? [];
+  static Map<String, dynamic> get appSettings => (globalConfig['app_settings'] as Map<String, dynamic>?) ?? {};
   static List get withdrawOptions => (globalConfig['withdraw_options'] as List?) ?? (globalConfig['withdraw_methods'] as List?) ?? (globalConfig['payment_methods'] as List?) ?? [];
   static List get withdrawMethods => withdrawOptions;
+}
+
+/// 💾 LocalDatabase: Synchronous 0-loading vault
+class LocalDatabase {
+  static List get paymentMethods => AppPreloader.paymentMethods;
+  static List get giftsCatalog => AppPreloader.giftsCatalog;
+  static List get coinPackages => AppPreloader.coinPackages;
+  static List get levelBadges => AppPreloader.levelBadges;
+  static List get vipFrames => AppPreloader.vipFrames;
+  static Map<String, dynamic> get appSettings => AppPreloader.appSettings;
+  static List get withdrawMethods => AppPreloader.withdrawMethods;
 }

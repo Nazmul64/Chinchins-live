@@ -526,18 +526,18 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
           defaultCameraCaptureOptions: CameraCaptureOptions(
             cameraPosition: CameraPosition.front,
             params: VideoParameters(
-              dimensions: VideoDimensionsPresets.h720_169,
+              dimensions: VideoDimensionsPresets.h1080_169, // Full HD 1080p 16:9
               encoding: VideoEncoding(
-                maxBitrate: 2500 * 1000, // 2.5 Mbps Crystal Clear HD
+                maxBitrate: 3500 * 1000, // 3.5 Mbps Crystal Clear Full HD
                 maxFramerate: 30,
               ),
             ),
           ),
           defaultVideoPublishOptions: VideoPublishOptions(
             simulcast: true,
-            videoCodec: 'VP8',
+            videoCodec: 'H264', // Hardware accelerated TikTok/BIGO standard codec
             videoEncoding: VideoEncoding(
-              maxBitrate: 2500 * 1000,
+              maxBitrate: 3500 * 1000,
               maxFramerate: 30,
             ),
           ),
