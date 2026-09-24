@@ -19,13 +19,14 @@ class TopGiftAlertBannerData {
   });
 }
 
-/// 🎁 TopGiftAlertBanner: Floating Cyan-Green Gradient Gift Alert Banner (TikTok/Bigo style)
+/// 🎁 TopGiftAlertBanner: Floating Golden Crown Ribbon Gift/Win Banner (matching screenshot)
 class TopGiftAlertBanner extends StatelessWidget {
   final String senderName;
   final String senderAvatar;
   final String receiverName;
   final String giftIcon;
   final String count;
+  final VoidCallback? onGoPressed;
 
   const TopGiftAlertBanner({
     super.key,
@@ -34,106 +35,162 @@ class TopGiftAlertBanner extends StatelessWidget {
     required this.receiverName,
     required this.giftIcon,
     required this.count,
+    this.onGoPressed,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      constraints: const BoxConstraints(maxWidth: 360),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF00C9FF), Color(0xFF92FE9D)], // Cyan-to-Green Gradient
+          colors: [
+            Color(0xFFE5A00D), // Rich Gold
+            Color(0xFFC98404),
+            Color(0xFF8E5A02), // Deep Amber Gold
+          ],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
-            blurRadius: 8,
+            color: const Color(0xFFFFB300).withValues(alpha: 0.5),
+            blurRadius: 10,
+            spreadRadius: 1,
+            offset: const Offset(0, 2),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.45),
+            blurRadius: 6,
             offset: const Offset(0, 3),
           ),
         ],
-        border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.0),
+        border: Border.all(color: const Color(0xFFFFE082), width: 1.2),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Sender Avatar
-          CircleAvatar(
-            radius: 12,
-            backgroundColor: Colors.white24,
-            backgroundImage: senderAvatar.isNotEmpty ? NetworkImage(senderAvatar) : null,
-            child: senderAvatar.isEmpty
-                ? const Icon(Icons.person, size: 14, color: Colors.white)
-                : null,
-          ),
-          const SizedBox(width: 6),
-
-          // Sender Name
-          Flexible(
-            child: Text(
-              senderName,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 11.5,
-                shadows: [Shadow(color: Colors.black45, blurRadius: 2)],
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          // 1. Sender Avatar with Gold Border
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFFFD54F), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.amber.withValues(alpha: 0.4),
+                  blurRadius: 4,
+                ),
+              ],
             ),
-          ),
-
-          // "send to"
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              "send to",
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-
-          // Receiver Name
-          Flexible(
-            child: Text(
-              receiverName,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 11.5,
-                shadows: [Shadow(color: Colors.black45, blurRadius: 2)],
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: ClipOval(
+              child: senderAvatar.isNotEmpty
+                  ? Image.network(
+                      senderAvatar,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const Center(
+                        child: Text('👑', style: TextStyle(fontSize: 12)),
+                      ),
+                    )
+                  : const Center(
+                      child: Text('👑', style: TextStyle(fontSize: 12)),
+                    ),
             ),
           ),
           const SizedBox(width: 6),
 
-          // Gift Icon
+          // 2. Eyes Emoji & Winning/Gift text
+          const Text('👀 ', style: TextStyle(fontSize: 10)),
+          Flexible(
+            child: RichText(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: senderName.length > 8 ? '${senderName.substring(0, 8)}...' : senderName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                      shadows: [Shadow(color: Colors.black54, blurRadius: 2)],
+                    ),
+                  ),
+                  const TextSpan(
+                    text: ' Won ',
+                    style: TextStyle(
+                      color: Color(0xFFFFF9C4),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 10.5,
+                    ),
+                  ),
+                  TextSpan(
+                    text: '$count ',
+                    style: const TextStyle(
+                      color: Color(0xFFFFEB3B),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11.5,
+                      shadows: [Shadow(color: Colors.black87, blurRadius: 3)],
+                    ),
+                  ),
+                  const TextSpan(
+                    text: '💎 by sending ',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+
+          // 3. Gift Icon
           if (giftIcon.isNotEmpty)
             Image.network(
               giftIcon,
-              width: 22,
-              height: 22,
-              errorBuilder: (context, error, stackTrace) => const Text('🎁', style: TextStyle(fontSize: 14)),
+              width: 20,
+              height: 20,
+              errorBuilder: (context, error, stackTrace) => const Text('🎁', style: TextStyle(fontSize: 12)),
             )
           else
-            const Text('🎁', style: TextStyle(fontSize: 14)),
+            const Text('🎁', style: TextStyle(fontSize: 12)),
+          const SizedBox(width: 6),
 
-          // Multiplier Count
-          Text(
-            " x$count",
-            style: const TextStyle(
-              color: Color(0xFFFFD700),
-              fontWeight: FontWeight.w900,
-              fontSize: 13,
-              fontStyle: FontStyle.italic,
-              shadows: [Shadow(color: Colors.black54, blurRadius: 3)],
+          // 4. "GO >" Capsule Button matching screenshot
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFFD54F), Color(0xFFFFB300)],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white70, width: 0.8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.amber.withValues(alpha: 0.6),
+                  blurRadius: 4,
+                ),
+              ],
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'GO',
+                  style: TextStyle(
+                    color: Color(0xFF3E2723),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 9.5,
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: Color(0xFF3E2723), size: 12),
+              ],
             ),
           ),
         ],

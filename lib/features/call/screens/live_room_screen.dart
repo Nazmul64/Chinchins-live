@@ -1644,7 +1644,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
               // 6. Rose Combo Multiplier Badge
               if (_roseComboCount > 0) _buildRoseComboBadge(),
 
-              // 7. Bottom Floating Action Bar: Emoji + "Type a message..." + Send + Gift + Rose + Share
+              // 6.1. Quick Comment Chips (matching screenshot)
+              _buildQuickCommentChips(),
+
+              // 7. Bottom Floating Action Bar: Message + Grid/New + Gift + Follow + Red Video Call
               _buildBottomBar(),
             ],
           ),
@@ -2197,92 +2200,174 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   }
 
   /// Bottom Floating Action Bar matching Screenshot 2
+  /// Floating Quick Comment Chips above Bottom Bar (matching Screenshot 1)
+  Widget _buildQuickCommentChips() {
+    final chips = ['supporting you', '✨ Keep shining!', 'So beautiful', 'Like ❤️'];
+    return Positioned(
+      bottom: 66,
+      left: 12,
+      right: 12,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          children: chips.map((text) {
+            return GestureDetector(
+              onTap: () {
+                _commentController.text = text;
+                _sendComment();
+              },
+              child: Container(
+                margin: const EdgeInsets.only(right: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white24, width: 0.8),
+                ),
+                child: Text(
+                  text,
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  void _showCommentInputDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1435).withValues(alpha: 0.95),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              border: Border.all(color: Colors.white24, width: 0.8),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.sentiment_satisfied_alt_rounded, color: Colors.white70, size: 22),
+                  onPressed: () {
+                    _commentController.text += '❤️';
+                  },
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _commentController,
+                    autofocus: true,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      hintText: "Type a live comment...",
+                      hintStyle: TextStyle(color: Colors.white54, fontSize: 12),
+                      border: InputBorder.none,
+                    ),
+                    onSubmitted: (_) {
+                      Navigator.pop(ctx);
+                      _sendComment();
+                    },
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _sendComment();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF1744), Color(0xFFFF007F)],
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Text(
+                      'Send',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Bottom Floating Action Bar matching latest screenshot
   Widget _buildBottomBar() {
     return Positioned(
-      bottom: 10,
+      bottom: 12,
       left: 12,
       right: 12,
       child: SafeArea(
         top: false,
         child: Row(
           children: [
-            // Emoji / Comment Input Pill
-            Expanded(
+            // 1. Left: Chat Bubble Button (Circled in red on screenshot)
+            GestureDetector(
+              onTap: _showCommentInputDialog,
               child: Container(
-                height: 44,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(22),
+                  color: Colors.black.withValues(alpha: 0.55),
+                  shape: BoxShape.circle,
                   border: Border.all(color: Colors.white24, width: 0.8),
                 ),
-                child: Row(
-                  children: [
-                    // Emoji Icon
-                    IconButton(
-                      icon: const Icon(Icons.sentiment_satisfied_alt_rounded, color: Colors.white70, size: 20),
-                      onPressed: () {
-                        _commentController.text += '❤️';
-                        _sendComment();
-                      },
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    ),
-                    const SizedBox(width: 2),
-
-                    // Input Text
-                    Expanded(
-                      child: TextField(
-                        controller: _commentController,
-                        style: const TextStyle(color: Colors.white, fontSize: 12.5),
-                        decoration: const InputDecoration(
-                          hintText: "Type a message...",
-                          hintStyle: TextStyle(color: Colors.white54, fontSize: 11.5),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.symmetric(vertical: 8),
-                        ),
-                        onSubmitted: (_) => _sendComment(),
-                      ),
-                    ),
-
-                    // Send Button
-                    GestureDetector(
-                      onTap: _sendComment,
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [Color(0xFFFF1744), Color(0xFFFF007F)],
-                          ),
-                        ),
-                        child: const Icon(Icons.send_rounded, color: Colors.white, size: 16),
-                      ),
-                    ),
-                  ],
-                ),
+                child: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.white, size: 20),
               ),
             ),
             const SizedBox(width: 8),
 
-            // Direct 1-on-1 Video Call Button (for Viewers with instant zero-loading balance check)
-            if (!widget.isHost) ...[
-              _buildCircleActionItem(
-                icon: Icons.videocam_rounded,
-                label: 'Call',
-                color: const Color(0xFF00E5FF),
-                onTap: _handleDirectVideoCallToHost,
+            // 2. Left: 4-Dot Grid / Menu Button with NEW red badge
+            GestureDetector(
+              onTap: _showMoreControlsSheet,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white24, width: 0.8),
+                    ),
+                    child: const Icon(Icons.grid_view_rounded, color: Colors.white, size: 20),
+                  ),
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF1744),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'NEW',
+                        style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 6),
-            ],
+            ),
 
-            // Gift Button
-            _buildCircleActionItem(
-              icon: Icons.card_giftcard_rounded,
-              label: 'Gift',
-              color: const Color(0xFFFF1744),
+            const Spacer(),
+
+            // 3. Right: Gift Box Button
+            GestureDetector(
               onTap: () {
                 InCallGiftSheet.show(
                   context,
@@ -2294,24 +2379,80 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                   onGiftSent: (anim) => _giftAnimKey.currentState?.playGiftAnimation(anim),
                 );
               },
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF7C4DFF), Color(0xFF00E5FF)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(color: const Color(0xFF7C4DFF).withValues(alpha: 0.5), blurRadius: 8),
+                  ],
+                ),
+                child: const Icon(Icons.card_giftcard_rounded, color: Colors.white, size: 22),
+              ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
 
-            // Rose Quick Gift Button
-            _buildCircleActionItem(
-              emoji: '🌹',
-              label: 'Rose',
-              color: const Color(0xFFFF1744),
-              onTap: _sendQuickRoseGift,
+            // 4. Right: Follow Heart Button (matching screenshot)
+            GestureDetector(
+              onTap: _toggleFollow,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: _isFollowing
+                      ? const LinearGradient(colors: [Color(0xFF455A64), Color(0xFF37474F)])
+                      : const LinearGradient(colors: [Color(0xFFFF1744), Color(0xFFFF007F)]),
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF1744).withValues(alpha: 0.4),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _isFollowing ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _isFollowing ? 'Following' : 'Follow',
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
 
-            // Share Button
-            _buildCircleActionItem(
-              icon: Icons.reply_rounded,
-              label: 'Share',
-              color: Colors.white70,
-              onTap: _shareLiveStream,
+            // 5. Right: Red Video Call Button (instant 1-on-1 private call with 0-loading balance check)
+            GestureDetector(
+              onTap: _handleDirectVideoCallToHost,
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF1744), Color(0xFFFF5252)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF1744).withValues(alpha: 0.6),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.videocam_rounded, color: Colors.white, size: 24),
+              ),
             ),
           ],
         ),
