@@ -124,20 +124,6 @@ class ResellerApiService {
             }
           }
 
-          // Append Google Play option
-          builtOptions.add(
-            const PaymentOption(
-              id: 'google_play',
-              key: 'google_play',
-              name: 'Google Play',
-              type: 'in_app_purchase',
-              accountType: 'Official In-App Store',
-              icon: 'https://chinchins.live/uploads/payment_methods/google_play.svg',
-              badge: null,
-              instructions: 'Instant Google Play in-app purchase.',
-            ),
-          );
-
           // Append Reseller option only if active resellers exist in DB
           if (activeResellers.isNotEmpty) {
             builtOptions.add(
@@ -175,7 +161,7 @@ class ResellerApiService {
       const PaymentOption(
         id: 1,
         key: 'bkash',
-        name: 'bkash',
+        name: 'bKash',
         type: 'gateway',
         accountType: 'Personal',
         accountNumber: '01706640777',
@@ -195,14 +181,26 @@ class ResellerApiService {
         instructions: 'Send money to our Nagad Personal Number: 01706640777.',
       ),
       const PaymentOption(
-        id: 'google_play',
-        key: 'google_play',
-        name: 'Google Play',
-        type: 'in_app_purchase',
-        accountType: 'Official In-App Store',
-        icon: 'https://chinchins.live/uploads/payment_methods/google_play.svg',
+        id: 3,
+        key: 'rocket',
+        name: 'Rocket',
+        type: 'gateway',
+        accountType: 'Personal',
+        accountNumber: '01706640777',
+        icon: 'https://chinchins.live/uploads/payment_methods/rocket.svg',
         badge: null,
-        instructions: 'Instant Google Play in-app purchase.',
+        instructions: 'Send money to our Rocket Personal Number: 01706640777.',
+      ),
+      const PaymentOption(
+        id: 4,
+        key: 'upay',
+        name: 'Upay',
+        type: 'gateway',
+        accountType: 'Personal',
+        accountNumber: '01706640777',
+        icon: 'https://chinchins.live/uploads/payment_methods/upay.svg',
+        badge: null,
+        instructions: 'Send money to our Upay Personal Number: 01706640777.',
       ),
     ];
   }

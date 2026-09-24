@@ -5,7 +5,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../models/payment_option_model.dart';
 import '../services/reseller_api_service.dart';
-import '../services/wallet_api_service.dart';
 import '../widgets/reseller_bottom_sheet.dart';
 import 'deposit_screen.dart';
 
@@ -27,7 +26,6 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
   List<PaymentOption> _options = [];
   String _selectedKey = 'reseller';
   bool _isLoading = false;
-  bool _isProcessingGooglePlay = false;
 
   @override
   void initState() {
@@ -97,10 +95,8 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
   Future<void> _onContinue() async {
     if (_selectedKey == 'reseller') {
       _openResellerSheet();
-    } else if (_selectedKey == 'google_play') {
-      await _handleGooglePlayPurchase();
     } else {
-      // Standard gateway / deposit flow (bKash / Nagad / Upay / etc.)
+      // Standard gateway / deposit flow (bKash / Nagad / Upay / Rocket / etc.)
       final currentOpt = _options.firstWhere(
         (o) => o.key == _selectedKey,
         orElse: () => _options.first,
@@ -136,103 +132,6 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
       selectedCoins: coins,
       selectedAmount: amount,
     );
-  }
-
-  Future<void> _handleGooglePlayPurchase() async {
-    final pkg = widget.selectedPackage;
-    final int packageId = _parseInt(pkg['id'] ?? pkg['package_id'] ?? 1, 1);
-    final int coins = _parseInt(pkg['coins'] ?? pkg['total_coins'] ?? 7560);
-
-    setState(() => _isProcessingGooglePlay = true);
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const Center(
-        child: Card(
-          color: Color(0xFF1E1B2E),
-          child: Padding(
-            padding: EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: Color(0xFF00E676)),
-                SizedBox(height: 16),
-                Text(
-                  'Connecting to Google Play Billing...',
-                  style: TextStyle(color: Colors.white, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    // Simulate standard Google Play token and verify on backend
-    await Future.delayed(const Duration(milliseconds: 1500));
-
-    final String mockToken = 'gplay_${DateTime.now().millisecondsSinceEpoch}_tok';
-    final String orderId = 'GPA.${DateTime.now().millisecondsSinceEpoch}';
-
-    final result = await ResellerApiService.verifyGooglePlayPurchase(
-      packageId: packageId,
-      productId: 'com.chinchins.live.gems$coins',
-      purchaseToken: mockToken,
-      orderId: orderId,
-    );
-
-    if (mounted) {
-      Navigator.pop(context); // Close loading dialog
-      setState(() => _isProcessingGooglePlay = false);
-
-      final isSuccess = result['status'] == true || result['success'] == true;
-
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF1E1B2E),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
-            children: [
-              Icon(
-                isSuccess ? Icons.check_circle_rounded : Icons.error_outline_rounded,
-                color: isSuccess ? const Color(0xFF00E676) : Colors.redAccent,
-                size: 26,
-              ),
-              const SizedBox(width: 10),
-              Text(
-                isSuccess ? 'Purchase Successful!' : 'Purchase Error',
-                style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          content: Text(
-            isSuccess
-                ? 'Successfully purchased $coins gems via Google Play! Your gems have been credited to your wallet.'
-                : (result['message'] ?? 'Failed to complete Google Play transaction. Please try again.'),
-            style: const TextStyle(color: Colors.white70, fontSize: 13.5, height: 1.4),
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isSuccess ? const Color(0xFF00E676) : AppColors.neonPink,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: () {
-                Navigator.pop(ctx);
-                if (isSuccess) {
-                  WalletApiService.getWalletBalance(forceRefresh: true);
-                  widget.onRechargeSuccess?.call();
-                  Navigator.pop(context);
-                }
-              },
-              child: Text(isSuccess ? 'Done' : 'OK', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      );
-    }
   }
 
   @override
@@ -359,7 +258,7 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
               child: GestureDetector(
-                onTap: _isProcessingGooglePlay ? null : _onContinue,
+                onTap: _onContinue,
                 child: Container(
                   width: double.infinity,
                   height: 52,
@@ -381,22 +280,16 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
                       ),
                     ],
                   ),
-                  child: Center(
-                    child: _isProcessingGooglePlay
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-                          )
-                        : const Text(
-                            'Continue',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
+                  child: const Center(
+                    child: Text(
+                      'Continue',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                   ),
                 ),
               ),

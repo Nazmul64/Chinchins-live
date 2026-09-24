@@ -95,6 +95,18 @@ class _RechargeGemsSheetState extends State<RechargeGemsSheet> {
       }
     }
 
+    // ⚡ Zero-Loading: Instant population from RAM/Disk cache
+    if (_packages.isEmpty) {
+      final cached = WalletApiService.getCachedPackagesSync();
+      if (cached.isNotEmpty) {
+        _packages = cached;
+        _isLoading = false;
+      } else {
+        _packages = _getChinchinsDefaultPackages();
+        _isLoading = false;
+      }
+    }
+
     _loadInitialData();
   }
 

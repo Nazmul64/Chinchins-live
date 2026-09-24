@@ -1834,45 +1834,29 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                     ),
                     const SizedBox(width: 3),
 
-                    // Top Viewer Avatars Stack
+                    // Dynamic Viewer Avatars Stack (No Dummy Photos, Real-Time Connected Viewers)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.black45,
+                        color: Colors.black54,
                         borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white12, width: 0.6),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          SizedBox(
-                            width: 34,
-                            height: 18,
-                            child: Stack(
-                              children: [
-                                Positioned(
-                                  left: 0,
-                                  child: _buildMiniAvatar(widget.host.avatarUrl),
-                                ),
-                                Positioned(
-                                  left: 8,
-                                  child: _buildMiniAvatar('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'),
-                                ),
-                                Positioned(
-                                  left: 16,
-                                  child: _buildMiniAvatar('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100'),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 2),
+                          if (_viewerCount > 0) ...[
+                            _buildMiniAvatar(widget.host.avatarUrl),
+                            const SizedBox(width: 4),
+                          ],
                           Text(
                             _viewerCount > 999 ? "${(_viewerCount / 1000).toStringAsFixed(1)}K" : '$_viewerCount',
-                            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 2),
+                    const SizedBox(width: 3),
 
                     // Options Menu Button (3-dots)
                     GestureDetector(
@@ -1906,33 +1890,6 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                   ],
                 ),
               ],
-            ),
-
-            const SizedBox(height: 4),
-
-            // Gold Top 1 Badge Capsule
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFFD54F).withValues(alpha: 0.4), width: 0.8),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('👑', style: TextStyle(fontSize: 11)),
-                  SizedBox(width: 4),
-                  Text(
-                    'Top 1',
-                    style: TextStyle(
-                      color: Color(0xFFFFD54F),
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
             ),
           ],
         ),
@@ -2313,7 +2270,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         top: false,
         child: Row(
           children: [
-            // 1. Left: Chat Bubble Button (Circled in red on screenshot)
+            // 1. Left: Chat Bubble Button
             GestureDetector(
               onTap: _showCommentInputDialog,
               child: Container(
@@ -2327,46 +2284,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                 child: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.white, size: 20),
               ),
             ),
-            const SizedBox(width: 8),
-
-            // 2. Left: 4-Dot Grid / Menu Button with NEW red badge
-            GestureDetector(
-              onTap: _showMoreControlsSheet,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.55),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white24, width: 0.8),
-                    ),
-                    child: const Icon(Icons.grid_view_rounded, color: Colors.white, size: 20),
-                  ),
-                  Positioned(
-                    top: -2,
-                    right: -2,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF1744),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        'NEW',
-                        style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
 
             const Spacer(),
 
-            // 3. Right: Gift Box Button
+            // 2. Right: Gift Box Button
             GestureDetector(
               onTap: () {
                 InCallGiftSheet.show(
@@ -2396,7 +2317,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
             ),
             const SizedBox(width: 8),
 
-            // 4. Right: Follow Heart Button (matching screenshot)
+            // 3. Right: Follow Heart Button (matching screenshot)
             GestureDetector(
               onTap: _toggleFollow,
               child: Container(
@@ -2430,30 +2351,32 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                 ),
               ),
             ),
-            const SizedBox(width: 8),
 
-            // 5. Right: Red Video Call Button (instant 1-on-1 private call with 0-loading balance check)
-            GestureDetector(
-              onTap: _handleDirectVideoCallToHost,
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF1744), Color(0xFFFF5252)],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFF1744).withValues(alpha: 0.6),
-                      blurRadius: 10,
-                      spreadRadius: 1,
+            // 4. Right: Red Video Call Button (Visible ONLY for Viewers to call Host; Host doesn't need to call anyone)
+            if (!widget.isHost) ...[
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _handleDirectVideoCallToHost,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF1744), Color(0xFFFF5252)],
                     ),
-                  ],
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF1744).withValues(alpha: 0.6),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.videocam_rounded, color: Colors.white, size: 24),
                 ),
-                child: const Icon(Icons.videocam_rounded, color: Colors.white, size: 24),
               ),
-            ),
+            ],
           ],
         ),
       ),

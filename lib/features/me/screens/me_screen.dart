@@ -92,9 +92,11 @@ class _MeScreenState extends State<MeScreen> {
     // 1. Try local saved user first for 0.00ms instant rendering
     final savedUser = await AuthApiService.getSavedUser();
     if (savedUser != null && mounted) {
+      final parsedProfile = ModelProfile.fromJson(savedUser);
       setState(() {
-        _myProfile = ModelProfile.fromJson(savedUser);
-        _myGems = savedUser['coins'] is int ? savedUser['coins'] : (_myGems);
+        _myProfile = parsedProfile;
+        _myGems = parsedProfile.coins;
+        _beans = parsedProfile.beans;
       });
     }
 
@@ -112,6 +114,8 @@ class _MeScreenState extends State<MeScreen> {
         setState(() {
           if (remoteProfile != null) {
             _myProfile = remoteProfile;
+            _myGems = remoteProfile.coins;
+            _beans = remoteProfile.beans;
           }
           if (walletData != null) {
             _myGems = walletData['coins'] ?? _myGems;
@@ -647,11 +651,11 @@ class _MeScreenState extends State<MeScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // 2. Stats Row ("5 I Like", "0 Like Me") matching Screenshot 4 & 5
+                // 2. Stats Row (I Like & Like Me) matching Screenshot 4 & 5
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildStatItem('I Like', '${_iLikeCount > 0 ? _iLikeCount : 5}', onTap: () {
+                    _buildStatItem('I Like', '$_iLikeCount', onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => const UserLikesListScreen(initialTab: 'i_like')),
@@ -708,7 +712,7 @@ class _MeScreenState extends State<MeScreen> {
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      '${_myGems > 0 ? _myGems : 410}',
+                                      '$_myGems',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
