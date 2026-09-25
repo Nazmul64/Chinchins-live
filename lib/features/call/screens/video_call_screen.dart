@@ -465,19 +465,30 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _wsGiftSub?.cancel();
     await CallSoundManager.stopRingtone();
 
-    if (widget.callId != null) {
-      if (_isConnectingCall || _callSeconds <= 0) {
-        await CallApiService.cancelCall(callId: widget.callId!);
-      } else {
-        await CallApiService.endCall(
-          callId: widget.callId!,
-          durationSeconds: _callSeconds,
-        );
-      }
-    }
-
-    await _webrtcService.dispose();
+    // ⚡ 1. Instantly close screen (0.00ms delay)
     if (mounted) Navigator.pop(context);
+
+    // 2. Perform API end/cancel and WebRTC cleanup in background
+    final callId = widget.callId;
+    final isConnecting = _isConnectingCall;
+    final callSecs = _callSeconds;
+    final webrtc = _webrtcService;
+
+    Future.microtask(() async {
+      try {
+        if (callId != null) {
+          if (isConnecting || callSecs <= 0) {
+            await CallApiService.cancelCall(callId: callId);
+          } else {
+            await CallApiService.endCall(
+              callId: callId,
+              durationSeconds: callSecs,
+            );
+          }
+        }
+        await webrtc.dispose();
+      } catch (_) {}
+    });
   }
 
   @override

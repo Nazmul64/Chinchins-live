@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../../core/services/app_cache_service.dart';
 import '../../../core/services/app_preloader.dart';
 import '../../../core/services/fast_api_client.dart';
+import '../../../core/services/gifts_api_service.dart';
 import '../../../core/services/preloader_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../navigation/screens/main_navigation_screen.dart';
+import '../../wallet/services/wallet_api_service.dart';
 import '../services/auth_api_service.dart';
 import 'login_screen.dart';
 
@@ -41,6 +44,27 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     _checkAuthentication();
   }
 
+  void _precachePackageAndGiftImages() {
+    try {
+      // 1. Precache fallback & cached gifts in memory
+      final gifts = GiftsApiService.cachedCatalog ?? GiftsApiService.getFallbackGifts();
+      for (final g in gifts) {
+        if (g.icon.isNotEmpty && (g.icon.startsWith('http://') || g.icon.startsWith('https://'))) {
+          precacheImage(CachedNetworkImageProvider(g.icon), context).catchError((_) => null);
+        }
+      }
+
+      // 2. Precache diamond packages & payment icons
+      final packages = WalletApiService.getCachedPackagesSync();
+      for (final pkg in packages) {
+        final iconUrl = pkg['icon_url'] ?? pkg['icon'] ?? pkg['image_url'];
+        if (iconUrl != null && iconUrl.toString().startsWith('http')) {
+          precacheImage(CachedNetworkImageProvider(iconUrl.toString()), context).catchError((_) => null);
+        }
+      }
+    } catch (_) {}
+  }
+
   Future<void> _checkAuthentication() async {
     final startTime = DateTime.now();
 
@@ -52,6 +76,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     // Kick off global static pre-fetch (gifts, payment gateways, coin packages) in parallel
     unawaited(AppCacheService.prefetchAllStaticData());
     unawaited(AppPreloader.initAppData());
+
+    // Precache all diamond package and gift images immediately into Flutter image cache
+    if (mounted) {
+      _precachePackageAndGiftImages();
+    }
 
     // If authenticated, kick off background session & essential preloading in parallel immediately
     if (token != null && token.isNotEmpty) {

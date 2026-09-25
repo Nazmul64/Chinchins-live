@@ -1331,17 +1331,24 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     Navigator.of(context).pop();
   }
 
-  void _endLiveSession() async {
-    if (_activeSession != null) {
-      await _activeSession!.liveKitRoom?.disconnect();
-      await _activeSession!.liveKitRoom?.dispose();
-      await _activeSession!.rtcEngine?.leaveChannel();
-      await _activeSession!.rtcEngine?.release();
-      _activeSession = null;
-    }
-    if (widget.isHost && _activeLiveId != null) {
-      await LiveStreamingApiService.endLiveStream(liveStreamId: _activeLiveId);
-    }
+  void _endLiveSession() {
+    final session = _activeSession;
+    final liveId = _activeLiveId;
+    _activeSession = null;
+
+    Future.microtask(() async {
+      try {
+        if (session != null) {
+          await session.liveKitRoom?.disconnect();
+          await session.liveKitRoom?.dispose();
+          await session.rtcEngine?.leaveChannel();
+          await session.rtcEngine?.release();
+        }
+        if (widget.isHost && liveId != null) {
+          await LiveStreamingApiService.endLiveStream(liveStreamId: liveId);
+        }
+      } catch (_) {}
+    });
   }
 
   void _handleExitLive() async {
@@ -1378,14 +1385,14 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       if (shouldEnd != true) return;
     }
 
+    // ⚡ 1. Instantly exit screen (0.00ms delay - no blocking spinner!)
     PiPCallOverlay.hideMiniWindow();
-    _activeSession = null;
-    if (widget.isHost && _activeLiveId != null) {
-      await LiveStreamingApiService.endLiveStream(liveStreamId: _activeLiveId);
-    }
     if (mounted) {
       Navigator.pop(context);
     }
+
+    // 2. Perform engine disconnect & API end in background
+    _endLiveSession();
   }
 
   void _sendQuickRoseGift() async {

@@ -672,28 +672,36 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     _wsInCallMsgSub?.cancel();
     _wsGiftSub?.cancel();
 
-    if (widget.callId != null) {
-      if (_isConnecting || _callSeconds <= 0) {
-        await CallApiService.cancelCall(callId: widget.callId!);
-      } else {
-        await CallApiService.endCall(
-          callId: widget.callId!,
-          durationSeconds: _callSeconds,
-        );
-      }
-    }
-
-    try {
-      if (_engine != null) {
-        await _engine!.leaveChannel();
-        await _engine!.release();
-        _engine = null;
-      }
-    } catch (_) {}
-
+    // ⚡ 1. Instantly close screen (0.00ms delay)
     if (mounted) {
       Navigator.of(context).pop();
     }
+
+    // 2. Perform API cancellation and Agora engine release in background
+    final callId = widget.callId;
+    final isConnecting = _isConnecting;
+    final callSecs = _callSeconds;
+    final engine = _engine;
+    _engine = null;
+
+    Future.microtask(() async {
+      try {
+        if (callId != null) {
+          if (isConnecting || callSecs <= 0) {
+            await CallApiService.cancelCall(callId: callId);
+          } else {
+            await CallApiService.endCall(
+              callId: callId,
+              durationSeconds: callSecs,
+            );
+          }
+        }
+        if (engine != null) {
+          await engine.leaveChannel();
+          await engine.release();
+        }
+      } catch (_) {}
+    });
   }
 
   Future<void> _handleUserHangup() async {

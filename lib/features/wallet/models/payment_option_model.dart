@@ -54,8 +54,8 @@ class PaymentOption {
     }
 
     return PaymentOption(
-      id: json['id'] ?? json['key'] ?? 'unknown',
-      key: json['key']?.toString().toLowerCase() ?? 'gateway',
+      id: json['id'] ?? json['key'] ?? json['code'] ?? 'unknown',
+      key: (json['key'] ?? json['code'] ?? json['payment_method_code'] ?? json['slug'] ?? json['id'] ?? 'option').toString().toLowerCase(),
       name: json['name']?.toString() ?? 'Payment Option',
       type: json['type']?.toString().toLowerCase() ?? 'gateway',
       accountType: json['account_type']?.toString(),

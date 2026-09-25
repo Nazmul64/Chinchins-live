@@ -33,12 +33,10 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
     super.dispose();
   }
 
-  Future<void> _startLiveStream() async {
+  void _startLiveStream() async {
     final title = _titleController.text.trim().isNotEmpty
         ? _titleController.text.trim()
         : '${_categories[_selectedCategoryIndex]['name']} Live Stream 🔥';
-
-    setState(() => _isStarting = true);
 
     try {
       final savedUser = await AuthApiService.getSavedUser();
@@ -55,13 +53,9 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
         'country': savedUser?['country'] ?? 'Global',
       });
 
-      // Call dynamic backend API to initiate live stream session
-      await LiveStreamingApiService.startLiveStream(title: title);
-
       if (!mounted) return;
-      setState(() => _isStarting = false);
 
-      // Navigate to full Live Room
+      // ⚡ 0.00ms Instant Page Transition (No blocking spinner before navigation!)
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -72,17 +66,14 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
           ),
         ),
       );
+
+      // Call dynamic backend API in background
+      unawaited(LiveStreamingApiService.startLiveStream(title: title).catchError((e, st) {
+        AppLogger.error('GoLiveBgError', e, st);
+        return null;
+      }));
     } catch (e, st) {
       AppLogger.error('GoLiveError', e, st);
-      if (mounted) {
-        setState(() => _isStarting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to start live: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
     }
   }
 
