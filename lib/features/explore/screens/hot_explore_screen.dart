@@ -50,7 +50,6 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
     } else {
       _models = ProfileApiService.getFallbackProfiles();
     }
-    _isLoading = false;
 
     // 2. Fetch fresh updates in parallel in background silently (SWR)
     _loadHomeFeed();
@@ -120,16 +119,12 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
           if (mounted) {
             setState(() {
               _models = filtered;
-              _isLoading = false;
             });
           }
         },
       );
     } catch (e) {
       debugPrint('Error loading home feed: $e');
-      if (mounted && _models.isEmpty) {
-        setState(() => _isLoading = false);
-      }
     }
   }
 
