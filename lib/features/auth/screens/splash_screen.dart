@@ -63,6 +63,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         if (iconUrl != null && iconUrl.toString().startsWith('http')) {
           precacheImage(CachedNetworkImageProvider(iconUrl.toString()), context).catchError((_) => null);
         }
+      }
+
       // 3. Precache Home Floating VIP / Extra Gems banner image
       final floating = VipCardsApiService.getCachedFloatingBanner();
       if (floating != null) {

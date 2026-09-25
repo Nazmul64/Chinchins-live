@@ -350,9 +350,6 @@ class ApiConstants {
   static String get floatingBannerAlt => '$baseUrl/floating-action-icon';
   static String get floatingWidget => '$baseUrl/floating-widget';
   static String get vipCardsBanner => '$baseUrl/vip-cards/banner';
-  static String get spendLessGetMore => '$baseUrl/spend-less-get-more';
-  static String get spendLessGetMoreBanner => '$baseUrl/spend-less-get-more/banner';
-  static String get spendLessGetMoreMy => '$baseUrl/spend-less-get-more/my';
 }
 
 
