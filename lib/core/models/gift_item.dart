@@ -285,31 +285,31 @@ class CharmLevelInfo {
   final int progress;
 
   const CharmLevelInfo({
-    this.level = 7,
-    this.levelTag = 'Lv7',
-    this.progress = 75,
+    this.level = 1,
+    this.levelTag = 'Lv.1',
+    this.progress = 0,
   });
 
   factory CharmLevelInfo.fromDynamic(dynamic raw) {
     if (raw == null) {
-      return const CharmLevelInfo(level: 7, levelTag: 'Lv7', progress: 75);
+      return const CharmLevelInfo(level: 1, levelTag: 'Lv.1', progress: 0);
     }
     if (raw is Map) {
-      final lvl = raw['level'] ?? 7;
-      final int parsedLvl = lvl is int ? lvl : (int.tryParse('$lvl') ?? 7);
+      final lvl = raw['level'] ?? raw['charm_level'] ?? 1;
+      final int parsedLvl = lvl is int ? lvl : (int.tryParse('$lvl') ?? 1);
       return CharmLevelInfo(
         level: parsedLvl,
-        levelTag: raw['level_tag']?.toString() ?? 'Lv$parsedLvl',
-        progress: raw['progress'] is int ? raw['progress'] : (int.tryParse('${raw['progress']}') ?? 75),
+        levelTag: raw['level_tag']?.toString() ?? 'Lv.$parsedLvl',
+        progress: raw['progress'] is int ? raw['progress'] : (int.tryParse('${raw['progress']}') ?? 0),
       );
     }
-    final rawStr = raw.toString();
+    final rawStr = raw.toString().trim();
     final digits = rawStr.replaceAll(RegExp(r'[^0-9]'), '');
-    final int parsed = int.tryParse(digits) ?? 7;
+    final int parsed = int.tryParse(digits) ?? 1;
     return CharmLevelInfo(
       level: parsed,
-      levelTag: rawStr.startsWith('Lv') ? rawStr : 'Lv$parsed',
-      progress: 75,
+      levelTag: rawStr.startsWith('Lv') ? rawStr : 'Lv.$parsed',
+      progress: 0,
     );
   }
 
@@ -325,12 +325,12 @@ class TopFanInfo {
   final String formatted;
 
   const TopFanInfo({
-    this.id = 84,
-    this.accountId = '229051289',
-    this.name = 'Raza me',
+    this.id = 0,
+    this.accountId = '',
+    this.name = 'No Top Fan yet',
     this.avatarUrl = '',
-    this.fanCoins = 54200,
-    this.formatted = '54.20K',
+    this.fanCoins = 0,
+    this.formatted = '0',
   });
 
   factory TopFanInfo.fromDynamic(dynamic raw) {

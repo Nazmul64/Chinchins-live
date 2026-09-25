@@ -122,7 +122,18 @@ class LocalVault {
         }
       }
 
-      put('payment_methods', data['payment_methods']);
+      if (data['payment_methods'] is List) {
+        final activeMethods = (data['payment_methods'] as List).where((m) {
+          if (m is! Map) return false;
+          final active = m['is_active'] ?? m['active'] ?? m['status'];
+          if (active == false || active == 0 || active == '0' || active == 'inactive') return false;
+          return true;
+        }).toList();
+        put('payment_methods', activeMethods);
+      } else {
+        put('payment_methods', data['payment_methods']);
+      }
+
       put('coin_packages', data['coin_packages']);
       put('gifts_catalog', data['gifts_catalog'] ?? data['gifts']);
       put('my_bag_items', data['my_bag_items'] ?? data['bag_items']);
@@ -139,7 +150,22 @@ class LocalVault {
   }
 
   // Synchronous getters (0.00ms execution, no Future or await required)
-  static List get paymentMethods => (_vault['payment_methods'] as List?) ?? _defaultPaymentMethods;
+  static List<Map<String, dynamic>> get paymentMethods {
+    final raw = _vault['payment_methods'];
+    if (raw is List && raw.isNotEmpty) {
+      return raw.whereType<Map>().where((m) {
+        final active = m['is_active'] ?? m['active'] ?? m['status'];
+        if (active == false || active == 0 || active == '0' || active == 'inactive') return false;
+        return true;
+      }).map((m) => Map<String, dynamic>.from(m)).toList();
+    }
+    return _defaultPaymentMethods.where((m) {
+      final active = m['is_active'] ?? m['active'] ?? m['status'];
+      if (active == false || active == 0 || active == '0' || active == 'inactive') return false;
+      return true;
+    }).toList();
+  }
+
   static List get coinPackages => (_vault['coin_packages'] as List?) ?? _defaultCoinPackages;
   static List get gifts => (_vault['gifts_catalog'] as List?) ?? [];
   static List get myBagItems => (_vault['my_bag_items'] as List?) ?? [];

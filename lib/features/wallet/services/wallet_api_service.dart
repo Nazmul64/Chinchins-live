@@ -116,7 +116,12 @@ class WalletApiService {
 
     final cached = await FastApiClient.getCached(ApiConstants.paymentMethods);
     if (cached is Map && cached['status'] == true && cached['data'] is List) {
-      _cachedPaymentMethods = List<Map<String, dynamic>>.from(cached['data']);
+      final rawList = List<Map<String, dynamic>>.from(cached['data']);
+      _cachedPaymentMethods = rawList.where((m) {
+        final active = m['is_active'] ?? m['active'] ?? m['status'];
+        if (active == false || active == 0 || active == '0' || active == 'inactive') return false;
+        return true;
+      }).toList();
       _syncPaymentMethodsInBackground();
       return _cachedPaymentMethods;
     }
@@ -141,7 +146,12 @@ class WalletApiService {
         final data = jsonDecode(response.body);
         if (data['status'] == true && data['data'] is List) {
           await FastApiClient.putCache(ApiConstants.paymentMethods, data);
-          _cachedPaymentMethods = List<Map<String, dynamic>>.from(data['data']);
+          final rawList = List<Map<String, dynamic>>.from(data['data']);
+          _cachedPaymentMethods = rawList.where((m) {
+            final active = m['is_active'] ?? m['active'] ?? m['status'];
+            if (active == false || active == 0 || active == '0' || active == 'inactive') return false;
+            return true;
+          }).toList();
           return _cachedPaymentMethods;
         }
       }

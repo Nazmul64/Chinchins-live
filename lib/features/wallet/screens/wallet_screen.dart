@@ -409,7 +409,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
 
   // --- TAB 1: Recharge Packages Grid ---
   Widget _buildRechargeTab() {
-    if (_isLoadingPackages) {
+    if (_isLoadingPackages && _packages.isEmpty) {
       return const Center(child: CircularProgressIndicator(color: AppColors.neonPink));
     }
 

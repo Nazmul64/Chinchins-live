@@ -21,15 +21,11 @@ class GiftsReceivedCard extends StatefulWidget {
 
 class _GiftsReceivedCardState extends State<GiftsReceivedCard> {
   UserGiftsData? _giftsData;
-  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _giftsData = GiftsApiService.getCachedReceivedGifts(widget.userId);
-    if (_giftsData == null) {
-      _isLoading = true;
-    }
     _loadGifts();
   }
 
@@ -47,7 +43,6 @@ class _GiftsReceivedCardState extends State<GiftsReceivedCard> {
     if (mounted) {
       setState(() {
         _giftsData = data;
-        _isLoading = false;
       });
     }
   }
@@ -162,14 +157,7 @@ class _GiftsReceivedCardState extends State<GiftsReceivedCard> {
           const SizedBox(height: 12),
 
           // Grid of actual gifts or Empty State
-          if (_isLoading && actualGifts.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: const CircularProgressIndicator(color: Color(0xFFFF2A6D)),
-              ),
-            )
-          else if (actualGifts.isEmpty)
+          if (actualGifts.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 18),
               child: Center(

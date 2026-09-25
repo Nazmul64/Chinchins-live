@@ -1550,7 +1550,11 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                             const Icon(Icons.favorite, color: Color(0xFFFF80AB), size: 10),
                             const SizedBox(width: 3),
                             Text(
-                              _giftsData?.charmLevel.levelTag ?? 'Lv${model.level > 0 ? model.level : 6}',
+                              (_giftsData != null && _giftsData!.charmLevel.level > 0)
+                                  ? _giftsData!.charmLevel.levelTag
+                                  : (model.charmLevel > 0
+                                      ? 'Lv.${model.charmLevel}'
+                                      : (model.level > 0 ? 'Lv.${model.level}' : 'Lv.1')),
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
@@ -1637,9 +1641,11 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          _giftsData?.topFan.name.isNotEmpty == true
+                          (_giftsData != null && _giftsData!.topFan.name.isNotEmpty && _giftsData!.topFan.name != 'No Top Fan yet')
                               ? _giftsData!.topFan.name
-                              : (model.topFan.isNotEmpty ? model.topFan : 'SUPER_BOY...'),
+                              : (model.topFan.isNotEmpty && model.topFan != 'No Top Fan yet'
+                                  ? model.topFan
+                                  : 'No Top Fan'),
                           style: const TextStyle(
                             color: Color(0xFFFFD54F),
                             fontSize: 11,

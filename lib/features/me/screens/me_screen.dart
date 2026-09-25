@@ -180,18 +180,19 @@ class _MeScreenState extends State<MeScreen> {
 
   void _openMyHostProfile() {
     final profile = _myProfile ??
-        const ModelProfile(
-          id: '6829104721',
+        ModelProfile(
+          id: '',
           name: 'Chinchins User',
-          age: 25,
+          age: 20,
           location: 'Bangladesh',
           intro: 'Welcome to Chinchins Live! ✨',
-          languages: ['English', 'Bengali'],
-          avatarUrl: MockData.imgLivePreview,
-          galleryUrls: [MockData.imgLivePreview],
-          charmLevel: 98,
-          topFan: 'Prince_01',
-          pricePerMin: 1800,
+          languages: const ['English', 'Bengali'],
+          avatarUrl: '',
+          galleryUrls: const [],
+          charmLevel: 1,
+          level: 1,
+          topFan: 'No Top Fan yet',
+          pricePerMin: 100,
         );
 
     Navigator.push(
