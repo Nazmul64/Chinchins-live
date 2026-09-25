@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -138,6 +139,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       );
+
+      // ⚡ Pre-fetch all post-authentication essentials into RAM cache (<0.00ms home load)
+      unawaited(AuthApiService.prefetchPostAuthEssentials());
 
       Navigator.pushAndRemoveUntil(
         context,

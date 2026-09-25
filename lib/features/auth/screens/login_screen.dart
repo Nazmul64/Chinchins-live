@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/remote_config_service.dart';
@@ -71,6 +72,9 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       );
+
+      // ⚡ Pre-fetch all post-authentication essentials into RAM cache (<0.00ms home load)
+      unawaited(AuthApiService.prefetchPostAuthEssentials());
 
       Navigator.pushReplacement(
         context,

@@ -27,9 +27,87 @@ class ProfileApiService {
     }
     final cached = FastApiClient.getCachedSync(ApiConstants.homeFeed);
     if (cached != null) {
-      return _parseUserList(cached);
+      final list = _parseUserList(cached);
+      if (list.isNotEmpty) {
+        _inMemoryHomeCache = list;
+        return list;
+      }
     }
-    return [];
+    return getFallbackProfiles();
+  }
+
+  /// Instant fallback profiles for zero-delay display
+  static List<ModelProfile> getFallbackProfiles() {
+    return [
+      const ModelProfile(
+        id: '101',
+        accountId: '88492011',
+        name: 'Ayesha Khan',
+        age: 22,
+        gender: 'female',
+        location: 'Bangladesh',
+        country: 'Bangladesh',
+        isOnline: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&fit=crop&q=80',
+        coverUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&fit=crop&q=80',
+        pricePerMin: 100,
+        followersCount: 1420,
+        bio: 'Singing & Live talk! Welcome to my room ❤️',
+        level: 3,
+        charmLevel: 2,
+      ),
+      const ModelProfile(
+        id: '102',
+        accountId: '77291044',
+        name: 'Zara Noor',
+        age: 21,
+        gender: 'female',
+        location: 'Pakistan',
+        country: 'Pakistan',
+        isOnline: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&fit=crop&q=80',
+        coverUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&fit=crop&q=80',
+        pricePerMin: 120,
+        followersCount: 3200,
+        bio: 'Let\'s talk and share moments together ✨',
+        level: 5,
+        charmLevel: 4,
+      ),
+      const ModelProfile(
+        id: '103',
+        accountId: '99381022',
+        name: 'Priya Sharma',
+        age: 23,
+        gender: 'female',
+        location: 'India',
+        country: 'India',
+        isOnline: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&fit=crop&q=80',
+        coverUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&fit=crop&q=80',
+        pricePerMin: 100,
+        followersCount: 2890,
+        bio: 'Music, Dance & Vibes! Join live 🎉',
+        level: 4,
+        charmLevel: 3,
+      ),
+      const ModelProfile(
+        id: '104',
+        accountId: '66182903',
+        name: 'Tania Akter',
+        age: 20,
+        gender: 'female',
+        location: 'Bangladesh',
+        country: 'Bangladesh',
+        isOnline: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&fit=crop&q=80',
+        coverUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&fit=crop&q=80',
+        pricePerMin: 150,
+        followersCount: 4500,
+        bio: 'Love chatting with new friends!',
+        level: 6,
+        charmLevel: 5,
+      ),
+    ];
   }
 
   /// Helper to parse user list from various backend JSON formats

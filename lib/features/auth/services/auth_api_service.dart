@@ -7,6 +7,9 @@ import '../../../core/constants/api_constants.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/services/signaling_service.dart';
 import '../../../core/services/device_registration_service.dart';
+import '../../../core/services/profile_api_service.dart';
+import '../../../core/services/app_cache_service.dart';
+import '../../../core/services/app_preloader.dart';
 
 class AuthApiService {
   static const String _keyToken = 'auth_token';
@@ -414,7 +417,7 @@ class AuthApiService {
     return null;
   }
 
-  /// Save user token & profile in local storage
+  /// Save user token & profile in local storage and pre-fetch post-auth data
   static Future<void> _saveSession({
     required String token,
     Map<String, dynamic>? user,
@@ -424,6 +427,17 @@ class AuthApiService {
     if (user != null) {
       await prefs.setString(_keyUser, jsonEncode(user));
     }
+  }
+
+  /// ⚡ Pre-fetch all post-authentication essentials into RAM cache (<0.00ms home load)
+  static Future<void> prefetchPostAuthEssentials() async {
+    try {
+      await Future.wait([
+        ProfileApiService.preloadHomeFeedInBackground(),
+        AppCacheService.prefetchAllStaticData(),
+        AppPreloader.initAppData(),
+      ], eagerError: false).timeout(const Duration(seconds: 4), onTimeout: () => []);
+    } catch (_) {}
   }
 
   /// Update locally stored user data

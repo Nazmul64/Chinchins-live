@@ -2426,7 +2426,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     );
   }
 
-  /// 50/50 PK Battle Dynamic Split Screen (Host on Left, Co-Host on Right + Center PK VS Badge & Countdown)
+  /// PK Battle Box Layout (Aspect Ratio 16:9 / 4:3 - TikTok & BIGO Standard)
   Widget _buildPkBattleSplitScreen({
     required Widget leftWidget,
     required Widget rightWidget,
@@ -2438,53 +2438,104 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     final seconds = (_pkSecondsRemaining % 60).toString().padLeft(2, '0');
 
     return Stack(
-      fit: StackFit.expand,
       children: [
-        // 1. 50/50 Split Screen Video Row
-        Row(
-          children: [
-            // Left Video: Host
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    right: BorderSide(color: const Color(0xFF00C9FF).withValues(alpha: 0.8), width: 1.5),
-                  ),
-                ),
-                child: ClipRect(
-                  child: BeautyFilterEngine.applyFilterToWidget(
-                    filter: _currentFilter,
-                    child: leftWidget,
-                  ),
-                ),
+        // 1. Positioned PK Video Boxes in Top Section (AspectRatio 16:9 - No stretched faces)
+        Positioned(
+          top: 90,
+          left: 0,
+          right: 0,
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: Colors.black,
               ),
-            ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Row(
+                    children: [
+                      // Left: Host Video Box
+                      Expanded(
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 1.5),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              right: BorderSide(color: const Color(0xFF00C9FF).withValues(alpha: 0.8), width: 1.5),
+                            ),
+                          ),
+                          child: ClipRect(
+                            child: BeautyFilterEngine.applyFilterToWidget(
+                              filter: _currentFilter,
+                              child: leftWidget,
+                            ),
+                          ),
+                        ),
+                      ),
 
-            // Right Video: Challenger / Co-Host
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    left: BorderSide(color: const Color(0xFFFF1744).withValues(alpha: 0.8), width: 1.5),
+                      // Right: Challenger / Guest Video Box
+                      Expanded(
+                        child: Container(
+                          margin: const EdgeInsets.only(left: 1.5),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              left: BorderSide(color: const Color(0xFFFF1744).withValues(alpha: 0.8), width: 1.5),
+                            ),
+                          ),
+                          child: ClipRect(
+                            child: rightWidget,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                child: ClipRect(
-                  child: rightWidget,
-                ),
+
+                  // Center Glowing PK VS Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF007F), Color(0xFFFF6F00)],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFF007F).withValues(alpha: 0.7),
+                          blurRadius: 12,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    child: const Text(
+                      'PK VS',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                        letterSpacing: 1.0,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
 
-        // 2. PK Battle Top Score Gauge Bar (Cyan Host vs Crimson Challenger)
+        // 2. PK Battle Top Score Gauge Bar & Countdown Timer
         Positioned(
-          top: 100,
+          top: 50,
           left: 16,
           right: 16,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Scores Row
+              // Scores Row & Timer
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -2505,6 +2556,31 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                         Text(
                           '$_hostPkScore',
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Center Timer Capsule
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.75),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white38, width: 0.8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.timer_outlined, color: Colors.amber, size: 11),
+                        const SizedBox(width: 3),
+                        Text(
+                          '$minutes:$seconds',
+                          style: const TextStyle(
+                            color: Colors.amber,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
                         ),
                       ],
                     ),
@@ -2561,69 +2637,6 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                       ),
                     ],
                   ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // 3. Center PK Badge & Countdown Timer
-        Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Glowing Neon PK Badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF007F), Color(0xFFFF6F00)],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white, width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFF007F).withValues(alpha: 0.7),
-                      blurRadius: 16,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: const Text(
-                  'PK VS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                    letterSpacing: 1.2,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-
-              // Countdown Timer Capsule
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.75),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white38, width: 0.8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.timer_outlined, color: Colors.amber, size: 11),
-                    const SizedBox(width: 3),
-                    Text(
-                      '$minutes:$seconds',
-                      style: const TextStyle(
-                        color: Colors.amber,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ],

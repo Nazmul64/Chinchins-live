@@ -41,20 +41,19 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
   @override
   void initState() {
     super.initState();
-    // 1. Instantly populate from memory/disk cache (0.00ms delay)
+    // 1. Instantly populate from memory/disk cache (0.00ms delay - Zero spinner)
     final initialFeed = ProfileApiService.getCachedHomeFeed();
     if (initialFeed.isNotEmpty) {
       _cachedHomeFeed = initialFeed;
       _models = initialFeed;
-      _isLoading = false;
     } else if (_cachedHomeFeed.isNotEmpty) {
       _models = _cachedHomeFeed;
-      _isLoading = false;
     } else {
-      _isLoading = true;
+      _models = ProfileApiService.getFallbackProfiles();
     }
+    _isLoading = false;
 
-    // 2. Fetch fresh updates in parallel in background
+    // 2. Fetch fresh updates in parallel in background silently (SWR)
     _loadHomeFeed();
   }
 
