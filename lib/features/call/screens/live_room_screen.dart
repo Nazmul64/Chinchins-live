@@ -251,6 +251,12 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   bool _isAudioMuted = false;
   bool _isCameraOff = false;
 
+  // Current Authenticated User Info for Comments
+  Map<String, dynamic>? _mySavedUser;
+  String _myDisplayName = 'You';
+  String _myAvatarUrl = '';
+  int _myLevel = 1;
+
   // Real-time Stream Subscriptions
   StreamSubscription? _msgSub;
   StreamSubscription? _giftSub;
@@ -290,6 +296,26 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     }
 
     _checkFollowStatus();
+    _loadMyUserData();
+  }
+
+  Future<void> _loadMyUserData() async {
+    try {
+      final saved = await AuthApiService.getSavedUser();
+      if (saved != null && mounted) {
+        setState(() {
+          _mySavedUser = saved;
+          _myDisplayName = saved['display_name'] ?? saved['name'] ?? 'You';
+          _myAvatarUrl = saved['avatar_url'] ?? saved['avatar'] ?? '';
+          final lvl = saved['level'] ?? saved['level_number'] ?? saved['current_level'];
+          _myLevel = lvl is int ? lvl : (int.tryParse('$lvl') ?? 1);
+          final uid = saved['id'] ?? saved['user_id'];
+          if (uid != null) {
+            _myUid = uid is int ? uid : (int.tryParse('$uid') ?? _myUid);
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -1395,10 +1421,16 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     if (text.isEmpty) return;
     _commentController.clear();
 
+    final now = DateTime.now();
+    final timeStr = "${now.hour % 12 == 0 ? 12 : now.hour % 12}:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}";
+
     setState(() {
       _liveComments.add({
-        'user': 'You',
+        'user': _myDisplayName,
+        'avatar': _myAvatarUrl,
+        'level': _myLevel,
         'text': text,
+        'time': timeStr,
         'color': AppColors.neonPink,
         'isMe': true,
       });
@@ -1817,29 +1849,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
           body: Stack(
             fit: StackFit.expand,
             children: [
-              // 1. Fullscreen Live Video Stream
+              // 1. Fullscreen Raw Crystal-Clear Live Video Stream (0 Dark Overlays)
               _buildVideoGrid(),
-
-              // 2. Subtle Gradient Overlay for Top Header and Bottom Chat readability
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Color(0x99000000),
-                          Colors.transparent,
-                          Colors.transparent,
-                          Color(0xDD000000),
-                        ],
-                        stops: [0.0, 0.2, 0.62, 1.0],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
 
               // 3. Top Floating Header: Host Capsule, Viewer Count, LIVE Badge, Follow, Top 1 Fan, Avatar Stack, Options, Close
               _buildTopFloatingHeader(),

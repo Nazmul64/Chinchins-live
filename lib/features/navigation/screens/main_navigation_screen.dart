@@ -38,9 +38,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     HotExploreScreen(
       onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
     ),
-    HotExploreScreen(
-      onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
-    ),
     const MessagesScreen(),
     const MeScreen(),
   ];
@@ -214,15 +211,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               label: 'Home',
             ),
 
-            // 2. Discover / Explore
-            _buildCustomNavItem(
-              index: 1,
-              icon: Icons.explore_rounded,
-              unselectedIcon: Icons.explore_outlined,
-              label: 'Discover',
-            ),
-
-            // 3. Center Go Live "+" Button (Screen H)
+            // 2. Center Go Live "+" Button (TikTok Style)
             GestureDetector(
               onTap: () {
                 Navigator.push(
@@ -231,33 +220,33 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 );
               },
               child: Container(
-                width: 44,
-                height: 32,
+                width: 48,
+                height: 36,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFFFF2A6D), Color(0xFFFF0055)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFFF2A6D).withValues(alpha: 0.45),
+                      color: const Color(0xFFFF2A6D).withValues(alpha: 0.5),
                       blurRadius: 10,
                       offset: const Offset(0, 2),
                     ),
                   ],
                 ),
                 child: const Center(
-                  child: Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                  child: Icon(Icons.add_rounded, color: Colors.white, size: 26),
                 ),
               ),
             ),
 
-            // 4. Inbox with dynamic unread badge
+            // 3. Inbox with dynamic unread badge
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _currentIndex = 2),
+              onTap: () => setState(() => _currentIndex = 1),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 child: Column(
@@ -267,8 +256,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                       clipBehavior: Clip.none,
                       children: [
                         Icon(
-                          _currentIndex == 2 ? Icons.chat_bubble_rounded : Icons.chat_bubble_outline_rounded,
-                          color: _currentIndex == 2 ? const Color(0xFFFF2A6D) : Colors.white60,
+                          _currentIndex == 1 ? Icons.chat_bubble_rounded : Icons.chat_bubble_outline_rounded,
+                          color: _currentIndex == 1 ? const Color(0xFFFF2A6D) : Colors.white60,
                           size: 22,
                         ),
                         ValueListenableBuilder<int>(
@@ -305,9 +294,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     Text(
                       'Inbox',
                       style: TextStyle(
-                        color: _currentIndex == 2 ? const Color(0xFFFF2A6D) : Colors.white60,
+                        color: _currentIndex == 1 ? const Color(0xFFFF2A6D) : Colors.white60,
                         fontSize: 10,
-                        fontWeight: _currentIndex == 2 ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: _currentIndex == 1 ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                   ],
@@ -315,9 +304,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               ),
             ),
 
-            // 5. Profile
+            // 4. Profile / Me
             _buildCustomNavItem(
-              index: 3,
+              index: 2,
               icon: Icons.person_rounded,
               unselectedIcon: Icons.person_outline_rounded,
               label: 'Profile',

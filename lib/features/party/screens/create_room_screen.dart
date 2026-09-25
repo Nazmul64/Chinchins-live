@@ -181,29 +181,13 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Mode Selector (Voice Party vs Video Multi-Guest)
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildTypeCard(
-                        type: PartyRoomType.audioVoice,
-                        title: 'Voice Party 🎙️',
-                        subtitle: '8-12 Seats Audio Stage',
-                        icon: Icons.mic_rounded,
-                        color: AppColors.neonPurple,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildTypeCard(
-                        type: PartyRoomType.videoParty,
-                        title: 'Video Party 📹',
-                        subtitle: 'Multi-Guest Video Grid',
-                        icon: Icons.videocam_rounded,
-                        color: AppColors.neonPink,
-                      ),
-                    ),
-                  ],
+                // Mode Selector (Voice Party)
+                _buildTypeCard(
+                  type: PartyRoomType.audioVoice,
+                  title: 'Voice Party 🎙️',
+                  subtitle: '8-12 Seats Audio Lounge & Interactive Stage',
+                  icon: Icons.mic_rounded,
+                  color: AppColors.neonPurple,
                 ),
                 const SizedBox(height: 18),
 

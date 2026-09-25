@@ -406,13 +406,7 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
           child: SvgPicture.network(
             iconUrl,
             fit: BoxFit.contain,
-            placeholderBuilder: (ctx) => const Center(
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFFD1D5DB)),
-              ),
-            ),
+            placeholderBuilder: (ctx) => _buildFallbackGenericIcon(opt.key),
           ),
         );
       }
@@ -432,6 +426,7 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
             child: CachedImageLoader(
               imageUrl: iconUrl,
               fit: BoxFit.contain,
+              placeholder: _buildFallbackGenericIcon(opt.key),
             ),
           ),
         );

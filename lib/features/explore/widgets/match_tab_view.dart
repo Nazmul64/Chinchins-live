@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
-import '../../../core/data/mock_data.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
@@ -57,16 +56,15 @@ class _MatchTabViewState extends State<MatchTabView> with AutomaticKeepAliveClie
   }
 
   void _initializePoolAndSlots() {
-    // Start with rich model profiles from MockData
-    final basePool = List<ModelProfile>.from(MockData.models);
-    _pool = basePool;
+    // Start with real profiles from in-memory / local storage cache
+    final basePool = ProfileApiService.getCachedHomeFeed();
+    _pool = basePool.isNotEmpty ? basePool : ProfileApiService.getFallbackProfiles();
+    _waitingCount = _pool.length;
 
     // Fill the initial 8 slots
     _displayedSlots = [];
     for (int i = 0; i < 8; i++) {
-      if (i < _pool.length) {
-        _displayedSlots.add(_pool[i]);
-      } else {
+      if (_pool.isNotEmpty) {
         _displayedSlots.add(_pool[i % _pool.length]);
       }
     }
@@ -75,25 +73,23 @@ class _MatchTabViewState extends State<MatchTabView> with AutomaticKeepAliveClie
 
   Future<void> _fetchLiveOnlineUsers() async {
     try {
-      // 1. Try dedicated Match API endpoint (/api/match)
+      // 1. Fetch real online users from Match API (/api/match/online-users or /api/match)
       final matchData = await MatchApiService.getMatchData();
       if (matchData != null && mounted) {
-        if (matchData['waiting_count'] is int) {
-          _waitingCount = matchData['waiting_count'] as int;
-        }
         if (matchData['hosts'] is List) {
           final hostsList = (matchData['hosts'] as List)
               .map((h) => ModelProfile.fromJson(h as Map<String, dynamic>))
               .toList();
           if (hostsList.isNotEmpty) {
             setState(() {
-              final existingIds = hostsList.map((e) => e.id).toSet();
-              final remainingOld = _pool.where((p) => !existingIds.contains(p.id)).toList();
-              _pool = [...hostsList, ...remainingOld];
-              for (int i = 0; i < min(8, _pool.length); i++) {
-                if (i < _displayedSlots.length) {
-                  _displayedSlots[i] = _pool[i];
-                }
+              _pool = hostsList;
+              _waitingCount = (matchData['total'] is int)
+                  ? matchData['total'] as int
+                  : (matchData['waiting_count'] is int ? matchData['waiting_count'] as int : _pool.length);
+
+              _displayedSlots = [];
+              for (int i = 0; i < 8; i++) {
+                _displayedSlots.add(_pool[i % _pool.length]);
               }
             });
             return;
@@ -106,19 +102,17 @@ class _MatchTabViewState extends State<MatchTabView> with AutomaticKeepAliveClie
       if (liveFeed.isNotEmpty && mounted) {
         final onlineOnly = liveFeed.where((m) {
           final name = m.name.toLowerCase();
-          return !name.contains('admin') && m.isOnline;
+          return !name.contains('admin');
         }).toList();
 
         if (onlineOnly.isNotEmpty) {
           setState(() {
-            final existingIds = onlineOnly.map((e) => e.id).toSet();
-            final remainingOld = _pool.where((p) => !existingIds.contains(p.id)).toList();
-            _pool = [...onlineOnly, ...remainingOld];
+            _pool = onlineOnly;
+            _waitingCount = _pool.length;
 
-            for (int i = 0; i < min(8, _pool.length); i++) {
-              if (i >= _displayedSlots.length) {
-                _displayedSlots.add(_pool[i]);
-              }
+            _displayedSlots = [];
+            for (int i = 0; i < 8; i++) {
+              _displayedSlots.add(_pool[i % _pool.length]);
             }
           });
         }
@@ -132,49 +126,30 @@ class _MatchTabViewState extends State<MatchTabView> with AutomaticKeepAliveClie
 
   void _startPeriodicSwapper() {
     _swapTimer?.cancel();
-    // Swap 1 avatar every 2.2 seconds sequentially/randomly with animation
-    _swapTimer = Timer.periodic(const Duration(milliseconds: 2200), (_) {
+    // Swap 1 avatar every 2.5 seconds with animation
+    _swapTimer = Timer.periodic(const Duration(milliseconds: 2500), (_) {
       if (!mounted || _pool.isEmpty || _displayedSlots.length < 8) return;
 
-      // Choose next slot in an engaging order: [0, 5, 2, 7, 1, 4, 3, 6]
       const pattern = [0, 5, 2, 7, 1, 4, 3, 6];
       final targetSlot = pattern[_currentSlotIndex % pattern.length];
       _currentSlotIndex++;
 
-      // Find next candidate from pool that is not in the other slots
-      final currentlyShowingIds = _displayedSlots.map((m) => m.id).toSet();
-      ModelProfile? nextProfile;
-
-      for (int i = 0; i < _pool.length; i++) {
-        final candidate = _pool[(_poolCursor + i) % _pool.length];
-        if (!currentlyShowingIds.contains(candidate.id)) {
-          nextProfile = candidate;
-          _poolCursor = (_poolCursor + i + 1) % _pool.length;
-          break;
-        }
-      }
-
-      // Fallback if pool is small
-      if (nextProfile == null) {
-        nextProfile = _pool[_poolCursor % _pool.length];
-        _poolCursor = (_poolCursor + 1) % _pool.length;
-      }
+      final nextProfile = _pool[_poolCursor % _pool.length];
+      _poolCursor = (_poolCursor + 1) % _pool.length;
 
       setState(() {
-        _displayedSlots[targetSlot] = nextProfile!;
+        _displayedSlots[targetSlot] = nextProfile;
       });
     });
   }
 
   void _startLiveCountJiggle() {
-    _counterJiggleTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (!mounted) return;
+    // Dynamic real count tracker
+    if (mounted && _pool.isNotEmpty) {
       setState(() {
-        // Subtle realistic live count fluctuation around 5380-5395
-        final delta = _random.nextInt(5) - 2; // -2, -1, 0, 1, 2
-        _waitingCount = (_waitingCount + delta).clamp(5300, 5450);
+        _waitingCount = _pool.length;
       });
-    });
+    }
   }
 
   void _onSlotTapped(ModelProfile profile) {

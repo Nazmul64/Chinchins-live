@@ -157,52 +157,7 @@ class ResellerApiService {
   }
 
   static List<PaymentOption> _getDefaultPaymentOptionsFallback() {
-    return [
-      const PaymentOption(
-        id: 1,
-        key: 'bkash',
-        name: 'bKash',
-        type: 'gateway',
-        accountType: 'Personal',
-        accountNumber: '01706640777',
-        icon: 'https://chinchins.live/uploads/payment_methods/bkash.svg',
-        badge: null,
-        instructions: 'Send money to our bKash Personal Number: 01706640777.',
-      ),
-      const PaymentOption(
-        id: 2,
-        key: 'nagad',
-        name: 'Nagad',
-        type: 'gateway',
-        accountType: 'Personal',
-        accountNumber: '01706640777',
-        icon: 'https://chinchins.live/uploads/payment_methods/nagad.svg',
-        badge: null,
-        instructions: 'Send money to our Nagad Personal Number: 01706640777.',
-      ),
-      const PaymentOption(
-        id: 3,
-        key: 'rocket',
-        name: 'Rocket',
-        type: 'gateway',
-        accountType: 'Personal',
-        accountNumber: '01706640777',
-        icon: 'https://chinchins.live/uploads/payment_methods/rocket.svg',
-        badge: null,
-        instructions: 'Send money to our Rocket Personal Number: 01706640777.',
-      ),
-      const PaymentOption(
-        id: 4,
-        key: 'upay',
-        name: 'Upay',
-        type: 'gateway',
-        accountType: 'Personal',
-        accountNumber: '01706640777',
-        icon: 'https://chinchins.live/uploads/payment_methods/upay.svg',
-        badge: null,
-        instructions: 'Send money to our Upay Personal Number: 01706640777.',
-      ),
-    ];
+    return [];
   }
 
   /// 2. Get Authorized Resellers List (100% Dynamic from Database)
