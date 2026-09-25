@@ -18,17 +18,17 @@ class PremiumVipScreen extends StatefulWidget {
 
 class _PremiumVipScreenState extends State<PremiumVipScreen> {
   List<Map<String, dynamic>> _cards = [];
-  bool _isLoading = true;
+  bool _isLoading = false;
   bool _isActionInProgress = false;
 
   @override
   void initState() {
     super.initState();
+    _cards = _getFallbackVipCards();
     _loadVipData();
   }
 
   Future<void> _loadVipData() async {
-    setState(() => _isLoading = true);
     try {
       final results = await Future.wait([
         WalletApiService.getWalletBalance().catchError((_) => null),

@@ -4,6 +4,7 @@ import 'package:livekit_client/livekit_client.dart';
 import '../services/livekit_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/services/signaling_service.dart';
+import '../core/widgets/cached_image_loader.dart';
 import '../features/auth/services/auth_api_service.dart';
 import '../features/call/services/live_streaming_api_service.dart';
 import '../features/call/widgets/in_call_gift_sheet.dart';
@@ -449,10 +450,9 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
   Widget buildMultiHostGrid(List<VideoTrack> activeTracks) {
     if (activeTracks.isEmpty) {
       return (widget.hostAvatar != null && widget.hostAvatar!.isNotEmpty)
-          ? Image.network(
-              widget.hostAvatar!,
+          ? CachedImageLoader(
+              imageUrl: widget.hostAvatar!,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(color: const Color(0xFF140F22)),
             )
           : Container(color: const Color(0xFF140F22));
     }

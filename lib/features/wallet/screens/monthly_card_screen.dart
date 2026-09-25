@@ -20,7 +20,7 @@ class MonthlyCardScreen extends StatefulWidget {
 class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProviderStateMixin {
   TabController? _tabController;
   List<Map<String, dynamic>> _cards = [];
-  bool _isLoading = true;
+  bool _isLoading = false;
   bool _isActionInProgress = false;
   int _userGems = 0;
 
@@ -30,8 +30,55 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
   @override
   void initState() {
     super.initState();
+    _cards = _getDefaultMonthlyCards();
+    _userGems = WalletApiService.getCachedCoins();
+
+    int initialIdx = widget.initialCardIndex;
+    if (initialIdx >= _cards.length) initialIdx = 0;
+    _tabController = TabController(
+      length: _cards.length,
+      initialIndex: initialIdx,
+      vsync: this,
+    );
+    _tabController!.addListener(() {
+      if (mounted) setState(() {});
+    });
+
     _loadCardsAndSession();
     _startTimerTicker();
+  }
+
+  static List<Map<String, dynamic>> _getDefaultMonthlyCards() {
+    return [
+      {
+        'id': 1,
+        'card_type': 'weekly',
+        'name': 'Weekly VIP Privilege Card',
+        'badge_title': 'Weekly Privilege Card',
+        'price_bdt': 300,
+        'original_price_bdt': 600.00,
+        'formatted_price': '৳ 300',
+        'instant_reward_coins': 8100,
+        'daily_checkin_total_coins': 6480,
+        'total_value_coins': 14580,
+        'daily_coins_amount': 925,
+        'validity_days': 7,
+      },
+      {
+        'id': 2,
+        'card_type': 'monthly',
+        'name': 'Super Monthly VIP Card',
+        'badge_title': 'Super Monthly Card',
+        'price_bdt': 1200,
+        'original_price_bdt': 2400.00,
+        'formatted_price': '৳ 1200',
+        'instant_reward_coins': 32940,
+        'daily_checkin_total_coins': 26330,
+        'total_value_coins': 59270,
+        'daily_coins_amount': 877,
+        'validity_days': 30,
+      },
+    ];
   }
 
   void _startTimerTicker() {
@@ -56,14 +103,17 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
   }
 
   Future<void> _loadCardsAndSession() async {
-    final balanceData = await WalletApiService.getWalletBalance();
-    final vipData = await VipCardsApiService.getVipCards();
-    final subData = await VipCardsApiService.getMySubscriptions();
+    final balanceData = await WalletApiService.getWalletBalance().catchError((_) => null);
+    final vipData = await VipCardsApiService.getVipCards().catchError((_) => <String, dynamic>{});
+    final subData = await VipCardsApiService.getMySubscriptions().catchError((_) => null);
 
     if (!mounted) return;
 
     final rawCards = vipData['cards'] as List? ?? [];
-    final List<Map<String, dynamic>> parsedCards = rawCards.map((c) => Map<String, dynamic>.from(c)).toList();
+    List<Map<String, dynamic>> parsedCards = rawCards.map((c) => Map<String, dynamic>.from(c)).toList();
+    if (parsedCards.isEmpty) {
+      parsedCards = _getDefaultMonthlyCards();
+    }
 
     int initialIdx = widget.initialCardIndex;
     if (initialIdx >= parsedCards.length) initialIdx = 0;

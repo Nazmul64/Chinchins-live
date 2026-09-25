@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../core/services/app_preloader.dart';
 import '../../../core/theme/app_colors.dart';
 import '../services/withdraw_api_service.dart';
 
@@ -56,16 +55,14 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     if (cached != null) {
       _applyWithdrawData(cached);
       _isLoading = false;
-    } else if (AppPreloader.withdrawMethods.isNotEmpty) {
-      _paymentMethods = List<Map<String, dynamic>>.from(
-        AppPreloader.withdrawMethods.map((m) => m is Map ? Map<String, dynamic>.from(m) : {'name': m.toString(), 'code': m.toString().toLowerCase()})
-      );
-      if (_paymentMethods.isNotEmpty) {
-        _selectedMethod = _paymentMethods.first;
-      }
-      _isLoading = false;
     } else {
-      _isLoading = true;
+      _paymentMethods = [
+        {'id': 1, 'name': 'bKash', 'code': 'bkash'},
+        {'id': 2, 'name': 'Nagad', 'code': 'nagad'},
+        {'id': 3, 'name': 'Rocket', 'code': 'rocket'},
+      ];
+      _selectedMethod = _paymentMethods.first;
+      _isLoading = false;
     }
 
     _fetchWithdrawInfo();

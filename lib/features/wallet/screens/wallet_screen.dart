@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../core/services/local_vault.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../services/wallet_api_service.dart';
@@ -19,9 +20,9 @@ class WalletScreen extends StatefulWidget {
 class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  bool _isLoadingBalance = true;
-  bool _isLoadingPackages = true;
-  bool _isLoadingHistory = true;
+  bool _isLoadingBalance = false;
+  bool _isLoadingPackages = false;
+  bool _isLoadingHistory = false;
 
   Map<String, dynamic>? _walletData;
   List<Map<String, dynamic>> _packages = [];
@@ -34,15 +35,17 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     _tabController = TabController(length: 2, vsync: this, initialIndex: widget.initialTabIndex);
 
     // ⚡ Zero-Loading: Instant population from RAM/Disk cache
+    final cachedCoins = WalletApiService.getCachedCoins();
+    _walletData = {'coins': cachedCoins, 'balance': cachedCoins, 'gems': cachedCoins};
+
     final cachedPackages = WalletApiService.getCachedPackagesSync();
-    if (cachedPackages.isNotEmpty) {
-      _packages = cachedPackages;
-      _isLoadingPackages = false;
-    }
+    _packages = cachedPackages.isNotEmpty ? cachedPackages : List<Map<String, dynamic>>.from(LocalVault.coinPackages);
+
     final cachedMethods = WalletApiService.getCachedPaymentMethodsSync();
-    if (cachedMethods.isNotEmpty) {
-      _paymentMethods = cachedMethods;
-    }
+    _paymentMethods = cachedMethods.isNotEmpty ? cachedMethods : List<Map<String, dynamic>>.from(LocalVault.paymentMethods);
+
+    _isLoadingBalance = false;
+    _isLoadingPackages = false;
 
     _loadAllWalletData();
   }

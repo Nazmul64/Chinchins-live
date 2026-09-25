@@ -6,7 +6,6 @@ import '../../../core/services/remote_config_service.dart';
 import '../../../core/services/app_update_service.dart';
 import '../../../core/services/device_registration_service.dart';
 import '../../../core/services/notification_api_service.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../../explore/screens/hot_explore_screen.dart';
 import '../../messages/screens/messages_screen.dart';

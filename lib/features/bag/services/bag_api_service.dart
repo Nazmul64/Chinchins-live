@@ -10,6 +10,18 @@ class BagApiService {
   static BagInventoryData? _cachedInventory;
   static List<BagStoreItem>? _cachedStoreCatalog;
 
+  /// Synchronously retrieve cached bag inventory in 0.00ms
+  static BagInventoryData getCachedInventorySync([String category = 'all', String status = 'all']) {
+    if (_cachedInventory != null) return _cachedInventory!;
+    final queryParams = {'category': category, 'status': status};
+    final localCached = FastApiClient.getCachedSync(ApiConstants.bag, queryParams);
+    if (localCached is Map && localCached['status'] == true) {
+      _cachedInventory = BagInventoryData.fromJson(Map<String, dynamic>.from(localCached));
+      return _cachedInventory!;
+    }
+    return _getDefaultInventoryData(category, status);
+  }
+
   /// 1. Fetch User Bag Inventory with SWR caching (0.00ms response)
   static Future<BagInventoryData> getBagInventory({
     String category = 'all',

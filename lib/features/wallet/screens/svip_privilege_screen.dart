@@ -20,7 +20,7 @@ class _SvipPrivilegeScreenState extends State<SvipPrivilegeScreen> {
   int _userCurrentSvipLevel = 0; // Current user SVIP (e.g. 0)
   int _userCurrentPoints = 0;
   int _userWalletCoins = 0;
-  bool _isLoading = true;
+  bool _isLoading = false;
 
   final PageController _pageController = PageController(viewportFraction: 0.28, initialPage: 1);
   final ScrollController _scrollController = ScrollController();
@@ -122,6 +122,7 @@ class _SvipPrivilegeScreenState extends State<SvipPrivilegeScreen> {
   void initState() {
     super.initState();
     _selectedLevelIndex = widget.initialLevelIndex.clamp(0, _svipLevels.length - 1);
+    _userWalletCoins = WalletApiService.getCachedCoins();
     _loadUserStatus();
   }
 
@@ -133,7 +134,6 @@ class _SvipPrivilegeScreenState extends State<SvipPrivilegeScreen> {
   }
 
   Future<void> _loadUserStatus() async {
-    setState(() => _isLoading = true);
     try {
       final user = await AuthApiService.getSavedUser();
       final wallet = await WalletApiService.getWalletBalance().catchError((_) => null);

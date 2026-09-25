@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../core/services/local_vault.dart';
 import '../../../core/theme/app_colors.dart';
 import '../services/wallet_api_service.dart';
 
@@ -25,7 +26,7 @@ class _DepositScreenState extends State<DepositScreen> {
 
   List<Map<String, dynamic>> _paymentMethods = [];
   Map<String, dynamic>? _selectedMethod;
-  bool _isLoadingMethods = true;
+  bool _isLoadingMethods = false;
   bool _isSubmitting = false;
 
   final TextEditingController _senderNumberController = TextEditingController();
@@ -38,16 +39,16 @@ class _DepositScreenState extends State<DepositScreen> {
   void initState() {
     super.initState();
     final cached = WalletApiService.getCachedPaymentMethodsSync();
-    if (cached.isNotEmpty) {
-      _paymentMethods = cached;
+    _paymentMethods = cached.isNotEmpty ? cached : List<Map<String, dynamic>>.from(LocalVault.paymentMethods);
+    if (_paymentMethods.isNotEmpty) {
       final targetId = widget.selectedPackage['payment_method_id'];
       final targetCode = widget.selectedPackage['payment_method_code'] ?? widget.selectedPackage['code'];
-      _selectedMethod = cached.firstWhere(
+      _selectedMethod = _paymentMethods.firstWhere(
         (m) => (targetId != null && m['id'] == targetId) || (targetCode != null && m['code'] == targetCode),
-        orElse: () => cached.first,
+        orElse: () => _paymentMethods.first,
       );
-      _isLoadingMethods = false;
     }
+    _isLoadingMethods = _paymentMethods.isEmpty;
     _fetchPaymentMethods();
   }
 

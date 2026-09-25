@@ -56,6 +56,30 @@ class PartyRoomApiService {
     return _cachedConfig;
   }
 
+  static List<GroupPartyRoom> _cachedPartyRooms = [];
+
+  /// Synchronously retrieve cached party rooms in 0.00ms
+  static List<GroupPartyRoom> getCachedPartyRoomsSync() {
+    if (_cachedPartyRooms.isNotEmpty) return _cachedPartyRooms;
+    final cached = FastApiClient.getCachedSync(ApiConstants.partyRooms);
+    if (cached != null) {
+      List? rawList;
+      if (cached is Map && cached['data'] is List) {
+        rawList = cached['data'] as List;
+      } else if (cached is List) {
+        rawList = cached;
+      }
+      if (rawList != null) {
+        _cachedPartyRooms = rawList
+            .whereType<Map<String, dynamic>>()
+            .map((e) => GroupPartyRoom.fromJson(e))
+            .toList();
+        return _cachedPartyRooms;
+      }
+    }
+    return [];
+  }
+
   /// 2. Browse Live Party Rooms Feed (`GET /api/party-rooms`)
   static Future<List<GroupPartyRoom>> getPartyRooms({
     String? roomType,
@@ -81,6 +105,10 @@ class PartyRoomApiService {
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
+        if (page == 1 && (search == null || search.isEmpty)) {
+          await FastApiClient.putCache(ApiConstants.partyRooms, json);
+        }
+
         List? rawList;
         if (json is Map && json['data'] is List) {
           rawList = json['data'] as List;
@@ -95,13 +123,14 @@ class PartyRoomApiService {
               rooms.add(GroupPartyRoom.fromJson(item));
             }
           }
+          _cachedPartyRooms = rooms;
           return rooms;
         }
       }
     } catch (e) {
       AppLogger.error('PartyRoomGetList', e);
     }
-    return [];
+    return _cachedPartyRooms;
   }
 
   /// 3. Create / Host a Party Room (`POST /api/party-rooms/create`)

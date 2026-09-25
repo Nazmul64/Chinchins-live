@@ -17,13 +17,16 @@ class PartyRoomsScreen extends StatefulWidget {
 
 class _PartyRoomsScreenState extends State<PartyRoomsScreen> with SingleTickerProviderStateMixin {
   List<GroupPartyRoom> _rooms = [];
-  bool _isLoading = true;
+  bool _isLoading = false;
   bool _showMiniPlayer = true;
   late AnimationController _equalizerController;
 
   @override
   void initState() {
     super.initState();
+    _rooms = PartyRoomApiService.getCachedPartyRoomsSync();
+    _isLoading = _rooms.isEmpty;
+
     _equalizerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -38,7 +41,9 @@ class _PartyRoomsScreenState extends State<PartyRoomsScreen> with SingleTickerPr
   }
 
   Future<void> _loadRooms() async {
-    setState(() => _isLoading = true);
+    if (_rooms.isEmpty) {
+      setState(() => _isLoading = true);
+    }
     try {
       final remoteRooms = await PartyRoomApiService.getPartyRooms(roomType: 'voice');
       if (mounted) {
@@ -50,7 +55,6 @@ class _PartyRoomsScreenState extends State<PartyRoomsScreen> with SingleTickerPr
     } catch (_) {
       if (mounted) {
         setState(() {
-          _rooms = [];
           _isLoading = false;
         });
       }

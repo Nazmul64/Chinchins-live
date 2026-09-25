@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../core/widgets/cached_image_loader.dart';
 
 class TopGiftAlertBannerData {
   final String id;
@@ -88,12 +89,9 @@ class TopGiftAlertBanner extends StatelessWidget {
             ),
             child: ClipOval(
               child: senderAvatar.isNotEmpty
-                  ? Image.network(
-                      senderAvatar,
+                  ? CachedImageLoader(
+                      imageUrl: senderAvatar,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => const Center(
-                        child: Text('👑', style: TextStyle(fontSize: 12)),
-                      ),
                     )
                   : const Center(
                       child: Text('👑', style: TextStyle(fontSize: 12)),
@@ -152,11 +150,10 @@ class TopGiftAlertBanner extends StatelessWidget {
 
           // 3. Gift Icon
           if (giftIcon.isNotEmpty)
-            Image.network(
-              giftIcon,
+            CachedImageLoader(
+              imageUrl: giftIcon,
               width: 20,
               height: 20,
-              errorBuilder: (context, error, stackTrace) => const Text('🎁', style: TextStyle(fontSize: 12)),
             )
           else
             const Text('🎁', style: TextStyle(fontSize: 12)),

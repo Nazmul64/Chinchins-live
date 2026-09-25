@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
+import '../core/widgets/cached_image_loader.dart';
 
 class LiveViewerScreen extends StatefulWidget {
   final String roomName;
@@ -125,10 +126,9 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
         children: [
           // 1. Blurred Background Cover
           if (widget.hostImageUrl.isNotEmpty)
-            Image.network(
-              widget.hostImageUrl,
+            CachedImageLoader(
+              imageUrl: widget.hostImageUrl,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(color: Colors.black),
             )
           else
             Container(color: const Color(0xFF0D0B14)),
@@ -162,7 +162,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
                   ),
                   child: ClipOval(
                     child: widget.hostImageUrl.isNotEmpty
-                        ? Image.network(widget.hostImageUrl, fit: BoxFit.cover)
+                        ? CachedImageLoader(imageUrl: widget.hostImageUrl, fit: BoxFit.cover)
                         : const Icon(Icons.person, size: 48, color: Colors.white70),
                   ),
                 ),

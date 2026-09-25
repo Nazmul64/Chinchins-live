@@ -72,6 +72,8 @@ class _MyBagScreenState extends State<MyBagScreen> {
   void initState() {
     super.initState();
     _selectedCategory = widget.initialCategory;
+    _inventory = BagApiService.getCachedInventorySync(_selectedCategory, _selectedStatus);
+    _myCoins = WalletApiService.getCachedCoins();
     _loadWalletBalance();
     _loadInventory();
   }

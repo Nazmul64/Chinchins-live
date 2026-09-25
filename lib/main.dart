@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core/services/app_cache_service.dart';
+import 'core/services/fast_api_client.dart';
+import 'core/services/local_vault.dart';
 import 'core/services/screen_protection_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/app_logger.dart';
@@ -10,11 +12,15 @@ import 'features/auth/screens/splash_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // ⚡ Initialize L1/L2 Local Fast Storage & Disk Caches
+  await FastApiClient.init();
+  await LocalVault.init();
+
   // ⚡ Fast In-Memory Static Data Pre-fetching (Non-blocking)
   AppCacheService.prefetchAllStaticData();
 
   // Allow screenshots and screen recording
-  ScreenProtectionService.instance.allowScreenshots();
+  await ScreenProtectionService.instance.allowScreenshots();
 
   // Global Flutter framework error handling
   FlutterError.onError = (FlutterErrorDetails details) {
