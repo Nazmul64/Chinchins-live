@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/theme/app_colors.dart';

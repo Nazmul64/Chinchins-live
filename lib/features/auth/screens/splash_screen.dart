@@ -49,8 +49,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       // 1. Precache fallback & cached gifts in memory
       final gifts = GiftsApiService.cachedCatalog ?? GiftsApiService.getFallbackGifts();
       for (final g in gifts) {
-        if (g.icon.isNotEmpty && (g.icon.startsWith('http://') || g.icon.startsWith('https://'))) {
-          precacheImage(CachedNetworkImageProvider(g.icon), context).catchError((_) => null);
+        final icon = g.iconUrl;
+        if (icon.isNotEmpty && (icon.startsWith('http://') || icon.startsWith('https://'))) {
+          precacheImage(CachedNetworkImageProvider(icon), context).catchError((_) => null);
         }
       }
 
