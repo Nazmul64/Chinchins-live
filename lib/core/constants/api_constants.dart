@@ -344,6 +344,15 @@ class ApiConstants {
   static String partyRoomRespondSeatRequest(dynamic id, dynamic requestId) => '$baseUrl/party-rooms/$id/seat-requests/$requestId/respond';
   static String partyRoomRequestSeat(dynamic id) => '$baseUrl/party-rooms/$id/request-seat';
   static String partyRoomMuteSeat(dynamic id) => '$baseUrl/party-rooms/$id/mute-seat';
+
+  // Premium VIP Cards & Home Screen Floating Action Banner Endpoints
+  static String get floatingBanner => '$baseUrl/floating-banner';
+  static String get floatingBannerAlt => '$baseUrl/floating-action-icon';
+  static String get floatingWidget => '$baseUrl/floating-widget';
+  static String get vipCardsBanner => '$baseUrl/vip-cards/banner';
+  static String get spendLessGetMore => '$baseUrl/spend-less-get-more';
+  static String get spendLessGetMoreBanner => '$baseUrl/spend-less-get-more/banner';
+  static String get spendLessGetMoreMy => '$baseUrl/spend-less-get-more/my';
 }
 
 

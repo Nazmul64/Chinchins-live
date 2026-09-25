@@ -57,47 +57,99 @@ class VipCardsApiService {
     return _cachedVipData;
   }
 
-  /// Fetch Floating VIP / Extra Gems banner configuration & image
-  /// Endpoint: GET /api/spend-less-get-more/banner
-  static Future<Map<String, dynamic>> getFloatingBanner() async {
+  static Map<String, dynamic>? _cachedFloatingBanner;
+
+  /// Instant local cache access for floating widget (0ms)
+  static Map<String, dynamic>? getCachedFloatingBanner() {
+    return _cachedFloatingBanner;
+  }
+
+  /// Fetch Floating VIP / Extra Gems banner configuration & image from Admin Panel API (GET /api/floating-banner)
+  static Future<Map<String, dynamic>> getFloatingBanner({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedFloatingBanner != null) {
+      _syncFloatingBannerInBackground();
+      return _cachedFloatingBanner!;
+    }
+
+    final localCached = await FastApiClient.getCached('chinchins_floating_banner_v1');
+    if (localCached is Map && (localCached['status'] == true || localCached['success'] == true) && localCached['data'] is Map) {
+      _cachedFloatingBanner = Map<String, dynamic>.from(localCached['data']);
+      _syncFloatingBannerInBackground();
+      return _cachedFloatingBanner!;
+    }
+
+    final liveData = await _syncFloatingBannerInBackground();
+    if (liveData != null) {
+      return liveData;
+    }
+
+    return _cachedFloatingBanner ?? _getDefaultFloatingBanner();
+  }
+
+  static Future<Map<String, dynamic>?> _syncFloatingBannerInBackground() async {
+    final candidateEndpoints = [
+      ApiConstants.floatingBanner,
+      ApiConstants.floatingBannerAlt,
+      ApiConstants.floatingWidget,
+      ApiConstants.vipCardsBanner,
+      ApiConstants.spendLessGetMoreBanner,
+    ];
+
     try {
       final token = await AuthApiService.getToken();
-      final url = Uri.parse(ApiConstants.spendLessGetMoreBanner);
       final headers = <String, String>{
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+      for (final endpoint in candidateEndpoints) {
+        try {
+          final url = Uri.parse(endpoint);
+          final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 4));
+          if (response.statusCode == 200) {
+            final decoded = jsonDecode(response.body);
+            if (decoded is Map && (decoded['status'] == true || decoded['success'] == true)) {
+              final rawData = decoded['data'] is Map ? decoded['data'] as Map : decoded;
+              final dataMap = Map<String, dynamic>.from(rawData);
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['status'] == true && decoded['data'] is Map) {
-          return Map<String, dynamic>.from(decoded['data']);
-        }
+              final isEnabled = dataMap['is_enabled'] != false;
+              final title = dataMap['title']?.toString() ?? 'Extra Gems';
+              final subtitle = dataMap['subtitle']?.toString() ?? dataMap['tag']?.toString() ?? 'Monthly Card';
+              final rawImg = dataMap['image_url'] ?? dataMap['image'] ?? dataMap['custom_image'] ?? dataMap['icon_url'];
+              final targetAction = dataMap['target_action']?.toString() ?? dataMap['action_type']?.toString() ?? 'OPEN_PREMIUM_VIP';
+
+              final result = {
+                'is_enabled': isEnabled,
+                'title': title,
+                'subtitle': subtitle,
+                'image_url': rawImg?.toString() ?? '',
+                'target_action': targetAction,
+              };
+
+              _cachedFloatingBanner = result;
+              await FastApiClient.putCache('chinchins_floating_banner_v1', {
+                'status': true,
+                'data': result,
+              });
+
+              return result;
+            }
+          }
+        } catch (_) {}
       }
     } catch (e, st) {
       AppLogger.error('GetFloatingBannerError', e, st);
     }
+    return _cachedFloatingBanner;
+  }
 
-    // Try extracting banner from getVipCards
-    try {
-      final vipData = await getVipCards();
-      if (vipData['floating_banner'] is Map) {
-        return Map<String, dynamic>.from(vipData['floating_banner']);
-      }
-      if (vipData['banner'] is Map) {
-        return Map<String, dynamic>.from(vipData['banner']);
-      }
-    } catch (_) {}
-
+  static Map<String, dynamic> _getDefaultFloatingBanner() {
     return {
       'is_enabled': true,
       'title': 'Extra Gems',
-      'tag': 'Monthly Card',
-      'image_url': 'https://chinchins.live/assets/images/vip/floating_extra_gems.png',
-      'action_type': 'OPEN_PREMIUM_VIP',
-      'target_screen': '/premium-vip',
+      'subtitle': 'Monthly Card',
+      'image_url': '',
+      'target_action': 'OPEN_PREMIUM_VIP',
     };
   }
 

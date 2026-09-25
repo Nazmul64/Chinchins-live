@@ -22,12 +22,28 @@ class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
   late Animation<double> _glowAnimation;
   bool _isDismissed = false;
   bool _isEnabled = true;
-  String _imageUrl = 'https://chinchins.live/assets/images/vip/floating_extra_gems.png';
+  String _imageUrl = '';
+  String _title = 'Extra Gems';
+  String _subtitle = 'Monthly Card';
+  String _targetAction = 'OPEN_PREMIUM_VIP';
 
   @override
   void initState() {
     super.initState();
     _position = widget.initialPosition;
+
+    // Instant synchronous cache load (0.00ms!)
+    final cached = VipCardsApiService.getCachedFloatingBanner();
+    if (cached != null) {
+      _isEnabled = cached['is_enabled'] != false;
+      _title = cached['title']?.toString() ?? _title;
+      _subtitle = cached['subtitle']?.toString() ?? _subtitle;
+      _targetAction = cached['target_action']?.toString() ?? _targetAction;
+      final cachedImg = cached['image_url']?.toString();
+      if (cachedImg != null && cachedImg.trim().isNotEmpty) {
+        _imageUrl = CachedImageLoader.normalize(cachedImg.trim());
+      }
+    }
 
     _shimmerController = AnimationController(
       vsync: this,
@@ -48,9 +64,15 @@ class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
 
       final enabled = bannerData['is_enabled'] != false;
       final rawImg = bannerData['image_url'] ?? bannerData['image'] ?? bannerData['custom_image'];
+      final title = bannerData['title']?.toString() ?? _title;
+      final subtitle = bannerData['subtitle']?.toString() ?? _subtitle;
+      final targetAction = bannerData['target_action']?.toString() ?? _targetAction;
 
       setState(() {
         _isEnabled = enabled;
+        _title = title;
+        _subtitle = subtitle;
+        _targetAction = targetAction;
         if (rawImg != null && rawImg.toString().trim().isNotEmpty) {
           _imageUrl = CachedImageLoader.normalize(rawImg.toString().trim());
         }
@@ -65,12 +87,14 @@ class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
   }
 
   void _onTap() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const MonthlyCardScreen(),
-      ),
-    );
+    if (_targetAction == 'OPEN_PREMIUM_VIP' || _targetAction == 'OPEN_MONTHLY_CARD' || _targetAction.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const MonthlyCardScreen(),
+        ),
+      );
+    }
   }
 
   @override
@@ -127,13 +151,64 @@ class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
                       ),
                     ),
 
-                    // Real Dynamic Image from Backend / Database (Admin Panel uploaded)
-                    CachedImageLoader(
-                      imageUrl: _imageUrl,
-                      width: 86,
-                      height: 86,
-                      fit: BoxFit.contain,
-                    ),
+                    // Real Dynamic Image from Admin Panel API (GET /api/floating-banner)
+                    if (_imageUrl.isNotEmpty)
+                      CachedImageLoader(
+                        imageUrl: _imageUrl,
+                        width: 86,
+                        height: 86,
+                        fit: BoxFit.contain,
+                      )
+                    else
+                      // Sleek Fallback VIP Card Badge
+                      Container(
+                        width: 82,
+                        height: 82,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFFFFD54F), Color(0xFFFF8F00), Color(0xFFE65100)],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFFFF9C4), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 28),
+                            const SizedBox(height: 2),
+                            Text(
+                              _title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.3,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              _subtitle,
+                              style: const TextStyle(
+                                color: Color(0xFFFFF9C4),
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
 
 
 

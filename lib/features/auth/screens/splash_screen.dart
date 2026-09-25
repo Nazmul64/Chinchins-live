@@ -8,6 +8,7 @@ import '../../../core/services/gifts_api_service.dart';
 import '../../../core/services/preloader_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../navigation/screens/main_navigation_screen.dart';
+import '../../wallet/services/vip_cards_api_service.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../services/auth_api_service.dart';
 import 'login_screen.dart';
@@ -62,6 +63,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         if (iconUrl != null && iconUrl.toString().startsWith('http')) {
           precacheImage(CachedNetworkImageProvider(iconUrl.toString()), context).catchError((_) => null);
         }
+      // 3. Precache Home Floating VIP / Extra Gems banner image
+      final floating = VipCardsApiService.getCachedFloatingBanner();
+      if (floating != null) {
+        final bannerImg = floating['image_url']?.toString();
+        if (bannerImg != null && bannerImg.startsWith('http')) {
+          precacheImage(CachedNetworkImageProvider(bannerImg), context).catchError((_) => null);
+        }
       }
     } catch (_) {}
   }
@@ -74,9 +82,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     final token = await AuthApiService.getToken();
     final savedUser = await AuthApiService.getSavedUser();
 
-    // Kick off global static pre-fetch (gifts, payment gateways, coin packages) in parallel
+    // Kick off global static pre-fetch (gifts, payment gateways, coin packages, floating banner) in parallel
     unawaited(AppCacheService.prefetchAllStaticData());
     unawaited(AppPreloader.initAppData());
+    unawaited(VipCardsApiService.getFloatingBanner());
 
     // Precache all diamond package and gift images immediately into Flutter image cache
     if (mounted) {

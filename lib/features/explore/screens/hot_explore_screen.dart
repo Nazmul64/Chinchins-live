@@ -470,12 +470,6 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
   }
 
   Widget _buildHotGridView() {
-    if (_isLoading && _models.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.neonPink),
-      );
-    }
-
     if (_models.isEmpty) {
       return RefreshIndicator(
         color: AppColors.neonPink,
