@@ -25,6 +25,7 @@ import '../widgets/in_call_profile_sheet.dart';
 import '../widgets/in_call_gift_sheet.dart';
 import '../widgets/gift_animation_overlay.dart';
 import '../widgets/top_gift_alert_banner.dart';
+import '../widgets/host_on_call_photo_carousel.dart';
 import '../../../core/services/gifts_api_service.dart';
 
 /// Auto-hiding VS Banner when Co-Host / PK connects (fades out after 2 seconds)
@@ -220,6 +221,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
   // Host Private Call State
   bool _isHostOnPrivateCall = false;
+  List<String> _hostGalleryPhotos = [];
+  String? _hostBackSoonText;
   StreamSubscription? _privateCallStatusSub;
   StreamSubscription? _incomingCallSub;
   StreamSubscription? _callAcceptedSub;
@@ -893,10 +896,25 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     // 1. Live Chat Comments (.chat.message, .message.sent)
     _msgSub = signaling.onLiveMessage.listen((data) {
       if (mounted) {
+        final senderId = data['user_id'] ?? data['sender_id'] ?? (data['user'] is Map ? data['user']['id'] : null);
+        if (senderId != null && senderId.toString() == _myUid.toString()) {
+          return;
+        }
+        final userName = (data['user'] is Map ? (data['user']['display_name'] ?? data['user']['name']) : null) ??
+            data['user_name'] ?? data['sender_name'] ?? 'Viewer';
+        final userAvatar = (data['user'] is Map ? (data['user']['avatar_url'] ?? data['user']['avatar']) : null) ??
+            data['user_avatar'] ?? data['sender_avatar'] ?? '';
+        final userLevel = data['level'] ?? data['level_number'] ?? data['user_level'] ??
+            (data['user'] is Map ? (data['user']['level'] ?? data['user']['level_number'] ?? data['user']['current_level']) : null) ?? 1;
+        final message = data['message']?.toString() ?? '';
+        if (message.isEmpty) return;
+
         setState(() {
           _liveComments.add({
-            'user': data['sender_name'] ?? data['user_name'] ?? data['user']?['display_name'] ?? 'Viewer',
-            'text': data['message'] ?? '',
+            'user': userName,
+            'avatar': userAvatar,
+            'level': userLevel,
+            'text': message,
             'color': const Color(0xFF00E5FF),
           });
         });
@@ -1145,12 +1163,26 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       }
     });
 
-    // 9. Real-Time Host 1-on-1 Private Call Status (.host.private_call)
+    // 9. Real-Time Host 1-on-1 Private Call Status (.host.private_call / LiveHostOnCallEvent)
     _privateCallStatusSub = signaling.onHostPrivateCallStatus.listen((data) {
       if (mounted) {
-        final isPaused = data['is_on_private_call'] == true || data['isPaused'] == true;
+        final isPaused = data['is_on_call'] == true ||
+            data['is_on_private_call'] == true ||
+            data['status'] == 'busy_on_call' ||
+            data['isPaused'] == true;
+        List<String> photos = [];
+        if (data['gallery_photos'] is List) {
+          photos = (data['gallery_photos'] as List).map((e) => e.toString()).toList();
+        }
+        final backSoon = data['back_soon_text']?.toString();
         setState(() {
           _isHostOnPrivateCall = isPaused;
+          if (photos.isNotEmpty) {
+            _hostGalleryPhotos = photos;
+          }
+          if (backSoon != null && backSoon.isNotEmpty) {
+            _hostBackSoonText = backSoon;
+          }
         });
       }
     });
@@ -2766,88 +2798,12 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     );
   }
 
-  /// Host on 1-on-1 Private Call Blurred Cover for Audience (Live Room & Chat remain active!)
+  /// Host on 1-on-1 Private Call Photo Slideshow for Audience (Live Room & Chat remain active!)
   Widget _buildHostOnPrivateCallView() {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // 1. Blurred Avatar Background
-        CachedImageLoader(
-          imageUrl: widget.host.avatarUrl,
-          fit: BoxFit.cover,
-        ),
-        BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            color: Colors.black.withValues(alpha: 0.65),
-          ),
-        ),
-
-        // 2. Center Private Call Status Card
-        Center(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 32),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1435).withValues(alpha: 0.85),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.5), width: 1.2),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF00E5FF).withValues(alpha: 0.2),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Glowing Lock Icon
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF00E5FF), Color(0xFF7C4DFF)],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF00E5FF).withValues(alpha: 0.5),
-                        blurRadius: 14,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.lock_rounded, color: Colors.white, size: 28),
-                ),
-                const SizedBox(height: 14),
-
-                const Text(
-                  'Host is on a private call',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 6),
-
-                const Text(
-                  'The live stream will resume automatically when the call ends.\nLive chat and gifts remain active! 💬🎁',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    height: 1.35,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+    return HostOnCallPhotoCarousel(
+      host: widget.host,
+      dynamicPhotos: _hostGalleryPhotos,
+      customText: _hostBackSoonText ?? "I'll back soon...",
     );
   }
 

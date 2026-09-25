@@ -566,6 +566,19 @@ class SignalingService {
       return;
     }
 
+    // 9b. Live Host On 1-on-1 Call Status (LiveHostOnCallEvent -> host.call_status / host.private_call)
+    if (cleanName == 'LiveHostOnCallEvent' ||
+        cleanName.endsWith('LiveHostOnCallEvent') ||
+        cleanName == 'host.call_status' ||
+        cleanName == 'host.private_call' ||
+        cleanName == 'host.on_call' ||
+        lowerName.contains('hostoncall') ||
+        lowerName.contains('host_call_status') ||
+        lowerName.contains('private_call')) {
+      _hostPrivateCallStatusController.add(data);
+      return;
+    }
+
     if (cleanName == 'LiveStreamEnded' ||
         cleanName == 'live.stream.ended' ||
         cleanName == 'live.ended' ||

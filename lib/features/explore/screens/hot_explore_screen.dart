@@ -33,7 +33,6 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
   String _selectedCountryCode = 'ALL';
   String _selectedCountryName = 'All';
   String _searchQuery = '';
-  bool _isLoading = false;
 
   @override
   bool get wantKeepAlive => true;

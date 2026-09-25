@@ -1191,7 +1191,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (_topGifterName != null && _topGifterName!.isNotEmpty)
+          if (_topGifterName.isNotEmpty)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
