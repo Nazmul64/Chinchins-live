@@ -7,6 +7,7 @@ import '../../../core/models/model_profile.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../../core/services/country_service.dart';
 import '../../profile/screens/edit_profile_media_screen.dart';
+import '../../navigation/screens/main_navigation_screen.dart';
 import '../../me/screens/terms_of_service_screen.dart';
 import '../../me/screens/privacy_policy_screen.dart';
 import '../services/auth_api_service.dart';
@@ -145,12 +146,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (context) => EditProfileMediaScreen(
-            isInitialSetup: true,
-            initialProfile: user != null && user is Map<String, dynamic> ? ModelProfile.fromJson(user) : null,
-          ),
-        ),
+        MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
         (route) => false,
       );
     } else {
