@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart' hide VideoDimensions;
 import 'package:permission_handler/permission_handler.dart';
@@ -25,6 +26,120 @@ import '../widgets/in_call_gift_sheet.dart';
 import '../widgets/gift_animation_overlay.dart';
 import '../widgets/top_gift_alert_banner.dart';
 import '../../../core/services/gifts_api_service.dart';
+
+/// Auto-hiding VS Banner when Co-Host / PK connects (fades out after 2 seconds)
+class CoHostVSBanner extends StatefulWidget {
+  final String hostName;
+  final String guestName;
+  final String? hostAvatar;
+  final String? guestAvatar;
+
+  const CoHostVSBanner({
+    super.key,
+    required this.hostName,
+    required this.guestName,
+    this.hostAvatar,
+    this.guestAvatar,
+  });
+
+  @override
+  State<CoHostVSBanner> createState() => _CoHostVSBannerState();
+}
+
+class _CoHostVSBannerState extends State<CoHostVSBanner> with SingleTickerProviderStateMixin {
+  bool _visible = true;
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _fadeAnimation = CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut);
+    _fadeController.forward();
+
+    // 2 seconds auto-hide
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        _fadeController.reverse().then((_) {
+          if (mounted) setState(() => _visible = false);
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_visible) return const SizedBox.shrink();
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white24, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.6),
+                blurRadius: 10,
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.hostAvatar != null && widget.hostAvatar!.isNotEmpty) ...[
+                CircleAvatar(
+                  radius: 12,
+                  backgroundImage: CachedNetworkImageProvider(widget.hostAvatar!),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                widget.hostName,
+                style: const TextStyle(color: Color(0xFF00C9FF), fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                child: Text(
+                  "VS",
+                  style: TextStyle(
+                    color: Color(0xFFFF1744),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+              Text(
+                widget.guestName,
+                style: const TextStyle(color: Color(0xFFFF5252), fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              if (widget.guestAvatar != null && widget.guestAvatar!.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                CircleAvatar(
+                  radius: 12,
+                  backgroundImage: CachedNetworkImageProvider(widget.guestAvatar!),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class ActiveLiveSession {
   final dynamic liveId;
@@ -335,7 +450,25 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       await [Permission.camera, Permission.microphone].request();
       if (_liveKitRoom != null) {
         try {
-          await _liveKitRoom!.localParticipant?.setCameraEnabled(true);
+          final localVideo = await LocalVideoTrack.createCameraTrack(
+            const CameraCaptureOptions(
+              cameraPosition: CameraPosition.front,
+              params: VideoParameters(
+                dimensions: VideoDimensionsPresets.h720_169, // Minimum 720p HD
+                encoding: VideoEncoding(
+                  maxBitrate: 2500 * 1000, // 2.5 Mbps High-Quality
+                  maxFramerate: 30,
+                ),
+              ),
+            ),
+          );
+          await _liveKitRoom!.localParticipant?.publishVideoTrack(
+            localVideo,
+            publishOptions: const VideoPublishOptions(
+              simulcast: false, // Ensure full quality without network drops
+              videoCodec: 'H264',
+            ),
+          );
           await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(true);
         } catch (e) {
           debugPrint('[LiveRoomScreen] Direct guest publish failed: $e');
@@ -350,7 +483,25 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
           if (tokenRes != null && tokenRes['livekit_token'] != null) {
             await _liveKitRoom!.disconnect();
             await _liveKitRoom!.connect('wss://chinchins.live/livekit', tokenRes['livekit_token']!);
-            await _liveKitRoom!.localParticipant?.setCameraEnabled(true);
+            final guestVideo = await LocalVideoTrack.createCameraTrack(
+              const CameraCaptureOptions(
+                cameraPosition: CameraPosition.front,
+                params: VideoParameters(
+                  dimensions: VideoDimensionsPresets.h720_169,
+                  encoding: VideoEncoding(
+                    maxBitrate: 2500 * 1000,
+                    maxFramerate: 30,
+                  ),
+                ),
+              ),
+            );
+            await _liveKitRoom!.localParticipant?.publishVideoTrack(
+              guestVideo,
+              publishOptions: const VideoPublishOptions(
+                simulcast: false,
+                videoCodec: 'H264',
+              ),
+            );
             await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(true);
           }
         }
@@ -526,18 +677,18 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
           defaultCameraCaptureOptions: CameraCaptureOptions(
             cameraPosition: CameraPosition.front,
             params: VideoParameters(
-              dimensions: VideoDimensionsPresets.h1080_169, // Full HD 1080p 16:9
+              dimensions: VideoDimensionsPresets.h720_169, // Minimum 720p HD 16:9
               encoding: VideoEncoding(
-                maxBitrate: 3500 * 1000, // 3.5 Mbps Crystal Clear Full HD
+                maxBitrate: 2500 * 1000, // 2.5 Mbps High-Quality Full HD
                 maxFramerate: 30,
               ),
             ),
           ),
           defaultVideoPublishOptions: VideoPublishOptions(
-            simulcast: true,
-            videoCodec: 'H264', // Hardware accelerated TikTok/BIGO standard codec
+            simulcast: false, // Ensure full quality without network drops
+            videoCodec: 'H264', // TikTok / BIGO standard hardware codec
             videoEncoding: VideoEncoding(
-              maxBitrate: 3500 * 1000,
+              maxBitrate: 2500 * 1000,
               maxFramerate: 30,
             ),
           ),
@@ -568,7 +719,29 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
       // Host or Co-Host publishes camera and microphone automatically
       if (isHost || _isGuestConnected) {
-        await _liveKitRoom!.localParticipant?.setCameraEnabled(true);
+        try {
+          final localVideo = await LocalVideoTrack.createCameraTrack(
+            const CameraCaptureOptions(
+              cameraPosition: CameraPosition.front,
+              params: VideoParameters(
+                dimensions: VideoDimensionsPresets.h720_169,
+                encoding: VideoEncoding(
+                  maxBitrate: 2500 * 1000,
+                  maxFramerate: 30,
+                ),
+              ),
+            ),
+          );
+          await _liveKitRoom!.localParticipant?.publishVideoTrack(
+            localVideo,
+            publishOptions: const VideoPublishOptions(
+              simulcast: false,
+              videoCodec: 'H264',
+            ),
+          );
+        } catch (_) {
+          await _liveKitRoom!.localParticipant?.setCameraEnabled(true);
+        }
         await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(true);
       }
 
@@ -957,9 +1130,13 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
             _viewerCount = (count is int) ? count : (int.tryParse('$count') ?? _viewerCount);
           }
           if (action == 'joined' && userName != null && userName.isNotEmpty) {
+            final userAvatar = (userObj is Map ? (userObj['avatar_url'] ?? userObj['avatar']) : null)?.toString() ?? '';
+            final userLevel = (userObj is Map ? (userObj['level'] ?? userObj['charm_level']) : null) ?? 1;
             _liveComments.add({
-              'user': 'System',
-              'text': '🌟 $userName joined the live stream',
+              'user': userName,
+              'avatar': userAvatar,
+              'level': userLevel,
+              'text': 'joined the live room',
               'color': const Color(0xFF69F0AE),
             });
             _scrollToBottom();
@@ -1735,9 +1912,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                                         gradient: const LinearGradient(colors: [Color(0xFF7C4DFF), Color(0xFF651FFF)]),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
-                                      child: const Text(
-                                        'Lv.7',
-                                        style: TextStyle(color: Colors.white, fontSize: 7.5, fontWeight: FontWeight.bold),
+                                      child: Text(
+                                        'Lv.${widget.host.level > 0 ? widget.host.level : 1}',
+                                        style: const TextStyle(color: Colors.white, fontSize: 7.5, fontWeight: FontWeight.bold),
                                       ),
                                     ),
                                     const SizedBox(width: 2),
@@ -2045,7 +2222,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // User Level Badge matching Screenshot 3
+                    // User Level Badge from Database
                     Container(
                       margin: const EdgeInsets.only(right: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.6),
@@ -2053,9 +2230,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                         gradient: const LinearGradient(colors: [Color(0xFF7C4DFF), Color(0xFF651FFF)]),
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: const Text(
-                        'Lv.3',
-                        style: TextStyle(color: Colors.white, fontSize: 7.5, fontWeight: FontWeight.bold),
+                      child: Text(
+                        'Lv.${c['level'] ?? c['userLevel'] ?? 1}',
+                        style: const TextStyle(color: Colors.white, fontSize: 7.5, fontWeight: FontWeight.bold),
                       ),
                     ),
                     Text(
@@ -2163,43 +2340,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     );
   }
 
-  /// Bottom Floating Action Bar matching Screenshot 2
-  /// Floating Quick Comment Chips above Bottom Bar (matching Screenshot 1)
-  Widget _buildQuickCommentChips() {
-    final chips = ['supporting you', '✨ Keep shining!', 'So beautiful', 'Like ❤️'];
-    return Positioned(
-      bottom: 66,
-      left: 12,
-      right: 12,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: Row(
-          children: chips.map((text) {
-            return GestureDetector(
-              onTap: () {
-                _commentController.text = text;
-                _sendComment();
-              },
-              child: Container(
-                margin: const EdgeInsets.only(right: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white24, width: 0.8),
-                ),
-                child: Text(
-                  text,
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
+  // Quick comment chips removed per clean UI requirement
+  Widget _buildQuickCommentChips() => const SizedBox.shrink();
 
   void _showCommentInputDialog() {
     showModalBottomSheet(
@@ -2493,33 +2635,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                     ],
                   ),
 
-                  // Center Glowing PK VS Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFF007F), Color(0xFFFF6F00)],
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white, width: 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFFF007F).withValues(alpha: 0.7),
-                          blurRadius: 12,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                    child: const Text(
-                      'PK VS',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 13,
-                        letterSpacing: 1.0,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
+                  // Auto-hiding VS Banner (fades out after 2 seconds)
+                  CoHostVSBanner(
+                    hostName: widget.host.name,
+                    guestName: 'Guest',
+                    hostAvatar: widget.host.avatarUrl,
                   ),
                 ],
               ),

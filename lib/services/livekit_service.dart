@@ -46,18 +46,18 @@ class LiveKitService {
         defaultCameraCaptureOptions: CameraCaptureOptions(
           cameraPosition: CameraPosition.front,
           params: VideoParameters(
-            dimensions: VideoDimensionsPresets.h1080_169, // Full HD 1080p
+            dimensions: VideoDimensionsPresets.h720_169, // Minimum 720p HD 16:9
             encoding: VideoEncoding(
-              maxBitrate: 3500 * 1000, // 3.5 Mbps Full HD
+              maxBitrate: 2500 * 1000, // 2.5 Mbps High-Quality Full HD
               maxFramerate: 30,
             ),
           ),
         ),
         defaultVideoPublishOptions: VideoPublishOptions(
-          simulcast: true,
-          videoCodec: 'H264',
+          simulcast: false, // Ensure full quality without network drops
+          videoCodec: 'H264', // TikTok / BIGO standard hardware codec
           videoEncoding: VideoEncoding(
-            maxBitrate: 3500 * 1000,
+            maxBitrate: 2500 * 1000,
             maxFramerate: 30,
           ),
         ),
