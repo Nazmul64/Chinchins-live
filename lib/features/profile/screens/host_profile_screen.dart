@@ -180,73 +180,29 @@ class _HostProfileScreenState extends State<HostProfileScreen>
       return;
     }
 
-    // Secondary check against fresh savedUser:
-    final int userCoins = (savedUser?['coins'] is num)
-        ? (savedUser!['coins'] as num).toInt()
-        : (int.tryParse('${savedUser?['coins']}') ?? cachedCoins);
+    // ⚡ 0.00ms INSTANT CALL SCREEN LAUNCH (Zero-Loader Rule)
+    final int optimisticCallId = (DateTime.now().millisecondsSinceEpoch ~/ 1000) % 10000000;
+    final String channelName = 'call_${_currentModel.id}_$optimisticCallId';
 
-    if (userCoins < ratePerMin) {
-      _showRechargeSheet();
-      return;
-    }
+    StreamingService.startDynamicCall(
+      context: context,
+      model: _currentModel,
+      callId: optimisticCallId,
+      channelName: channelName,
+      isFreeTrial: false,
+      freeDurationSeconds: 16,
+      ratePerMinute: ratePerMin,
+      isIncoming: false,
+    );
 
-    CallSoundManager.playOutgoingRingtone();
-
-    try {
-      final res = await CallApiService.initiateCall(
-        receiverId: _currentModel.id,
-        receiverAccountId: _currentModel.accountId,
-        callType: 'video',
-      );
-
-      if (!mounted) return;
-
-      if (res['success'] == true) {
-        final int? callId = res['call_id'] is int
-            ? res['call_id'] as int
-            : int.tryParse(res['call_id']?.toString() ?? '');
-        final channelName = res['channel_name']?.toString() ?? 'call_${_currentModel.id}';
-        final isFreeTrial = res['is_free_trial'] == true;
-        final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
-        final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (_currentModel.pricePerMin > 0 ? _currentModel.pricePerMin : 100);
-
-        StreamingService.startDynamicCall(
-          context: context,
-          model: _currentModel,
-          callId: callId,
-          channelName: channelName,
-          isFreeTrial: isFreeTrial,
-          freeDurationSeconds: freeSecs,
-          ratePerMinute: ratePerMin,
-          dialToneUrl: res['dial_tone_url']?.toString(),
-          initialSessionData: res,
-        );
-      } else if (res['is_low_balance'] == true ||
-                 res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
-                 res['code'] == 'INSUFFICIENT_BALANCE' ||
-                 res['show_recharge_modal'] == true) {
-        CallSoundManager.stopRingtone();
-        _showRechargeSheet(modalData: res['recharge_modal_data'] as Map<String, dynamic>?);
-      } else {
-        CallSoundManager.stopRingtone();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(res['message'] ?? 'Could not initiate call.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    } catch (e) {
-      CallSoundManager.stopRingtone();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Call error: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    }
+    // Concurrently trigger backend notification, FCM VoIP push & socket event
+    CallApiService.initiateCall(
+      receiverId: _currentModel.id,
+      receiverAccountId: _currentModel.accountId,
+      callType: 'video',
+    ).then((res) {
+      // Backend signaled in background
+    }).catchError((_) {});
   }
 
   Future<void> _startAudioCall() async {
@@ -275,74 +231,30 @@ class _HostProfileScreenState extends State<HostProfileScreen>
       return;
     }
 
-    // Secondary check against fresh savedUser:
-    final int userCoins = (savedUser?['coins'] is num)
-        ? (savedUser!['coins'] as num).toInt()
-        : (int.tryParse('${savedUser?['coins']}') ?? cachedCoins);
+    // ⚡ 0.00ms INSTANT CALL SCREEN LAUNCH (Zero-Loader Rule)
+    final int optimisticCallId = (DateTime.now().millisecondsSinceEpoch ~/ 1000) % 10000000;
+    final String channelName = 'audio_call_${_currentModel.id}_$optimisticCallId';
 
-    if (userCoins < ratePerMin) {
-      _showRechargeSheet();
-      return;
-    }
+    StreamingService.startDynamicCall(
+      context: context,
+      model: _currentModel,
+      callId: optimisticCallId,
+      channelName: channelName,
+      callType: 'audio',
+      isFreeTrial: false,
+      freeDurationSeconds: 16,
+      ratePerMinute: ratePerMin,
+      isIncoming: false,
+    );
 
-    CallSoundManager.playOutgoingRingtone();
-
-    try {
-      final res = await CallApiService.initiateCall(
-        receiverId: _currentModel.id,
-        receiverAccountId: _currentModel.accountId,
-        callType: 'audio',
-      );
-
-      if (!mounted) return;
-
-      if (res['success'] == true) {
-        final int? callId = res['call_id'] is int
-            ? res['call_id'] as int
-            : int.tryParse(res['call_id']?.toString() ?? '');
-        final channelName = res['channel_name']?.toString() ?? 'audio_call_${_currentModel.id}';
-        final isFreeTrial = res['is_free_trial'] == true;
-        final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
-        final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : (_currentModel.pricePerMin > 0 ? _currentModel.pricePerMin : 100);
-
-        StreamingService.startDynamicCall(
-          context: context,
-          model: _currentModel,
-          callId: callId,
-          channelName: channelName,
-          callType: 'audio',
-          isFreeTrial: isFreeTrial,
-          freeDurationSeconds: freeSecs,
-          ratePerMinute: ratePerMin,
-          dialToneUrl: res['dial_tone_url']?.toString(),
-          initialSessionData: res,
-        );
-      } else if (res['is_low_balance'] == true ||
-                 res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
-                 res['code'] == 'INSUFFICIENT_BALANCE' ||
-                 res['show_recharge_modal'] == true) {
-        CallSoundManager.stopRingtone();
-        _showRechargeSheet(modalData: res['recharge_modal_data'] as Map<String, dynamic>?);
-      } else {
-        CallSoundManager.stopRingtone();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(res['message'] ?? 'Could not initiate call.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    } catch (e) {
-      CallSoundManager.stopRingtone();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Call error: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    }
+    // Concurrently trigger backend notification, FCM VoIP push & socket event
+    CallApiService.initiateCall(
+      receiverId: _currentModel.id,
+      receiverAccountId: _currentModel.accountId,
+      callType: 'audio',
+    ).then((res) {
+      // Backend signaled in background
+    }).catchError((_) {});
   }
 
   void _showRechargeSheet({Map<String, dynamic>? modalData}) {

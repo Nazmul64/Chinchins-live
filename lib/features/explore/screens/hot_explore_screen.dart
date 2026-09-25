@@ -265,10 +265,9 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
 
   Future<void> _startVideoCall(ModelProfile model) async {
     final int cachedCoins = WalletApiService.getCachedCoins();
-    final int ratePerMin = model.pricePerMin > 0 ? model.pricePerMin : 1800;
+    final int ratePerMin = model.pricePerMin > 0 ? model.pricePerMin : 100;
 
     // ⚡ ZERO-DELAY INSTANT SYNCHRONOUS CHECK (<0.001s):
-    // If cached coins are insufficient, open recharge sheet IMMEDIATELY with zero delay!
     if (cachedCoins < ratePerMin) {
       RechargeGemsSheet.show(
         context,
@@ -299,97 +298,29 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
       return;
     }
 
-    // Secondary balance check against fresh savedUser:
-    final int userCoins = (savedUser?['coins'] is num)
-        ? (savedUser!['coins'] as num).toInt()
-        : (int.tryParse('${savedUser?['coins']}') ?? cachedCoins);
+    // ⚡ 0.00ms INSTANT CALL SCREEN LAUNCH (Zero-Loader Rule)
+    final int optimisticCallId = (DateTime.now().millisecondsSinceEpoch ~/ 1000) % 10000000;
+    final String channelName = 'call_${model.id}_$optimisticCallId';
 
-    if (userCoins < ratePerMin) {
-      RechargeGemsSheet.show(
-        context,
-        model: model,
-        receiverId: model.id,
-        receiverName: model.name,
-        receiverAvatarUrl: model.avatarUrl,
-        onRechargeSuccess: () {
-          _startVideoCall(model);
-        },
-      );
-      return;
-    }
+    StreamingService.startDynamicCall(
+      context: context,
+      model: model,
+      callId: optimisticCallId,
+      channelName: channelName,
+      isFreeTrial: false,
+      freeDurationSeconds: 16,
+      ratePerMinute: ratePerMin,
+      isIncoming: false,
+    );
 
-    try {
-      final initiateRes = await CallApiService.initiateCall(
-        receiverId: model.id,
-        receiverAccountId: model.accountId,
-        callType: 'video',
-      );
-
-      if (!mounted) return;
-
-      if (initiateRes['success'] == true) {
-        final dynamic rawCallId = initiateRes['call_id'] ?? initiateRes['id'];
-        final int? callId = rawCallId is int
-            ? rawCallId
-            : int.tryParse(rawCallId?.toString() ?? '');
-        final channelName = initiateRes['channel_name']?.toString() ?? 'explore_call_${model.id}';
-        final isFreeTrial = initiateRes['is_free_trial'] == true;
-        final freeSecs = (initiateRes['free_duration_seconds'] is int)
-            ? initiateRes['free_duration_seconds'] as int
-            : 10;
-        final ratePerMin = (initiateRes['rate_per_minute'] is int)
-            ? initiateRes['rate_per_minute'] as int
-            : (model.pricePerMin > 0 ? model.pricePerMin : 100);
-
-        StreamingService.startDynamicCall(
-          context: context,
-          model: model,
-          callId: callId,
-          channelName: channelName,
-          isFreeTrial: isFreeTrial,
-          freeDurationSeconds: freeSecs,
-          ratePerMinute: ratePerMin,
-          isIncoming: false,
-          dialToneUrl: initiateRes['dial_tone_url']?.toString(),
-          initialSessionData: initiateRes,
-        );
-      } else if (initiateRes['is_low_balance'] == true ||
-                 initiateRes['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
-                 initiateRes['code'] == 'INSUFFICIENT_BALANCE' ||
-                 initiateRes['show_recharge_modal'] == true ||
-                 (initiateRes['message']?.toString().toLowerCase().contains('insufficient') ?? false) ||
-                 (initiateRes['message']?.toString().toLowerCase().contains('recharge') ?? false) ||
-                 (initiateRes['message']?.toString().toLowerCase().contains('coin') ?? false) ||
-                 (initiateRes['message']?.toString().toLowerCase().contains('balance') ?? false)) {
-        RechargeGemsSheet.show(
-          context,
-          model: model,
-          receiverId: model.id,
-          receiverName: model.name,
-          receiverAvatarUrl: model.avatarUrl,
-          modalData: initiateRes['recharge_modal_data'] as Map<String, dynamic>?,
-          onRechargeSuccess: () {
-            _startVideoCall(model);
-          },
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(initiateRes['message']?.toString() ?? 'Could not initiate call'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Call connection error: $e'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    }
+    // Concurrently trigger backend notification, FCM VoIP push & socket event
+    CallApiService.initiateCall(
+      receiverId: model.id,
+      receiverAccountId: model.accountId,
+      callType: 'video',
+    ).then((initiateRes) {
+      // Backend signaled in background
+    }).catchError((_) {});
   }
 
   @override
@@ -472,23 +403,69 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            SizedBox(height: MediaQuery.of(context).size.height * 0.25),
-            const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.wifi_tethering_off_rounded, color: AppColors.textMuted, size: 54),
-                  SizedBox(height: 14),
-                  Text(
-                    'No Streamers Found',
-                    style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 6),
-                  Text(
-                    'Pull down to refresh or check back soon',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                  ),
-                ],
+            SizedBox(height: MediaQuery.of(context).size.height * 0.22),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 90,
+                      height: 90,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.05),
+                        border: Border.all(color: Colors.white12, width: 1.5),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          '🙈',
+                          style: TextStyle(fontSize: 44),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      "Oops!! we couldn't find more",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'All streamers are currently busy or offline.\nPull down or tap below to refresh!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.neonPink,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        elevation: 4,
+                      ),
+                      onPressed: _loadHomeFeed,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text(
+                        'Refresh Feed',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

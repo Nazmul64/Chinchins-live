@@ -189,27 +189,23 @@ class _LiveFeedViewState extends State<LiveFeedView>
           child: RefreshIndicator(
             color: AppColors.neonPink,
             onRefresh: _handleRefresh,
-            child: _isLoadingStreams && _activeStreams.isEmpty
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.neonPink),
-                  )
-                : _activeStreams.isEmpty
-                    ? _buildEmptyStreamsView()
-                    : GridView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 0.72,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                        ),
-                        itemCount: _activeStreams.length,
-                        itemBuilder: (context, index) {
-                          final stream = _activeStreams[index];
-                          return _buildLiveStreamCard(context, stream, index);
-                        },
-                      ),
+            child: _activeStreams.isEmpty
+                ? _buildEmptyStreamsView()
+                : GridView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.72,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                    ),
+                    itemCount: _activeStreams.length,
+                    itemBuilder: (context, index) {
+                      final stream = _activeStreams[index];
+                      return _buildLiveStreamCard(context, stream, index);
+                    },
+                  ),
           ),
         ),
       ],

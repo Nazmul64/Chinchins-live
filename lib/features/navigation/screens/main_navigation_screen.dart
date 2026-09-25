@@ -131,27 +131,80 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _handleIncomingCallData(Map<String, dynamic> incoming) {
-    final dynamic rawCallId = incoming['call_id'] ?? incoming['id'];
-    final int? callId = rawCallId is int
-        ? rawCallId
-        : int.tryParse(rawCallId?.toString() ?? '0');
+    final payload = incoming['data'] is Map ? Map<String, dynamic>.from(incoming['data']) : incoming;
+    final dynamic rawCallId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? payload['call_session_id'] ?? incoming['call_id'] ?? incoming['id'];
+    
+    int callId = 0;
+    if (rawCallId is int && rawCallId > 0) {
+      callId = rawCallId;
+    } else if (rawCallId != null) {
+      final digits = rawCallId.toString().replaceAll(RegExp(r'[^0-9]'), '');
+      if (digits.isNotEmpty) {
+        callId = int.tryParse(digits.length > 9 ? digits.substring(0, 9) : digits) ?? 0;
+      }
+      if (callId == 0) {
+        callId = rawCallId.toString().hashCode.abs();
+      }
+    }
+    if (callId == 0) {
+      callId = (DateTime.now().millisecondsSinceEpoch ~/ 1000) % 10000000;
+    }
 
-    if (callId != null && callId > 0 && callId != _activeIncomingCallId) {
+    if (callId != _activeIncomingCallId) {
       _activeIncomingCallId = callId;
-      final rawCaller = (incoming['caller'] is Map ? incoming['caller'] : null) ??
+      final rawCaller = (payload['caller'] is Map ? payload['caller'] : null) ??
+          (payload['sender'] is Map ? payload['sender'] : null) ??
+          (payload['user'] is Map ? payload['user'] : null) ??
+          (payload['from_user'] is Map ? payload['from_user'] : null) ??
+          (incoming['caller'] is Map ? incoming['caller'] : null) ??
           (incoming['sender'] is Map ? incoming['sender'] : null) ??
           (incoming['user'] is Map ? incoming['user'] : null) ??
           {};
       final caller = Map<String, dynamic>.from(rawCaller);
+      
+      final callerId = caller['id']?.toString() ??
+          caller['user_id']?.toString() ??
+          caller['account_id']?.toString() ??
+          payload['caller_id']?.toString() ??
+          payload['from_user_id']?.toString() ??
+          '1';
+      final callerAccountId = caller['account_id']?.toString() ?? callerId;
+      final callerName = caller['name'] ??
+          caller['display_name'] ??
+          caller['username'] ??
+          payload['caller_name'] ??
+          payload['user_name'] ??
+          'Chinchins User';
+      final callerAvatar = caller['avatar'] ??
+          caller['avatar_url'] ??
+          caller['profile_photo'] ??
+          payload['caller_avatar'] ??
+          'https://images.unsplash.com/photo-1534528741775-53994a69daeb';
+
       final model = ModelProfile.fromJson({
-        'id': caller['id']?.toString() ?? caller['user_id']?.toString() ?? caller['account_id']?.toString() ?? '1',
-        'account_id': caller['account_id']?.toString() ?? caller['id']?.toString() ?? '1',
-        'name': caller['name'] ?? caller['display_name'] ?? caller['username'] ?? 'Chinchins User',
-        'avatar': caller['avatar'] ?? caller['avatar_url'] ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb',
+        'id': callerId,
+        'account_id': callerAccountId,
+        'name': callerName,
+        'avatar': callerAvatar,
         'age': caller['age'] ?? 22,
         'country': caller['country'] ?? 'Bangladesh',
-        'video_call_rate': incoming['rate_per_minute'] ?? 100,
+        'video_call_rate': payload['rate_per_minute'] ?? incoming['rate_per_minute'] ?? 100,
       });
+
+      final channelName = (payload['channel_name'] ??
+              payload['room_name'] ??
+              payload['call_channel'] ??
+              payload['call_session_id'] ??
+              incoming['channel_name'] ??
+              'call_$callId')
+          .toString();
+
+      final ringtoneUrl = (payload['incoming_ringtone_url'] ??
+              payload['ringtone_url'] ??
+              payload['ringtone'] ??
+              incoming['incoming_ringtone_url'] ??
+              incoming['ringtone_url'])
+          ?.toString();
 
       final navState = ChinchinsLiveApp.navigatorKey.currentState ?? Navigator.of(context);
       navState.push(
@@ -159,11 +212,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           builder: (context) => IncomingCallScreen(
             model: model,
             callId: callId,
-            channelName: incoming['channel_name']?.toString(),
-            isFreeTrial: incoming['is_free_trial'] == true,
-            freeDurationSeconds: incoming['free_duration_seconds'] ?? 10,
-            ratePerMinute: incoming['rate_per_minute'] ?? 100,
-            ringtoneUrl: (incoming['incoming_ringtone_url'] ?? incoming['ringtone_url'])?.toString(),
+            channelName: channelName,
+            isFreeTrial: payload['is_free_trial'] == true || incoming['is_free_trial'] == true,
+            freeDurationSeconds: payload['free_duration_seconds'] ?? incoming['free_duration_seconds'] ?? 10,
+            ratePerMinute: payload['rate_per_minute'] ?? incoming['rate_per_minute'] ?? 100,
+            ringtoneUrl: ringtoneUrl,
           ),
         ),
       ).then((_) {

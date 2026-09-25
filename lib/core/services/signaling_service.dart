@@ -223,6 +223,12 @@ class SignalingService {
       await _subscribeToChannel('private-chat.$uIdStr', isPrivate: true);
       await _subscribeToChannel('private-user.$uIdStr', isPrivate: true);
       await _subscribeToChannel('user.$uIdStr', isPrivate: false);
+      await _subscribeToChannel('calls.$uIdStr', isPrivate: false);
+      await _subscribeToChannel('private-calls.$uIdStr', isPrivate: true);
+      await _subscribeToChannel('call.$uIdStr', isPrivate: false);
+      await _subscribeToChannel('private-call.$uIdStr', isPrivate: true);
+      await _subscribeToChannel('user-calls.$uIdStr', isPrivate: false);
+      await _subscribeToChannel('private-user-calls.$uIdStr', isPrivate: true);
     }
 
     if (accountId != null) {
@@ -234,6 +240,12 @@ class SignalingService {
         await _subscribeToChannel('private-chat.$accIdStr', isPrivate: true);
         await _subscribeToChannel('private-user.$accIdStr', isPrivate: true);
         await _subscribeToChannel('user.$accIdStr', isPrivate: false);
+        await _subscribeToChannel('calls.$accIdStr', isPrivate: false);
+        await _subscribeToChannel('private-calls.$accIdStr', isPrivate: true);
+        await _subscribeToChannel('call.$accIdStr', isPrivate: false);
+        await _subscribeToChannel('private-call.$accIdStr', isPrivate: true);
+        await _subscribeToChannel('user-calls.$accIdStr', isPrivate: false);
+        await _subscribeToChannel('private-user-calls.$accIdStr', isPrivate: true);
       }
     }
   }
@@ -542,11 +554,22 @@ class SignalingService {
         cleanName == 'incoming_call' ||
         cleanName == 'call.initiated' ||
         cleanName == 'CallInitiated' ||
+        cleanName == 'call_invitation' ||
+        cleanName == 'CallInvitation' ||
+        cleanName == 'private_call.incoming' ||
+        cleanName == 'private_call.initiated' ||
         cleanName.endsWith('IncomingCallEvent') ||
         cleanName.endsWith('CallIncomingEvent') ||
         cleanName.endsWith('CallInitiatedEvent') ||
+        cleanName.endsWith('CallInvitationEvent') ||
+        cleanName.endsWith('PrivateCallIncomingEvent') ||
         lowerName.contains('incoming') ||
-        (data.containsKey('caller') && (data.containsKey('call_id') || data.containsKey('channel_name')))) {
+        lowerName.contains('call_initiated') ||
+        lowerName.contains('callinitiated') ||
+        lowerName.contains('call_invite') ||
+        lowerName.contains('callinvite') ||
+        ((data.containsKey('caller') || data.containsKey('sender') || data.containsKey('caller_id') || data.containsKey('caller_name')) &&
+            (data.containsKey('call_id') || data.containsKey('channel_name') || data.containsKey('call_session_id')))) {
       _incomingCallController.add(data);
       return;
     }
