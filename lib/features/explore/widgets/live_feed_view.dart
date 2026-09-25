@@ -22,14 +22,18 @@ class LiveFeedView extends StatefulWidget {
 }
 
 class _LiveFeedViewState extends State<LiveFeedView>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   List<Map<String, dynamic>> _activeStreams = [];
-  bool _isLoadingStreams = true;
+  bool _isLoadingStreams = false;
   late AnimationController _equalizerController;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    _isLoadingStreams = _activeStreams.isEmpty;
     _equalizerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -44,7 +48,9 @@ class _LiveFeedViewState extends State<LiveFeedView>
   }
 
   Future<void> _loadActiveStreams() async {
-    setState(() => _isLoadingStreams = true);
+    if (_activeStreams.isEmpty) {
+      setState(() => _isLoadingStreams = true);
+    }
     try {
       final streams = await LiveStreamingApiService.getActiveLiveStreams();
       if (mounted) {
@@ -56,7 +62,6 @@ class _LiveFeedViewState extends State<LiveFeedView>
     } catch (_) {
       if (mounted) {
         setState(() {
-          _activeStreams = [];
           _isLoadingStreams = false;
         });
       }
@@ -102,6 +107,7 @@ class _LiveFeedViewState extends State<LiveFeedView>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Column(
       children: [
         // Sub-bar with grid layout switch and Go Live button

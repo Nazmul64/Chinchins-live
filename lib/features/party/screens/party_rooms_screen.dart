@@ -15,11 +15,15 @@ class PartyRoomsScreen extends StatefulWidget {
   State<PartyRoomsScreen> createState() => _PartyRoomsScreenState();
 }
 
-class _PartyRoomsScreenState extends State<PartyRoomsScreen> with SingleTickerProviderStateMixin {
+class _PartyRoomsScreenState extends State<PartyRoomsScreen>
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   List<GroupPartyRoom> _rooms = [];
   bool _isLoading = false;
   bool _showMiniPlayer = true;
   late AnimationController _equalizerController;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -97,6 +101,7 @@ class _PartyRoomsScreenState extends State<PartyRoomsScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
       body: Stack(

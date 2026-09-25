@@ -19,7 +19,7 @@ class MatchTabView extends StatefulWidget {
   State<MatchTabView> createState() => _MatchTabViewState();
 }
 
-class _MatchTabViewState extends State<MatchTabView> {
+class _MatchTabViewState extends State<MatchTabView> with AutomaticKeepAliveClientMixin {
   // Pool of all available online users
   List<ModelProfile> _pool = [];
 
@@ -35,6 +35,9 @@ class _MatchTabViewState extends State<MatchTabView> {
   int _poolCursor = 0;
   int _waitingCount = 5383;
   final Random _random = Random();
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -198,6 +201,7 @@ class _MatchTabViewState extends State<MatchTabView> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     if (_displayedSlots.length < 8) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.neonPink),

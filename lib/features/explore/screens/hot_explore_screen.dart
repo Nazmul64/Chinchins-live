@@ -26,7 +26,7 @@ class HotExploreScreen extends StatefulWidget {
   State<HotExploreScreen> createState() => _HotExploreScreenState();
 }
 
-class _HotExploreScreenState extends State<HotExploreScreen> {
+class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepAliveClientMixin {
   static List<ModelProfile> _cachedHomeFeed = [];
   int _selectedTabIndex = 0;
   List<ModelProfile> _models = [];
@@ -34,6 +34,9 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
   String _selectedCountryName = 'All';
   String _searchQuery = '';
   bool _isLoading = false;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -137,7 +140,6 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
       setState(() {
         _selectedTabIndex = index;
       });
-      _loadHomeFeed();
     }
   }
 
@@ -399,6 +401,7 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
       body: SafeArea(
@@ -418,7 +421,7 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
                   selectedCountryCode: _selectedCountryCode,
                 ),
 
-                // User Cards 2-Column Grid, Match Tab View, OR Live Broadcast Tab View
+                // User Cards 2-Column Grid, Live, Party, or Match Tab Views in IndexedStack (0ms switch)
                 Expanded(
                   child: _buildCurrentTabBody(),
                 ),
@@ -437,31 +440,37 @@ class _HotExploreScreenState extends State<HotExploreScreen> {
   }
 
   Widget _buildCurrentTabBody() {
-    if (_selectedTabIndex == 1) {
-      return LiveFeedView(
-        models: _models,
-        onRefresh: _loadHomeFeed,
-      );
-    }
+    return IndexedStack(
+      index: _selectedTabIndex,
+      children: [
+        // Tab 0: Hot Explore Grid Feed
+        _buildHotGridView(),
 
-    if (_selectedTabIndex == 2) {
-      return const PartyRoomsScreen();
-    }
+        // Tab 1: Live Stream Feed
+        LiveFeedView(
+          models: _models,
+          onRefresh: _loadHomeFeed,
+        ),
 
-    if (_selectedTabIndex == 3) {
-      return MatchTabView(
-        onStartMatching: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const RandomMatchScreen(),
-            ),
-          );
-        },
-      );
-    }
+        // Tab 2: Party Rooms Screen
+        const PartyRoomsScreen(),
 
-    // Tab 0: Hot Explore Grid Feed
+        // Tab 3: Match Tab View
+        MatchTabView(
+          onStartMatching: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const RandomMatchScreen(),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHotGridView() {
     if (_isLoading && _models.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.neonPink),
