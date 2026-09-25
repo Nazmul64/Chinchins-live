@@ -55,8 +55,8 @@ class ApiConstants {
   static String get profileBases => '$baseUrl/profile-bases';
   static String get levels => '$baseUrl/profile-bases';
   static String get levelStatus => '$baseUrl/user/level-status';
-  static String levelStatusForUser(dynamic id) => '$baseUrl/user/level-status?user_id=$id';
-
+  static String get customerProfileIcons => '$baseUrl/customer-profile-icons';
+  static String get customerProfileIconsAlias => '$baseUrl/customer-profile/icons';
   // Wallet, Payment, Deposit & Withdrawal endpoints
   static String get walletBalance => '$baseUrl/wallet/balance';
   static String get paymentMethods => '$baseUrl/payment-methods';

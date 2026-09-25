@@ -9,6 +9,7 @@ import '../../../core/data/mock_data.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/services/local_image_cache.dart';
+import '../../../core/services/customer_profile_icon_service.dart';
 import '../../../core/services/app_update_service.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../../auth/widgets/logout_confirmation_dialog.dart';
@@ -58,6 +59,9 @@ class _MeScreenState extends State<MeScreen> {
     LocalImageCache.init();
     _loadUserProfile();
     _loadKycStatus();
+    CustomerProfileIconService.syncIconsBackground().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _loadKycStatus() async {
@@ -722,7 +726,11 @@ class _MeScreenState extends State<MeScreen> {
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              const Text('💎', style: TextStyle(fontSize: 26)),
+                              _buildProfileItemIcon(
+                                'my_gems',
+                                size: 32,
+                                fallbackWidget: const Text('💎', style: TextStyle(fontSize: 26)),
+                              ),
                             ],
                           ),
                         ),
@@ -776,7 +784,11 @@ class _MeScreenState extends State<MeScreen> {
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              const Text('🥚', style: TextStyle(fontSize: 26)),
+                              _buildProfileItemIcon(
+                                'beans_center',
+                                size: 32,
+                                fallbackWidget: const Text('🥚', style: TextStyle(fontSize: 26)),
+                              ),
                             ],
                           ),
                         ),
@@ -803,7 +815,11 @@ class _MeScreenState extends State<MeScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Text('💳', style: TextStyle(fontSize: 24)),
+                        _buildProfileItemIcon(
+                          'spend_less_card',
+                          size: 32,
+                          fallbackWidget: const Text('💳', style: TextStyle(fontSize: 24)),
+                        ),
                         const SizedBox(width: 12),
                         const Expanded(
                           child: Column(
@@ -863,15 +879,15 @@ class _MeScreenState extends State<MeScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildGridMenuItem(Icons.military_tech_rounded, 'SVIP', const Color(0xFFFFB300), onTap: () => _openSvipScreen(1)),
-                          _buildGridMenuItem(Icons.shopping_bag_rounded, 'My Bag', const Color(0xFFE0E0E0), onTap: () {
+                          _buildGridMenuItem('svip', 'SVIP', const Color(0xFFFFB300), Icons.military_tech_rounded, onTap: () => _openSvipScreen(1)),
+                          _buildGridMenuItem('my_bag', 'My Bag', const Color(0xFFE0E0E0), Icons.shopping_bag_rounded, onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(builder: (context) => const MyBagScreen()),
                             ).then((_) => _loadUserProfile());
                           }),
-                          _buildGridMenuItem(Icons.diamond_rounded, 'Gems Center', const Color(0xFFFFD54F), onTap: () => _openWalletScreen(initialTabIndex: 0)),
-                          _buildGridMenuItem(Icons.account_balance_wallet_rounded, 'Payment\ndetails', const Color(0xFF90CAF9), onTap: () => _openWalletScreen(initialTabIndex: 1)),
+                          _buildGridMenuItem('gems_center', 'Gems Center', const Color(0xFFFFD54F), Icons.diamond_rounded, onTap: () => _openWalletScreen(initialTabIndex: 0)),
+                          _buildGridMenuItem('payment_details', 'Payment\ndetails', const Color(0xFF90CAF9), Icons.account_balance_wallet_rounded, onTap: () => _openWalletScreen(initialTabIndex: 1)),
                         ],
                       ),
                       const SizedBox(height: 20),
@@ -880,7 +896,7 @@ class _MeScreenState extends State<MeScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.start,
                         children: [
-                          Expanded(child: _buildGridMenuItem(Icons.workspace_premium_rounded, 'My Level', const Color(0xFFFFB300), onTap: () {
+                          Expanded(child: _buildGridMenuItem('my_level', 'My Level', const Color(0xFFFFB300), Icons.workspace_premium_rounded, onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -891,8 +907,8 @@ class _MeScreenState extends State<MeScreen> {
                               ),
                             );
                           })),
-                          Expanded(child: _buildGridMenuItem(Icons.card_giftcard_rounded, 'Sign-In', const Color(0xFFFFD54F), onTap: () => _openMonthlyCardScreen(0))),
-                          Expanded(child: _buildGridMenuItem(Icons.calendar_today_rounded, 'Reward', const Color(0xFF4DD0E1), onTap: () => _openMonthlyCardScreen(0))),
+                          Expanded(child: _buildGridMenuItem('sign_in', 'Sign-In', const Color(0xFFFFD54F), Icons.card_giftcard_rounded, onTap: () => _openMonthlyCardScreen(0))),
+                          Expanded(child: _buildGridMenuItem('reward', 'Reward', const Color(0xFF4DD0E1), Icons.calendar_today_rounded, onTap: () => _openMonthlyCardScreen(0))),
                           const Expanded(child: SizedBox()), // 4th empty column for balance
                         ],
                       ),
@@ -1201,7 +1217,21 @@ class _MeScreenState extends State<MeScreen> {
     );
   }
 
-  Widget _buildGridMenuItem(IconData icon, String label, Color iconColor, {VoidCallback? onTap}) {
+  Widget _buildProfileItemIcon(String key, {double size = 28, Widget? fallbackWidget}) {
+    final iconUrl = CustomerProfileIconService.getIconUrl(key);
+    if (iconUrl.isNotEmpty) {
+      return CachedImageLoader(
+        imageUrl: iconUrl,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+      );
+    }
+    return fallbackWidget ?? const SizedBox.shrink();
+  }
+
+  Widget _buildGridMenuItem(String key, String label, Color iconColor, IconData defaultIcon, {VoidCallback? onTap}) {
+    final iconUrl = CustomerProfileIconService.getIconUrl(key);
     return GestureDetector(
       onTap: onTap ?? () {},
       child: SizedBox(
@@ -1215,7 +1245,16 @@ class _MeScreenState extends State<MeScreen> {
                 color: iconColor.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: iconColor, size: 24),
+              child: Center(
+                child: iconUrl.isNotEmpty
+                    ? CachedImageLoader(
+                        imageUrl: iconUrl,
+                        width: 28,
+                        height: 28,
+                        fit: BoxFit.contain,
+                      )
+                    : Icon(defaultIcon, color: iconColor, size: 24),
+              ),
             ),
             const SizedBox(height: 6),
             Text(

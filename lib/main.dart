@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core/services/app_cache_service.dart';
+import 'core/services/customer_profile_icon_service.dart';
 import 'core/services/fast_api_client.dart';
 import 'core/services/local_vault.dart';
 import 'core/services/screen_protection_service.dart';
@@ -15,9 +16,11 @@ void main() async {
   // ⚡ Initialize L1/L2 Local Fast Storage & Disk Caches
   await FastApiClient.init();
   await LocalVault.init();
+  await CustomerProfileIconService.init();
 
   // ⚡ Fast In-Memory Static Data Pre-fetching (Non-blocking)
   AppCacheService.prefetchAllStaticData();
+  CustomerProfileIconService.syncIconsBackground();
 
   // Allow screenshots and screen recording
   await ScreenProtectionService.instance.allowScreenshots();
