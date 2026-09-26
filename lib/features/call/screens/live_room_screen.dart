@@ -1442,7 +1442,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                       context,
                       MaterialPageRoute(
                         builder: (_) => VideoCallScreen(
-                          callId: callId?.toString(),
+                          callId: int.tryParse(callId?.toString() ?? ''),
                           channelName: channelName,
                           model: callerModel,
                           isIncoming: true,
