@@ -5,6 +5,7 @@ import '../../../core/models/model_profile.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
+import '../../../core/widgets/livu_empty_state_card.dart';
 import '../services/match_api_service.dart';
 import '../../call/screens/random_match_screen.dart';
 import '../../profile/screens/host_profile_screen.dart';
@@ -178,8 +179,17 @@ class _MatchTabViewState extends State<MatchTabView> with AutomaticKeepAliveClie
   Widget build(BuildContext context) {
     super.build(context);
     if (_displayedSlots.length < 8) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.neonPink),
+      // ⚡ 0ms Empty State — NO SPINNER EVER. Background fetch updates reactively.
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        children: [
+          SizedBox(height: MediaQuery.of(context).size.height * 0.08),
+          LivUEmptyStateCard(
+            onRefresh: () {
+              _fetchLiveOnlineUsers();
+            },
+          ),
+        ],
       );
     }
 

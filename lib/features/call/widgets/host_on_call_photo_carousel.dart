@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui' as ui;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../../core/models/model_profile.dart';
@@ -71,7 +72,7 @@ class _HostOnCallPhotoCarouselState extends State<HostOnCallPhotoCarousel>
       }
     }
     if (list.isEmpty) {
-      list.add('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600');
+      list.add('https://chinchins.live/uploads/app/logo.png');
     }
     _photoList = list;
   }
@@ -124,7 +125,7 @@ class _HostOnCallPhotoCarouselState extends State<HostOnCallPhotoCarousel>
             key: ValueKey<String>(currentPhoto),
             decoration: BoxDecoration(
               image: DecorationImage(
-                image: NetworkImage(currentPhoto),
+                image: CachedNetworkImageProvider(currentPhoto),
                 fit: BoxFit.cover,
               ),
             ),

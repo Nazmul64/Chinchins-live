@@ -68,20 +68,10 @@ class _RandomMatchScreenState extends State<RandomMatchScreen>
 
           _startAutoConnect();
         } else {
-          // Fallback demo match
+          // No match found from server — stop searching
           setState(() {
-            _matchedProfile = ModelProfile.fromJson({
-              'id': '2',
-              'name': 'Ayeena04',
-              'avatar': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb',
-              'age': 21,
-              'country': 'Bangladesh',
-              'video_call_rate': 100,
-            });
             _isSearching = false;
-            _countdown = 3;
           });
-          _startAutoConnect();
         }
       }
     } catch (_) {

@@ -179,7 +179,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           caller['avatar_url'] ??
           caller['profile_photo'] ??
           payload['caller_avatar'] ??
-          'https://images.unsplash.com/photo-1534528741775-53994a69daeb';
+          'https://chinchins.live/uploads/app/logo.png';
 
       final model = ModelProfile.fromJson({
         'id': callerId,

@@ -448,18 +448,33 @@ class PartyRoomTopicTag {
   final String id;
   final String name;
   final String tag;
+  final String? icon;
+  final String? color;
+  final String? slug;
 
   const PartyRoomTopicTag({
     required this.id,
     required this.name,
     required this.tag,
+    this.icon,
+    this.color,
+    this.slug,
   });
 
   factory PartyRoomTopicTag.fromJson(Map<String, dynamic> json) {
+    final rawName = json['name']?.toString() ?? '';
+    final icon = json['icon']?.toString();
+    final displayName = (icon != null && icon.isNotEmpty && !rawName.contains(icon))
+        ? '$rawName $icon'
+        : rawName;
+
     return PartyRoomTopicTag(
-      id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-      tag: json['tag']?.toString() ?? json['name']?.toString() ?? '',
+      id: json['id']?.toString() ?? json['slug']?.toString() ?? rawName.toLowerCase(),
+      name: displayName,
+      tag: rawName,
+      icon: icon,
+      color: json['color']?.toString(),
+      slug: json['slug']?.toString(),
     );
   }
 }
@@ -504,19 +519,10 @@ class PartyRoomConfig {
       hostCommissionPercentage: json['host_commission_percentage'] is num ? (json['host_commission_percentage'] as num).toDouble() : 50.0,
       adminCommissionPercentage: json['admin_commission_percentage'] is num ? (json['admin_commission_percentage'] as num).toDouble() : 50.0,
       maxGuests: json['max_guests'] is int ? json['max_guests'] as int : (int.tryParse(json['max_guests']?.toString() ?? '10') ?? 10),
-      topicTags: tags.isNotEmpty ? tags : defaultTags,
+      topicTags: tags,
       defaultAnnouncement: json['default_announcement']?.toString() ?? 'Welcome to our Live Fun Hangout 🥳✨! Please be respectful to everyone in the room.',
     );
   }
-
-  static List<PartyRoomTopicTag> get defaultTags => const [
-        PartyRoomTopicTag(id: 'singing', name: 'Singing 🎤', tag: 'Singing'),
-        PartyRoomTopicTag(id: 'dating', name: 'Dating ❤️', tag: 'Dating'),
-        PartyRoomTopicTag(id: 'party', name: 'Party 💃', tag: 'Party'),
-        PartyRoomTopicTag(id: 'chitchat', name: 'ChitChat 💬', tag: 'ChitChat'),
-        PartyRoomTopicTag(id: 'gaming', name: 'Gaming 🎮', tag: 'Gaming'),
-        PartyRoomTopicTag(id: 'latenight', name: 'Late Night 🌙', tag: 'Late Night'),
-      ];
 }
 
 class PartyRoomMessage {

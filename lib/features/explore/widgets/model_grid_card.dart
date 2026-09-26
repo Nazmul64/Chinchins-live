@@ -373,33 +373,47 @@ class _ModelGridCardState extends State<ModelGridCard> with SingleTickerProvider
                 ),
               ),
 
-            // White Circular Button with Purple Video Camera Icon matching screenshot
+            // 🎥 High-Gloss White-Bordered Circular Button with Purple Disc & White Video Camera Icon (Screenshot 3)
             Transform.scale(
               scale: scale,
               child: Container(
                 width: buttonSize,
                 height: buttonSize,
+                padding: const EdgeInsets.all(2.5),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.white,
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.45),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.5),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
                     ),
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.25),
+                      color: Colors.black.withValues(alpha: 0.3),
                       blurRadius: 4,
                       offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-                child: const Center(
-                  child: Icon(
-                    Icons.videocam_rounded,
-                    color: Color(0xFF9333EA), // Purple Video Camera Icon
-                    size: 21,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF9333EA), // Purple Vibrant
+                        Color(0xFF7C3AED), // Deep Violet
+                      ],
+                    ),
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.videocam_rounded,
+                      color: Colors.white, // Pure White Video Camera Icon
+                      size: 20,
+                    ),
                   ),
                 ),
               ),

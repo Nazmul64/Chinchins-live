@@ -15,13 +15,19 @@ class CreateRoomScreen extends StatefulWidget {
 class _CreateRoomScreenState extends State<CreateRoomScreen> {
   PartyRoomType _selectedType = PartyRoomType.audioVoice;
   final TextEditingController _titleController = TextEditingController(text: 'My Live Fun Hangout 🥳✨');
-  String _selectedTag = 'Singing 🎤';
-  List<PartyRoomTopicTag> _tags = PartyRoomConfig.defaultTags;
+  String _selectedTag = '';
+  List<PartyRoomTopicTag> _tags = [];
   bool _isCreating = false;
 
   @override
   void initState() {
     super.initState();
+    // ⚡ 0ms Instant synchronous read from local cache
+    final cachedTags = PartyRoomApiService.getCachedPartyTagsSync();
+    if (cachedTags.isNotEmpty) {
+      _tags = cachedTags;
+      _selectedTag = _tags.first.name.isNotEmpty ? _tags.first.name : _tags.first.tag;
+    }
     _loadConfig();
   }
 
@@ -32,14 +38,24 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
   }
 
   Future<void> _loadConfig() async {
-    final config = await PartyRoomApiService.getConfig();
-    if (mounted) {
+    // 1. Fetch dynamic database tags from GET /api/party/tags (zero hardcode)
+    final dynamicTags = await PartyRoomApiService.getPartyTags();
+    if (mounted && dynamicTags.isNotEmpty) {
       setState(() {
-        if (config.topicTags.isNotEmpty) {
-          _tags = config.topicTags;
-          if (!_tags.any((t) => t.name == _selectedTag || t.tag == _selectedTag)) {
-            _selectedTag = _tags.first.name.isNotEmpty ? _tags.first.name : _tags.first.tag;
-          }
+        _tags = dynamicTags;
+        if (_selectedTag.isEmpty || !_tags.any((t) => t.name == _selectedTag || t.tag == _selectedTag)) {
+          _selectedTag = _tags.first.name.isNotEmpty ? _tags.first.name : _tags.first.tag;
+        }
+      });
+    }
+
+    // 2. Also load party config
+    final config = await PartyRoomApiService.getConfig();
+    if (mounted && config.topicTags.isNotEmpty && _tags.isEmpty) {
+      setState(() {
+        _tags = config.topicTags;
+        if (_selectedTag.isEmpty || !_tags.any((t) => t.name == _selectedTag || t.tag == _selectedTag)) {
+          _selectedTag = _tags.first.name.isNotEmpty ? _tags.first.name : _tags.first.tag;
         }
       });
     }
@@ -222,37 +238,56 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
                   style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _tags.map((topic) {
-                    final isSelected = _selectedTag == topic.name || _selectedTag == topic.tag;
-                    final displayLabel = topic.name.isNotEmpty ? topic.name : topic.tag;
+                if (_tags.isNotEmpty)
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _tags.map((topic) {
+                      final isSelected = _selectedTag == topic.name || _selectedTag == topic.tag;
+                      final displayLabel = topic.name.isNotEmpty ? topic.name : topic.tag;
 
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedTag = displayLabel),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                        decoration: BoxDecoration(
-                          gradient: isSelected ? AppColors.primaryGradient : null,
-                          color: isSelected ? null : AppColors.cardDark,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isSelected ? Colors.transparent : AppColors.cardBorder,
+                      return GestureDetector(
+                        onTap: () => setState(() => _selectedTag = displayLabel),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            gradient: isSelected ? AppColors.primaryGradient : null,
+                            color: isSelected ? null : AppColors.cardDark,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isSelected ? Colors.transparent : AppColors.cardBorder,
+                            ),
+                          ),
+                          child: Text(
+                            displayLabel,
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : AppColors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            ),
                           ),
                         ),
-                        child: Text(
-                          displayLabel,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : AppColors.textSecondary,
-                            fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          ),
-                        ),
+                      );
+                    }).toList(),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardDark,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.cardBorder),
+                    ),
+                    child: TextField(
+                      onChanged: (val) => _selectedTag = val.trim(),
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: const InputDecoration(
+                        hintText: 'Enter topic tag...',
+                        hintStyle: TextStyle(color: AppColors.textHint, fontSize: 13),
+                        border: InputBorder.none,
                       ),
-                    );
-                  }).toList(),
-                ),
+                    ),
+                  ),
                 const SizedBox(height: 24),
 
                 // Start Party Room Button

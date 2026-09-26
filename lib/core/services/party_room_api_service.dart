@@ -56,6 +56,79 @@ class PartyRoomApiService {
     return _cachedConfig;
   }
 
+  static List<PartyRoomTopicTag> _cachedPartyTags = [];
+
+  /// Synchronously retrieve cached dynamic party tags in 0.00ms
+  static List<PartyRoomTopicTag> getCachedPartyTagsSync() {
+    if (_cachedPartyTags.isNotEmpty) return _cachedPartyTags;
+    final cached = FastApiClient.getCachedSync(ApiConstants.partyTags);
+    if (cached != null) {
+      final list = (cached is Map && cached['data'] is List)
+          ? cached['data'] as List
+          : (cached is List ? cached : null);
+      if (list != null) {
+        _cachedPartyTags = list
+            .whereType<Map<String, dynamic>>()
+            .map((e) => PartyRoomTopicTag.fromJson(e))
+            .toList();
+        return _cachedPartyTags;
+      }
+    }
+    return _cachedPartyTags;
+  }
+
+  /// 1b. Get Dynamic Party Tags (`GET /api/party/tags` - Zero hardcode)
+  static Future<List<PartyRoomTopicTag>> getPartyTags() async {
+    try {
+      final cached = FastApiClient.getCachedSync(ApiConstants.partyTags);
+      if (cached != null) {
+        final list = (cached is Map && cached['data'] is List)
+            ? cached['data'] as List
+            : (cached is List ? cached : null);
+        if (list != null) {
+          _cachedPartyTags = list
+              .whereType<Map<String, dynamic>>()
+              .map((e) => PartyRoomTopicTag.fromJson(e))
+              .toList();
+        }
+      }
+
+      final headers = await _getHeaders();
+      http.Response response;
+      try {
+        response = await http
+            .get(Uri.parse(ApiConstants.partyTags), headers: headers)
+            .timeout(const Duration(seconds: 8));
+      } catch (_) {
+        response = await http
+            .get(Uri.parse(ApiConstants.partyRoomsTags), headers: headers)
+            .timeout(const Duration(seconds: 8));
+      }
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        if (json is Map<String, dynamic> && json['data'] is List) {
+          await FastApiClient.putCache(ApiConstants.partyTags, json);
+          _cachedPartyTags = (json['data'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map((e) => PartyRoomTopicTag.fromJson(e))
+              .toList();
+          return _cachedPartyTags;
+        } else if (json is List) {
+          await FastApiClient.putCache(ApiConstants.partyTags, {'data': json});
+          _cachedPartyTags = json
+              .whereType<Map<String, dynamic>>()
+              .map((e) => PartyRoomTopicTag.fromJson(e))
+              .toList();
+          return _cachedPartyTags;
+        }
+      }
+    } catch (e) {
+      AppLogger.error('PartyRoomGetTags', e);
+    }
+    return _cachedPartyTags;
+  }
+
   static List<GroupPartyRoom> _cachedPartyRooms = [];
 
   /// Synchronously retrieve cached party rooms in 0.00ms

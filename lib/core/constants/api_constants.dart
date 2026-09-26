@@ -81,12 +81,18 @@ class ApiConstants {
   static String get vipCardsPurchase => spendLessGetMorePurchase;
   static String get vipCardsClaimDaily => spendLessGetMoreClaim;
   
-  // Withdrawal / Cash Out endpoints
-  static String get withdrawInfo => '$baseUrl/withdraw/info';
+  // Withdrawal / Cash Out endpoints (RESTful User & Seller Payout Engine)
+  static String get walletWithdraw => '$baseUrl/wallet/withdraw';
+  static String get walletWithdrawMethods => '$baseUrl/wallet/withdraw-methods';
+  static String get walletWithdrawHistory => '$baseUrl/wallet/withdraw-history';
+  static String get withdrawInfo => '$baseUrl/wallet/withdraw-methods';
   static String get withdrawCalculate => '$baseUrl/withdraw/calculate';
-  static String get withdrawSubmit => '$baseUrl/withdraw/submit';
-  static String get withdrawHistory => '$baseUrl/withdraw/history';
+  static String get withdrawSubmit => '$baseUrl/wallet/withdraw';
+  static String get withdrawHistory => '$baseUrl/wallet/withdraw-history';
   static String withdrawDetails(String id) => '$baseUrl/withdraw/$id';
+  static String get sellerWithdraw => '$baseUrl/seller/withdraw';
+  static String get sellerWithdrawMethods => '$baseUrl/seller/withdraw-methods';
+  static String get sellerWithdrawHistory => '$baseUrl/seller/withdraw-history';
   
   // Video & Audio Calling endpoints (Legacy & Standard RESTful /api/calls)
   static String get calls => '$baseUrl/calls';
@@ -319,6 +325,8 @@ class ApiConstants {
   static String get supportUnreadCount => '$baseUrl/support/unread-count';
 
   // Party Room (Voice & Video Multi-Guest) Endpoints
+  static String get partyTags => '$baseUrl/party/tags';
+  static String get partyRoomsTags => '$baseUrl/party-rooms/tags';
   static String get partyRoomsConfig => '$baseUrl/party-rooms/config';
   static String get partyRooms => '$baseUrl/party-rooms';
   static String get partyRoomsCreate => '$baseUrl/party-rooms/create';

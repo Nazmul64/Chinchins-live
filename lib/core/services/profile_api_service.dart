@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../constants/api_constants.dart';
 import '../models/model_profile.dart';
 import 'fast_api_client.dart';
+import 'hive_cache_service.dart';
 import '../../features/auth/services/auth_api_service.dart';
 
 class ProfileApiService {
@@ -20,11 +21,21 @@ class ProfileApiService {
     }
   }
 
-  /// Get In-Memory Home Feed immediately (0.00ms synchronous)
+  /// Get In-Memory / Hive Home Feed immediately (0.00ms synchronous)
   static List<ModelProfile> getCachedHomeFeed() {
     if (_inMemoryHomeCache.isNotEmpty) {
       return _inMemoryHomeCache;
     }
+    // 1. Check Hive Storage (0.00ms)
+    final hiveFeed = HiveCacheService.getCachedHomeFeed();
+    if (hiveFeed.isNotEmpty) {
+      final list = _parseUserList(hiveFeed);
+      if (list.isNotEmpty) {
+        _inMemoryHomeCache = list;
+        return list;
+      }
+    }
+    // 2. Check FastApiClient memory / disk cache
     final cached = FastApiClient.getCachedSync(ApiConstants.homeFeed);
     if (cached != null) {
       final list = _parseUserList(cached);
@@ -33,81 +44,13 @@ class ProfileApiService {
         return list;
       }
     }
-    return getFallbackProfiles();
+    return [];
   }
 
-  /// Instant fallback profiles for zero-delay display
+  /// Returns empty list — no fake dummy users in production.
+  /// The UI will show LivUEmptyStateCard while real API data loads in background.
   static List<ModelProfile> getFallbackProfiles() {
-    return [
-      ModelProfile.fromJson({
-        'id': '101',
-        'account_id': '88492011',
-        'name': 'Ayesha Khan',
-        'age': 22,
-        'gender': 'female',
-        'location': 'Bangladesh',
-        'country': 'Bangladesh',
-        'is_online': true,
-        'avatar_url': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&fit=crop&q=80',
-        'cover_photo_url': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&fit=crop&q=80',
-        'price_per_min': 100,
-        'followers_count': 1420,
-        'bio': 'Singing & Live talk! Welcome to my room ❤️',
-        'level': 3,
-        'charm_level': 2,
-      }),
-      ModelProfile.fromJson({
-        'id': '102',
-        'account_id': '77291044',
-        'name': 'Zara Noor',
-        'age': 21,
-        'gender': 'female',
-        'location': 'Pakistan',
-        'country': 'Pakistan',
-        'is_online': true,
-        'avatar_url': 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&fit=crop&q=80',
-        'cover_photo_url': 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&fit=crop&q=80',
-        'price_per_min': 120,
-        'followers_count': 3200,
-        'bio': 'Let\'s talk and share moments together ✨',
-        'level': 5,
-        'charm_level': 4,
-      }),
-      ModelProfile.fromJson({
-        'id': '103',
-        'account_id': '99381022',
-        'name': 'Priya Sharma',
-        'age': 23,
-        'gender': 'female',
-        'location': 'India',
-        'country': 'India',
-        'is_online': true,
-        'avatar_url': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&fit=crop&q=80',
-        'cover_photo_url': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&fit=crop&q=80',
-        'price_per_min': 100,
-        'followers_count': 2890,
-        'bio': 'Music, Dance & Vibes! Join live 🎉',
-        'level': 4,
-        'charm_level': 3,
-      }),
-      ModelProfile.fromJson({
-        'id': '104',
-        'account_id': '66182903',
-        'name': 'Tania Akter',
-        'age': 20,
-        'gender': 'female',
-        'location': 'Bangladesh',
-        'country': 'Bangladesh',
-        'is_online': true,
-        'avatar_url': 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&fit=crop&q=80',
-        'cover_photo_url': 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&fit=crop&q=80',
-        'price_per_min': 150,
-        'followers_count': 4500,
-        'bio': 'Love chatting with new friends!',
-        'level': 6,
-        'charm_level': 5,
-      }),
-    ];
+    return [];
   }
 
   /// Helper to parse user list from various backend JSON formats
@@ -172,6 +115,7 @@ class ProfileApiService {
 
       if (parsed.isNotEmpty) {
         _inMemoryHomeCache = parsed;
+        HiveCacheService.saveHomeFeed(parsed.map((p) => p.toJson()).toList());
       }
       return parsed;
     }

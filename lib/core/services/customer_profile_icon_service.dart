@@ -25,6 +25,7 @@ class CustomerProfileIconService {
     'my_level': 'https://chinchins.live/uploads/customer_profile_icon/default_my_level.png',
     'sign_in': 'https://chinchins.live/uploads/customer_profile_icon/default_sign_in.png',
     'reward': 'https://chinchins.live/uploads/customer_profile_icon/default_reward.png',
+    'withdraw': 'https://chinchins.live/uploads/customer_profile_icon/default_withdraw.png',
   };
 
   /// 1. Initialize icons from local storage immediately at app launch (0.00ms)

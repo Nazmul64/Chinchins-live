@@ -78,7 +78,7 @@ class _AppSideDrawerState extends State<AppSideDrawer> {
               child: Row(
                 children: [
                   AvatarWithFrame(
-                    avatarUrl: profile?.avatarUrl ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb',
+                    avatarUrl: profile?.avatarUrl ?? 'https://chinchins.live/uploads/app/logo.png',
                     size: 60,
                     level: profile?.level ?? 1,
                     frameUrl: profile?.avatarFrameUrl,

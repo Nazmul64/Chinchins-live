@@ -54,9 +54,28 @@ class WithdrawApiService {
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
-        if (decoded['status'] == true && decoded['data'] is Map) {
+        if (decoded is Map<String, dynamic>) {
           await FastApiClient.putCache(ApiConstants.withdrawInfo, decoded);
-          _cachedWithdrawInfo = Map<String, dynamic>.from(decoded['data']);
+          final Map<String, dynamic> normalized = {};
+          if (decoded['data'] is Map) {
+            normalized.addAll(Map<String, dynamic>.from(decoded['data']));
+          } else if (decoded['data'] is List) {
+            normalized['payment_methods'] = decoded['data'];
+          }
+          if (decoded['config'] is Map) {
+            normalized.addAll(Map<String, dynamic>.from(decoded['config']));
+          }
+          if (decoded.containsKey('beans_balance')) normalized['beans_balance'] = decoded['beans_balance'];
+          if (decoded.containsKey('coins_balance')) normalized['coins_balance'] = decoded['coins_balance'];
+          if (decoded['user'] is Map) {
+            normalized['user'] = decoded['user'];
+          } else {
+            normalized['user'] = {
+              'coins': decoded['coins_balance'] ?? decoded['beans_balance'] ?? 0,
+              'beans': decoded['beans_balance'] ?? 0,
+            };
+          }
+          _cachedWithdrawInfo = normalized;
           return _cachedWithdrawInfo;
         }
       }
@@ -133,7 +152,10 @@ class WithdrawApiService {
       }
 
       final payload = <String, dynamic>{
+        'amount_beans': coins,
+        'beans': coins,
         'coins': coins,
+        'amount': coins,
         'account_number': accountNumber.trim(),
         'account_type': accountType,
         'payment_method': methodCode,

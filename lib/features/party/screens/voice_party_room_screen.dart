@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:livekit_client/livekit_client.dart';
@@ -1000,7 +1001,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
           CircleAvatar(
             radius: 20,
             backgroundColor: const Color(0xFF1E293B),
-            backgroundImage: roomHostAvatar.isNotEmpty ? NetworkImage(roomHostAvatar) : null,
+            backgroundImage: roomHostAvatar.isNotEmpty ? CachedNetworkImageProvider(roomHostAvatar) : null,
             child: roomHostAvatar.isEmpty
                 ? Text(
                     roomHostName.isNotEmpty ? roomHostName[0].toUpperCase() : 'H',

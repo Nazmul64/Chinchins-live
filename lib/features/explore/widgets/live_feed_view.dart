@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
+import '../../../core/services/hive_cache_service.dart';
+import '../../../core/services/signaling_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
+import '../../../core/widgets/livu_empty_state_card.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../../call/screens/live_room_screen.dart';
 import '../../call/services/live_streaming_api_service.dart';
@@ -26,6 +30,7 @@ class _LiveFeedViewState extends State<LiveFeedView>
   List<Map<String, dynamic>> _activeStreams = [];
   bool _isLoadingStreams = false;
   late AnimationController _equalizerController;
+  StreamSubscription? _liveEndedSub;
 
   @override
   bool get wantKeepAlive => true;
@@ -33,24 +38,45 @@ class _LiveFeedViewState extends State<LiveFeedView>
   @override
   void initState() {
     super.initState();
-    _isLoadingStreams = _activeStreams.isEmpty;
+    // ⚡ 0.00ms Instant local Hive load (Zero spinner)
+    _activeStreams = HiveCacheService.getCachedLiveStreams();
+    _isLoadingStreams = false;
     _equalizerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..repeat();
     _loadActiveStreams();
+
+    // ✅ Socket: Instantly remove ended stream cards without waiting for refresh
+    _liveEndedSub = SignalingService().onLiveStreamEnded.listen((data) {
+      final endedId = (data['live_stream_id'] ?? data['id'] ?? data['room_id'])?.toString();
+      final endedChannel = (data['channel_name'] ?? data['room_name'])?.toString();
+      final endedHostId = (data['host_id'] ?? data['user_id'])?.toString();
+      if (mounted && (endedId != null || endedChannel != null || endedHostId != null)) {
+        setState(() {
+          _activeStreams.removeWhere((s) {
+            final sId = (s['id'] ?? s['live_stream_id'])?.toString();
+            final sChannel = (s['channel_name'] ?? s['room_name'])?.toString();
+            final sHostId = (s['host'] is Map ? s['host']['id'] : s['host_id'])?.toString();
+            return (endedId != null && (sId == endedId || sChannel == endedId)) ||
+                   (endedChannel != null && (sChannel == endedChannel || sId == endedChannel)) ||
+                   (endedHostId != null && sHostId == endedHostId);
+          });
+        });
+        // Persist cleaned list to Hive cache
+        HiveCacheService.saveLiveStreams(_activeStreams);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _liveEndedSub?.cancel();
     _equalizerController.dispose();
     super.dispose();
   }
 
   Future<void> _loadActiveStreams() async {
-    if (_activeStreams.isEmpty) {
-      setState(() => _isLoadingStreams = true);
-    }
     try {
       final streams = await LiveStreamingApiService.getActiveLiveStreams();
       if (mounted) {
@@ -58,6 +84,8 @@ class _LiveFeedViewState extends State<LiveFeedView>
           _activeStreams = streams;
           _isLoadingStreams = false;
         });
+        // Cache to Hive for instant next load
+        HiveCacheService.saveLiveStreams(streams);
       }
     } catch (_) {
       if (mounted) {
@@ -89,7 +117,9 @@ class _LiveFeedViewState extends State<LiveFeedView>
     });
 
     if (!mounted) return;
-    await Navigator.push(
+
+    // ⚡ INSTANT: Navigate immediately, backend session starts inside LiveRoomScreen
+    unawaited(Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => LiveRoomScreen(
@@ -98,11 +128,9 @@ class _LiveFeedViewState extends State<LiveFeedView>
           isHost: true,
         ),
       ),
-    );
-
-    if (mounted) {
-      _loadActiveStreams();
-    }
+    ).then((_) {
+      if (mounted) _loadActiveStreams();
+    }));
   }
 
   @override
@@ -216,77 +244,11 @@ class _LiveFeedViewState extends State<LiveFeedView>
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       children: [
-        SizedBox(height: MediaQuery.of(context).size.height * 0.15),
-        Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      const Color(0xFFFF2A6D).withValues(alpha: 0.25),
-                      Colors.transparent,
-                    ],
-                  ),
-                  border: Border.all(
-                    color: const Color(0xFFFF2A6D).withValues(alpha: 0.4),
-                    width: 1.5,
-                  ),
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.live_tv_rounded,
-                    color: Color(0xFFFF2A6D),
-                    size: 46,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'No Live Broadcasts Right Now',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                child: Text(
-                  'Be the first to go live and broadcast to everyone on Chinchins Live!',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.65),
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: _startHostBroadcast,
-                icon: const Icon(Icons.videocam_rounded, size: 18),
-                label: const Text(
-                  'Start Live Stream',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF2A6D),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  elevation: 6,
-                  shadowColor: const Color(0xFFFF2A6D).withValues(alpha: 0.5),
-                ),
-              ),
-            ],
-          ),
+        SizedBox(height: MediaQuery.of(context).size.height * 0.12),
+        LivUEmptyStateCard(
+          title: 'Oops!!',
+          subtitle: "we couldn't find more live broadcasts",
+          onRefresh: _handleRefresh,
         ),
       ],
     );
@@ -312,6 +274,7 @@ class _LiveFeedViewState extends State<LiveFeedView>
 
     return GestureDetector(
       onTap: () {
+        // ⚡ INSTANT: 0ms navigate — LiveKit connection starts in background inside screen
         Navigator.push(
           context,
           MaterialPageRoute(

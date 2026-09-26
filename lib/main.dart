@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'core/services/app_cache_service.dart';
 import 'core/services/customer_profile_icon_service.dart';
 import 'core/services/fast_api_client.dart';
+import 'core/services/hive_cache_service.dart';
 import 'core/services/local_vault.dart';
 import 'core/services/screen_protection_service.dart';
 import 'core/theme/app_theme.dart';
@@ -13,7 +14,8 @@ import 'features/auth/screens/splash_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ⚡ Initialize L1/L2 Local Fast Storage & Disk Caches
+  // ⚡ Initialize L1/L2 Local Fast Storage, Hive & Disk Caches
+  await HiveCacheService.init();
   await FastApiClient.init();
   await LocalVault.init();
   await CustomerProfileIconService.init();

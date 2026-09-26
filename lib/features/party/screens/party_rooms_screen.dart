@@ -4,6 +4,7 @@ import '../../../core/models/group_room.dart';
 import '../../../core/services/party_room_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
+import '../../../core/widgets/livu_empty_state_card.dart';
 import 'voice_party_room_screen.dart';
 import 'video_party_room_screen.dart';
 import 'create_room_screen.dart';
@@ -123,9 +124,12 @@ class _PartyRoomsScreenState extends State<PartyRoomsScreen>
 
                 // Vertical Party Rooms List or Empty State
                 if (_isLoading && _rooms.isEmpty)
-                  const SliverFillRemaining(
-                    child: Center(
-                      child: CircularProgressIndicator(color: AppColors.neonPink),
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: LivUEmptyStateCard(
+                      onRefresh: _loadRooms,
+                      title: 'No Rooms Yet',
+                      subtitle: 'Pull to refresh or create a new party room!',
                     ),
                   )
                 else if (_rooms.isEmpty)
@@ -587,7 +591,7 @@ class _PartyRoomsScreenState extends State<PartyRoomsScreen>
               CachedImageLoader(
                 imageUrl: room.hostAvatar.isNotEmpty
                     ? room.hostAvatar
-                    : 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&fit=crop&q=80',
+                    : 'https://chinchins.live/uploads/app/logo.png',
                 fit: BoxFit.cover,
               ),
 

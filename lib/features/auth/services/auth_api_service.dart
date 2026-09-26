@@ -10,6 +10,7 @@ import '../../../core/services/device_registration_service.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/services/app_cache_service.dart';
 import '../../../core/services/app_preloader.dart';
+import '../../../core/services/hive_cache_service.dart';
 
 class AuthApiService {
   static const String _keyToken = 'auth_token';
@@ -426,6 +427,7 @@ class AuthApiService {
     await prefs.setString(_keyToken, token);
     if (user != null) {
       await prefs.setString(_keyUser, jsonEncode(user));
+      await HiveCacheService.saveUserProfile(user);
     }
   }
 
@@ -444,6 +446,7 @@ class AuthApiService {
   static Future<void> saveUser(Map<String, dynamic> user) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyUser, jsonEncode(user));
+    await HiveCacheService.saveUserProfile(user);
   }
 
   /// Retrieve stored auth token
@@ -452,13 +455,19 @@ class AuthApiService {
     return prefs.getString(_keyToken);
   }
 
-  /// Retrieve stored user data
+  /// Retrieve stored user data (0.00ms Hive instant lookup first)
   static Future<Map<String, dynamic>?> getSavedUser() async {
+    final hiveUser = HiveCacheService.getCachedUserProfile();
+    if (hiveUser != null) {
+      return hiveUser;
+    }
     final prefs = await SharedPreferences.getInstance();
     final userStr = prefs.getString(_keyUser);
     if (userStr != null) {
       try {
-        return jsonDecode(userStr) as Map<String, dynamic>;
+        final decoded = jsonDecode(userStr) as Map<String, dynamic>;
+        HiveCacheService.saveUserProfile(decoded);
+        return decoded;
       } catch (_) {}
     }
     return null;
@@ -502,6 +511,7 @@ class AuthApiService {
       await prefs.remove('user_id');
       await prefs.remove('fcm_token');
       await prefs.remove('kyc_verification_status');
+      await HiveCacheService.clearAll();
     }
     return true;
   }

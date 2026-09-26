@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
@@ -703,7 +704,7 @@ class _ResellerChatScreenState extends State<ResellerChatScreen> {
             // Reseller Avatar
             CircleAvatar(
               radius: 16,
-              backgroundImage: NetworkImage(widget.reseller.avatarUrl),
+              backgroundImage: CachedNetworkImageProvider(widget.reseller.avatarUrl),
             ),
             const SizedBox(width: 8),
           ],
@@ -828,7 +829,7 @@ class _ResellerChatScreenState extends State<ResellerChatScreen> {
             CircleAvatar(
               radius: 16,
               backgroundImage: _userAvatarUrl != null && _userAvatarUrl!.isNotEmpty
-                  ? NetworkImage(_userAvatarUrl!)
+                  ? CachedNetworkImageProvider(_userAvatarUrl!)
                   : null,
               child: _userAvatarUrl == null || _userAvatarUrl!.isEmpty
                   ? const Icon(Icons.person, color: Colors.white, size: 18)

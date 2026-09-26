@@ -4,9 +4,11 @@ import 'dart:ui' as ui;
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:livekit_client/livekit_client.dart' hide VideoDimensions;
 import 'package:permission_handler/permission_handler.dart';
 import '../../../main.dart';
+import '../../../core/constants/api_constants.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/signaling_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -27,6 +29,8 @@ import '../widgets/gift_animation_overlay.dart';
 import '../widgets/top_gift_alert_banner.dart';
 import '../widgets/host_on_call_photo_carousel.dart';
 import '../../../core/services/gifts_api_service.dart';
+import '../../../core/services/hive_cache_service.dart';
+import 'video_call_screen.dart';
 
 /// Auto-hiding VS Banner when Co-Host / PK connects (fades out after 2 seconds)
 class CoHostVSBanner extends StatefulWidget {
@@ -236,6 +240,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   
   // LiveKit RTC State
   Room? _liveKitRoom;
+  LocalVideoTrack? _localVideoTrack;
+  OverlayEntry? _incomingCallOverlayEntry;
   List<VideoTrack> _activeVideos = [];
   EventsListener<RoomEvent>? _liveKitListener;
   bool _isLiveKitConnected = false;
@@ -323,6 +329,12 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     _pkBattleTimer?.cancel();
     _privateCallStatusSub?.cancel();
     _incomingCallSub?.cancel();
+    _incomingCallOverlayEntry?.remove();
+    _incomingCallOverlayEntry = null;
+    try {
+      _localVideoTrack?.stop();
+      _localVideoTrack = null;
+    } catch (_) {}
     _callAcceptedSub?.cancel();
     _callEndedSub?.cancel();
     _roseComboTimer?.cancel();
@@ -398,6 +410,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   Future<void> _pauseLiveStreamForPrivateCall() async {
     if (!widget.isHost) return;
     try {
+      try {
+        await _localVideoTrack?.stop();
+      } catch (_) {}
       if (_liveKitRoom != null) {
         await _liveKitRoom!.localParticipant?.setCameraEnabled(false);
         await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(false);
@@ -422,6 +437,24 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   Future<void> _resumeLiveStreamFromPrivateCall() async {
     if (!widget.isHost) return;
     try {
+      try {
+        _localVideoTrack = await LocalVideoTrack.createCameraTrack(
+          const CameraCaptureOptions(
+            cameraPosition: CameraPosition.front,
+            params: VideoParameters(
+              dimensions: VideoDimensionsPresets.h720_169,
+              encoding: VideoEncoding(
+                maxBitrate: 2500 * 1000,
+                maxFramerate: 30,
+              ),
+            ),
+          ),
+        );
+        if (_liveKitRoom != null && _localVideoTrack != null) {
+          await _liveKitRoom!.localParticipant?.publishVideoTrack(_localVideoTrack!);
+        }
+      } catch (_) {}
+
       if (_liveKitRoom != null) {
         await _liveKitRoom!.localParticipant?.setCameraEnabled(!_isCameraOff);
         await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(!_isAudioMuted);
@@ -435,7 +468,12 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         isOnPrivateCall: false,
       );
       if (mounted) {
-        setState(() => _isHostOnPrivateCall = false);
+        setState(() {
+          _isHostOnPrivateCall = false;
+          if (_localVideoTrack != null) {
+            _activeVideos = [_localVideoTrack!];
+          }
+        });
       }
     } catch (e) {
       debugPrint('[LiveRoomScreen] Resume from private call error: $e');
@@ -570,7 +608,36 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       String agoraToken = '';
 
       if (widget.isHost) {
-        // 1. Host starts live broadcast
+        // ⚡ 1. Sub-Second Camera Preview (0ms delay): Start local camera immediately before any server calls!
+        try {
+          await [Permission.camera, Permission.microphone].request();
+          _localVideoTrack = await LocalVideoTrack.createCameraTrack(
+            const CameraCaptureOptions(
+              cameraPosition: CameraPosition.front,
+              params: VideoParameters(
+                dimensions: VideoDimensionsPresets.h720_169,
+                encoding: VideoEncoding(
+                  maxBitrate: 2500 * 1000,
+                  maxFramerate: 30,
+                ),
+              ),
+            ),
+          );
+          if (mounted && _localVideoTrack != null) {
+            setState(() {
+              _activeVideos = [_localVideoTrack!];
+            });
+          }
+        } catch (e) {
+          debugPrint('[LiveRoomScreen] Local camera preview init: $e');
+        }
+
+        // Subscribe to host's private user channel to receive calls
+        try {
+          await SignalingService().subscribeToUser(_myUid, accountId: widget.host.accountId);
+        } catch (_) {}
+
+        // 1b. Host starts live broadcast
         final session = widget.initialSessionData ??
             await LiveStreamingApiService.startLiveStream(
               title: widget.title ?? 'Welcome to my official live stream! 🌟',
@@ -749,18 +816,23 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       // Host or Co-Host publishes camera and microphone automatically
       if (isHost || _isGuestConnected) {
         try {
-          final localVideo = await LocalVideoTrack.createCameraTrack(
-            const CameraCaptureOptions(
-              cameraPosition: CameraPosition.front,
-              params: VideoParameters(
-                dimensions: VideoDimensionsPresets.h720_169,
-                encoding: VideoEncoding(
-                  maxBitrate: 2500 * 1000,
-                  maxFramerate: 30,
-                ),
-              ),
-            ),
-          );
+          final localVideo = (isHost && _localVideoTrack != null)
+              ? _localVideoTrack!
+              : await LocalVideoTrack.createCameraTrack(
+                  const CameraCaptureOptions(
+                    cameraPosition: CameraPosition.front,
+                    params: VideoParameters(
+                      dimensions: VideoDimensionsPresets.h720_169,
+                      encoding: VideoEncoding(
+                        maxBitrate: 2500 * 1000,
+                        maxFramerate: 30,
+                      ),
+                    ),
+                  ),
+                );
+          if (isHost && _localVideoTrack == null) {
+            _localVideoTrack = localVideo;
+          }
           await _liveKitRoom!.localParticipant?.publishVideoTrack(
             localVideo,
             publishOptions: const VideoPublishOptions(
@@ -954,12 +1026,12 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         final giftData = data['gift_data'] ?? data['gift'];
         final giftName = (giftData is Map ? giftData['name'] : null) ?? data['gift_name'] ?? 'Super Gift';
         final senderName = (data['sender'] is Map ? data['sender']['name'] : null) ?? data['sender_name'] ?? data['user_name'] ?? 'Viewer';
-        final senderAvatar = (data['sender'] is Map ? data['sender']['avatar_url'] : null) ?? data['sender_avatar']?.toString() ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100';
+        final senderAvatar = (data['sender'] is Map ? data['sender']['avatar_url'] : null) ?? data['sender_avatar']?.toString() ?? '';
         final receiverName = data['receiver_name'] ?? widget.host.name;
         final count = data['count'] ?? data['gift_count'] ?? 1;
         final coins = data['total_coins'] ?? (giftData is Map ? giftData['coin_price'] : null) ?? data['coins'] ?? 100;
         final animUrl = (giftData is Map ? (giftData['animation_asset_url'] ?? giftData['icon_url']) : null) ?? data['animation_url']?.toString() ?? data['animation_asset_url']?.toString() ?? data['image_url']?.toString();
-        final giftIcon = (giftData is Map ? giftData['icon_url'] : null) ?? data['gift_icon']?.toString() ?? 'https://img.icons8.com/color/96/diamond-heart.png';
+        final giftIcon = (giftData is Map ? giftData['icon_url'] : null) ?? data['gift_icon']?.toString() ?? 'https://chinchins.live/uploads/app/logo.png';
 
         final parsedCoins = (coins is int ? coins : (int.tryParse('$coins') ?? 100));
 
@@ -1213,8 +1285,13 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       }
     });
 
-    // 10. Auto pause/resume when Host is in a 1-on-1 private call
+    // 10. Auto pause/resume and incoming 1-on-1 calls for Host (socket channel private-user.{hostId})
     if (widget.isHost) {
+      _incomingCallSub = signaling.onIncomingCall.listen((data) {
+        if (mounted) {
+          _showIncomingCallOverlay(data);
+        }
+      });
       _callAcceptedSub = signaling.onCallAccepted.listen((data) {
         _pauseLiveStreamForPrivateCall();
       });
@@ -1222,6 +1299,179 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         _resumeLiveStreamFromPrivateCall();
       });
     }
+  }
+
+  void _showIncomingCallOverlay(Map<String, dynamic> data) {
+    if (_incomingCallOverlayEntry != null) return;
+
+    final callerName = (data['caller'] is Map ? (data['caller']['name'] ?? data['caller']['display_name']) : null) ??
+        data['caller_name'] ?? data['name'] ?? data['user_name'] ?? 'Viewer';
+    final callerAvatar = (data['caller'] is Map ? (data['caller']['avatar_url'] ?? data['caller']['avatar']) : null) ??
+        data['caller_avatar'] ?? data['avatar'] ?? data['avatar_url'] ?? '';
+    final callerId = (data['caller'] is Map ? data['caller']['id'] : null) ??
+        data['caller_id'] ?? data['user_id'];
+    final callId = data['call_id'] ?? data['id'] ?? data['call_session_id'];
+    final channelName = data['channel_name'] ?? 'call_${callerId}_${DateTime.now().millisecondsSinceEpoch}';
+
+    final overlay = Overlay.of(context);
+    _incomingCallOverlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top + 16,
+        left: 14,
+        right: 14,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF231838), Color(0xFF130E20)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFFF2A6D).withValues(alpha: 0.6), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.7),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+                BoxShadow(
+                  color: const Color(0xFFFF2A6D).withValues(alpha: 0.25),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                // Caller Avatar with Cyan Ring
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF00E5FF), width: 2),
+                  ),
+                  child: ClipOval(
+                    child: CachedImageLoader(imageUrl: callerAvatar, fit: BoxFit.cover),
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Caller Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        callerName,
+                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      const Row(
+                        children: [
+                          Icon(Icons.videocam_rounded, color: Color(0xFF00E5FF), size: 13),
+                          SizedBox(width: 4),
+                          Text(
+                            'Incoming Video Call...',
+                            style: TextStyle(color: Color(0xFF00E5FF), fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Decline Button
+                GestureDetector(
+                  onTap: () {
+                    _incomingCallOverlayEntry?.remove();
+                    _incomingCallOverlayEntry = null;
+                    if (callId != null) {
+                      CallApiService.rejectCall(callId.toString());
+                    }
+                  },
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFFFF1744),
+                    ),
+                    child: const Icon(Icons.call_end_rounded, color: Colors.white, size: 20),
+                  ),
+                ),
+                const SizedBox(width: 10),
+
+                // Accept Button
+                GestureDetector(
+                  onTap: () async {
+                    _incomingCallOverlayEntry?.remove();
+                    _incomingCallOverlayEntry = null;
+
+                    // 1. Pause live stream video track & show photo slider
+                    await _pauseLiveStreamForPrivateCall();
+
+                    // 2. Accept call on backend
+                    if (callId != null) {
+                      CallApiService.acceptCall(callId.toString());
+                    }
+
+                    // 3. Open Video Call Screen
+                    final callerModel = ModelProfile(
+                      id: callerId?.toString() ?? '',
+                      accountId: callerId?.toString() ?? '',
+                      name: callerName,
+                      avatarUrl: callerAvatar,
+                      pricePerMin: 100,
+                    );
+
+                    if (!mounted) return;
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => VideoCallScreen(
+                          callSessionId: callId?.toString(),
+                          channelName: channelName,
+                          model: callerModel,
+                          isCaller: false,
+                        ),
+                      ),
+                    );
+
+                    // 4. Call ended: Resume live camera broadcast
+                    await _resumeLiveStreamFromPrivateCall();
+                  },
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFF10B981),
+                    ),
+                    child: const Icon(Icons.call_rounded, color: Colors.white, size: 20),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(_incomingCallOverlayEntry!);
+
+    // Auto dismiss after 30 seconds
+    Timer(const Duration(seconds: 30), () {
+      _incomingCallOverlayEntry?.remove();
+      _incomingCallOverlayEntry = null;
+    });
   }
 
   void _showCoHostInviteReceivedDialog(Map<String, dynamic> data) {
@@ -1573,23 +1823,66 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   }
 
   void _endLiveSession() {
+    // ✅ Capture all state BEFORE clearing (critical for correctness)
     final session = _activeSession;
-    final liveId = _activeLiveId;
+    final liveId = _activeLiveId ?? widget.liveId;
+    final channelName = _activeChannelName;
+    final liveKitRoomRef = _liveKitRoom;
+    final rtcEngineRef = _rtcEngine;
     _activeSession = null;
+    _liveKitRoom = null;
+    _rtcEngine = null;
 
-    Future.microtask(() async {
+    // ⚡ Fire-and-forget background cleanup — NEVER blocks UI
+    unawaited(Future.microtask(() async {
       try {
-        if (session != null) {
-          await session.liveKitRoom?.disconnect();
-          await session.liveKitRoom?.dispose();
-          await session.rtcEngine?.leaveChannel();
-          await session.rtcEngine?.release();
-        }
-        if (widget.isHost && liveId != null) {
-          await LiveStreamingApiService.endLiveStream(liveStreamId: liveId);
+        liveKitRoomRef?.disconnect();
+        liveKitRoomRef?.dispose();
+      } catch (_) {}
+      try {
+        if (session?.liveKitRoom != null) {
+          session!.liveKitRoom!.disconnect();
+          session.liveKitRoom!.dispose();
         }
       } catch (_) {}
-    });
+      try {
+        if (rtcEngineRef != null) {
+          await rtcEngineRef.leaveChannel();
+          await rtcEngineRef.release();
+        }
+        if (session?.rtcEngine != null) {
+          await session!.rtcEngine!.leaveChannel();
+          await session.rtcEngine!.release();
+        }
+      } catch (_) {}
+
+      if (widget.isHost && liveId != null) {
+        // ✅ Fire both primary and legacy endpoint for maximum reliability
+        unawaited(LiveStreamingApiService.endLiveStream(liveStreamId: liveId));
+        try {
+          final token = await AuthApiService.getToken();
+          if (token != null) {
+            unawaited(
+              http.post(
+                Uri.parse('${ApiConstants.baseUrl}/live/$liveId/end'),
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $token',
+                },
+              ).timeout(const Duration(seconds: 10)),
+            );
+          }
+        } catch (_) {}
+      }
+
+      if (liveId != null) {
+        try { SignalingService().leaveLiveRoom(liveId); } catch (_) {}
+      }
+      if (channelName.isNotEmpty) {
+        try { SignalingService().leaveLiveRoom(channelName); } catch (_) {}
+      }
+    }));
   }
 
   void _handleExitLive() async {
@@ -1626,13 +1919,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       if (shouldEnd != true) return;
     }
 
-    // ⚡ 1. Instantly exit screen (0.00ms delay - no blocking spinner!)
+    // ⚡ INSTANT EXIT: Pop immediately (0ms), all cleanup fires in background
     PiPCallOverlay.hideMiniWindow();
-    if (mounted) {
-      Navigator.pop(context);
-    }
+    if (mounted) Navigator.of(context).pop();
 
-    // 2. Perform engine disconnect & API end in background
+    // ⚡ Background: disconnect engines + notify server
     _endLiveSession();
   }
 
@@ -2863,8 +3154,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   }
 
   Widget _buildVideoGrid({bool isMini = false}) {
-    // 0. Check if host is on a 1-on-1 private call (for Viewers)
-    if (_isHostOnPrivateCall && !widget.isHost) {
+    // 0. Check if host is on a 1-on-1 private call (Show photo carousel for both Host and Viewers)
+    if (_isHostOnPrivateCall) {
       return _buildHostOnPrivateCallView();
     }
 

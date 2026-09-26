@@ -248,7 +248,7 @@ class ModelProfile {
       avatar = parsedGallery.first;
     }
     if (avatar.isEmpty) {
-      avatar = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300';
+      avatar = 'https://chinchins.live/uploads/app/logo.png';
     }
 
     // Default fallback gallery if empty

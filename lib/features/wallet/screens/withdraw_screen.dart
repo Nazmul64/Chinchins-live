@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../core/services/hive_cache_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../services/withdraw_api_service.dart';
 
@@ -54,8 +55,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     final cached = WithdrawApiService.getCachedWithdrawInfoSync();
     if (cached != null) {
       _applyWithdrawData(cached);
-      _isLoading = false;
-    } else {
+      final cachedProfile = HiveCacheService.getCachedUserProfile();
+      if (cachedProfile != null) {
+        _userCoins = _parseInt(cachedProfile['beans_balance'] ?? cachedProfile['beans'] ?? cachedProfile['coins'], 0);
+      }
       _paymentMethods = [
         {'id': 1, 'name': 'bKash', 'code': 'bkash'},
         {'id': 2, 'name': 'Nagad', 'code': 'nagad'},
@@ -81,11 +84,19 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     _rateText = data['rate_text']?.toString() ?? '100 Coins = ৳10.00 BDT';
     _noticeText = data['notice']?.toString() ?? 'Withdrawals are processed manually within 1-24 hours.';
 
-    if (userData != null) {
-      _userCoins = _parseInt(userData['coins'], 0);
-      if (_accountNumberController.text.isEmpty && userData['phone'] != null) {
-        _accountNumberController.text = userData['phone'].toString();
+    // Extract beans/coins balance (prioritize beans_balance)
+    final rawBeans = data['beans_balance'] ?? userData?['beans_balance'] ?? userData?['beans'] ?? data['coins_balance'] ?? userData?['coins'];
+    if (rawBeans != null) {
+      _userCoins = _parseInt(rawBeans, 0);
+    } else if (_userCoins == 0) {
+      final cachedProfile = HiveCacheService.getCachedUserProfile();
+      if (cachedProfile != null) {
+        _userCoins = _parseInt(cachedProfile['beans_balance'] ?? cachedProfile['beans'] ?? cachedProfile['coins'], 0);
       }
+    }
+
+    if (userData != null && _accountNumberController.text.isEmpty && userData['phone'] != null) {
+      _accountNumberController.text = userData['phone'].toString();
     }
 
     if (methods.isNotEmpty) {

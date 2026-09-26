@@ -691,98 +691,34 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       return;
     }
 
-    final savedUser = await AuthApiService.getSavedUser();
-    if (!mounted) return;
+    // ⚡ INSTANT CALL SCREEN LAUNCH (0ms — NO await before navigation!)
+    final int optimisticCallId = (DateTime.now().millisecondsSinceEpoch ~/ 1000) % 10000000;
+    final String channelName = 'call_${model.id}_$optimisticCallId';
 
-    final int userCoins = (savedUser?['coins'] is num)
-        ? (savedUser!['coins'] as num).toInt()
-        : (int.tryParse('${savedUser?['coins']}') ?? cachedCoins);
+    StreamingService.startDynamicCall(
+      context: context,
+      model: model,
+      callId: optimisticCallId,
+      channelName: channelName,
+      isFreeTrial: false,
+      freeDurationSeconds: 16,
+      ratePerMinute: ratePerMin,
+      isIncoming: false,
+    );
 
-    if (userCoins < ratePerMin) {
-      RechargeGemsSheet.show(
-        context,
-        model: model,
-        receiverId: widget.thread.modelId,
-        receiverName: widget.thread.name,
-        receiverAvatarUrl: widget.thread.avatarUrl,
-        onRechargeSuccess: () {
-          _openVideoCall();
-        },
-      );
-      return;
-    }
-
-    CallSoundManager.playOutgoingRingtone();
-
-    try {
-      final res = await CallApiService.initiateCall(
-        receiverId: model.id,
-        receiverAccountId: model.accountId,
-        callType: 'video',
-      );
-
-      if (!mounted) {
-        CallSoundManager.stopRingtone();
-        return;
+    // ⚡ Background: Fire API call concurrently (fire-and-forget)
+    CallApiService.initiateCall(
+      receiverId: model.id,
+      receiverAccountId: model.accountId,
+      callType: 'video',
+    ).then((res) {
+      if (res['is_low_balance'] == true ||
+          res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
+          res['code'] == 'INSUFFICIENT_BALANCE') {
+        // Balance issue — will be handled on call screen side
+        debugPrint('[Chat] Call initiated but low balance flagged');
       }
-
-      if (res['success'] == true) {
-        final int? callId = res['call_id'] is int
-            ? res['call_id'] as int
-            : int.tryParse(res['call_id']?.toString() ?? '');
-        final channelName = res['channel_name']?.toString() ?? 'chat_call_${model.id}';
-        final isFreeTrial = res['is_free_trial'] == true;
-        final freeSecs = (res['free_duration_seconds'] is int) ? res['free_duration_seconds'] as int : 10;
-        final ratePerMin = (res['rate_per_minute'] is int) ? res['rate_per_minute'] as int : model.pricePerMin;
-
-        StreamingService.startDynamicCall(
-          context: context,
-          model: model,
-          callId: callId,
-          channelName: channelName,
-          isFreeTrial: isFreeTrial,
-          freeDurationSeconds: freeSecs,
-          ratePerMinute: ratePerMin,
-          dialToneUrl: res['dial_tone_url']?.toString(),
-          initialSessionData: res,
-        );
-      } else if (res['is_low_balance'] == true ||
-                 res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
-                 res['code'] == 'INSUFFICIENT_BALANCE' ||
-                 res['show_recharge_modal'] == true) {
-        CallSoundManager.stopRingtone();
-        RechargeGemsSheet.show(
-          context,
-          model: model,
-          receiverId: widget.thread.modelId,
-          receiverName: widget.thread.name,
-          receiverAvatarUrl: widget.thread.avatarUrl,
-          modalData: res['recharge_modal_data'] as Map<String, dynamic>?,
-          onRechargeSuccess: () {
-            _openVideoCall();
-          },
-        );
-      } else {
-        CallSoundManager.stopRingtone();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(res['message'] ?? 'Could not initiate call.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    } catch (e) {
-      CallSoundManager.stopRingtone();
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Call error: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    }
+    }).catchError((_) {});
   }
 
   void _openProfile() {

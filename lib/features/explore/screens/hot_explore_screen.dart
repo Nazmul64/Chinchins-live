@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
+import '../../../core/services/hive_cache_service.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/livu_empty_state_card.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../widgets/explore_header.dart';
 import '../widgets/model_grid_card.dart';
@@ -40,7 +42,7 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
   @override
   void initState() {
     super.initState();
-    // 1. Instantly populate from memory/disk cache (0.00ms delay - Zero spinner)
+    // 1. Instantly populate from Hive/RAM memory cache (0.00ms delay - Zero spinner)
     final initialFeed = ProfileApiService.getCachedHomeFeed();
     if (initialFeed.isNotEmpty) {
       _cachedHomeFeed = initialFeed;
@@ -48,7 +50,7 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
     } else if (_cachedHomeFeed.isNotEmpty) {
       _models = _cachedHomeFeed;
     } else {
-      _models = ProfileApiService.getFallbackProfiles();
+      _models = [];
     }
 
     // 2. Fetch fresh updates in parallel in background silently (SWR)
@@ -263,7 +265,7 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
     );
   }
 
-  Future<void> _startVideoCall(ModelProfile model) async {
+  void _startVideoCall(ModelProfile model) {
     final int cachedCoins = WalletApiService.getCachedCoins();
     final int ratePerMin = model.pricePerMin > 0 ? model.pricePerMin : 100;
 
@@ -282,11 +284,11 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
       return;
     }
 
-    final savedUser = await AuthApiService.getSavedUser();
+    // ⚡ Synchronous self-call check from Hive cache (0ms — no network call)
+    final savedUser = HiveCacheService.getCachedUserProfile();
     final myId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString();
     final myAccountId = savedUser?['account_id']?.toString();
 
-    if (!mounted) return;
     if ((myId != null && (myId == model.id || myId == model.accountId)) ||
         (myAccountId != null && (myAccountId == model.accountId || myAccountId == model.id))) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -401,72 +403,11 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
         backgroundColor: AppColors.cardDark,
         onRefresh: _loadHomeFeed,
         child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           children: [
-            SizedBox(height: MediaQuery.of(context).size.height * 0.22),
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.05),
-                        border: Border.all(color: Colors.white12, width: 1.5),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          '🙈',
-                          style: TextStyle(fontSize: 44),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      "Oops!! we couldn't find more",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'All streamers are currently busy or offline.\nPull down or tap below to refresh!',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white54,
-                        fontSize: 13,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.neonPink,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        elevation: 4,
-                      ),
-                      onPressed: _loadHomeFeed,
-                      icon: const Icon(Icons.refresh_rounded, size: 18),
-                      label: const Text(
-                        'Refresh Feed',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            SizedBox(height: MediaQuery.of(context).size.height * 0.12),
+            LivUEmptyStateCard(
+              onRefresh: _loadHomeFeed,
             ),
           ],
         ),

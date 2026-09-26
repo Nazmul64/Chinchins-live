@@ -441,6 +441,7 @@ class _MeScreenState extends State<MeScreen> {
     );
   }
 
+
   void _showCustomerServiceDialog() {
     Navigator.push(
       context,
@@ -892,7 +893,7 @@ class _MeScreenState extends State<MeScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Row 2 (My Level, Sign-In, Reward)
+                      // Row 2 (My Level, Sign-In, Reward, Withdraw - Matching Screenshot 1 & 2)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.start,
                         children: [
@@ -909,7 +910,15 @@ class _MeScreenState extends State<MeScreen> {
                           })),
                           Expanded(child: _buildGridMenuItem('sign_in', 'Sign-In', const Color(0xFFFFD54F), Icons.card_giftcard_rounded, onTap: () => _openMonthlyCardScreen(0))),
                           Expanded(child: _buildGridMenuItem('reward', 'Reward', const Color(0xFF4DD0E1), Icons.calendar_today_rounded, onTap: () => _openMonthlyCardScreen(0))),
-                          const Expanded(child: SizedBox()), // 4th empty column for balance
+                          Expanded(
+                            child: _buildGridMenuItem(
+                              'withdraw',
+                              'Withdraw',
+                              const Color(0xFF10B981), // Emerald green matching Admin Panel Screenshot 1
+                              Icons.account_balance_wallet_rounded,
+                              onTap: _openWithdrawScreen,
+                            ),
+                          ),
                         ],
                       ),
                     ],
