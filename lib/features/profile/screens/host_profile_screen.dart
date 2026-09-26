@@ -76,8 +76,33 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     if (fresh != null && mounted) {
       setState(() {
         _currentModel = fresh;
+        if (fresh.isLive) {
+          _showMiniLivePreview = true;
+        }
       });
     }
+
+    // Also check active live streams list to ensure live state is caught immediately
+    CallApiService.getLiveStreams().then((streams) {
+      if (!mounted || streams.isEmpty) return;
+      final match = streams.firstWhere(
+        (s) =>
+            s['host_id']?.toString() == widget.model.id ||
+            s['user_id']?.toString() == widget.model.id ||
+            s['account_id']?.toString() == widget.model.effectiveAccountId,
+        orElse: () => <String, dynamic>{},
+      );
+      if (match.isNotEmpty && mounted) {
+        setState(() {
+          _currentModel = _currentModel.copyWith(
+            isLive: true,
+            activeLiveStreamId: match['id'] ?? match['stream_id'],
+            liveChannelName: match['channel_name']?.toString(),
+          );
+          _showMiniLivePreview = true;
+        });
+      }
+    }).catchError((_) {});
   }
 
   void _triggerProfileViewAndAutoCallback() {
@@ -1232,8 +1257,8 @@ class _HostProfileScreenState extends State<HostProfileScreen>
 
   Widget _buildMiniLiveStreamFloatingPreview(ModelProfile model) {
     return Positioned(
-      top: 64,
-      right: 14,
+      top: 68,
+      left: 14,
       child: Material(
         color: Colors.transparent,
         child: GestureDetector(
@@ -1251,23 +1276,23 @@ class _HostProfileScreenState extends State<HostProfileScreen>
             );
           },
           child: Container(
-            width: 112,
-            height: 154,
+            width: 120,
+            height: 160,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: const Color(0xFFFF1744),
-                width: 2,
+                width: 2.2,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFFF1744).withValues(alpha: 0.45),
-                  blurRadius: 12,
-                  spreadRadius: 2,
+                  color: const Color(0xFFFF1744).withValues(alpha: 0.5),
+                  blurRadius: 14,
+                  spreadRadius: 1.5,
                 ),
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  blurRadius: 8,
+                  color: Colors.black.withValues(alpha: 0.7),
+                  blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
               ],
@@ -1288,9 +1313,9 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          Color(0x77000000),
+                          Color(0x66000000),
                           Colors.transparent,
-                          Color(0xAA000000),
+                          Color(0x88000000),
                         ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
@@ -1298,52 +1323,24 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                     ),
                   ),
 
-                  // Top Bar: 🔴 LIVE Badge + Close Button
+                  // Top Left: Close Button (x) matching Screenshot 2
                   Positioned(
                     top: 6,
                     left: 6,
-                    right: 6,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFF1744),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.circle, color: Colors.white, size: 6),
-                              SizedBox(width: 3),
-                              Text(
-                                'LIVE',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8.5,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
-                          ),
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _showMiniLivePreview = false;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
                         ),
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _showMiniLivePreview = false;
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: const BoxDecoration(
-                              color: Colors.black54,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.close_rounded, color: Colors.white70, size: 12),
-                          ),
-                        ),
-                      ],
+                        child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
+                      ),
                     ),
                   ),
 
@@ -1351,30 +1348,36 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                   const Center(
                     child: Icon(
                       Icons.play_circle_fill_rounded,
-                      color: Colors.white70,
-                      size: 28,
+                      color: Colors.white,
+                      size: 32,
                     ),
                   ),
 
-                  // Bottom Label: "Watch Live"
-                  const Positioned(
-                    bottom: 6,
-                    left: 6,
-                    right: 6,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Watch Live',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                  // Bottom Right: Equalizer Waves + LIVE Badge matching Screenshot 2
+                  Positioned(
+                    bottom: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF1744).withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.graphic_eq_rounded, color: Colors.white, size: 12),
+                          SizedBox(width: 3),
+                          Text(
+                            'Live',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],

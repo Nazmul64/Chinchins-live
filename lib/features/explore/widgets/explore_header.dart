@@ -85,12 +85,12 @@ class ExploreHeader extends StatelessWidget {
               const SizedBox(width: 6),
 
               // Trophy / Leaderboard 🏆 (Screenshot 1 & 2)
-              GestureDetector(
-                onTap: onRankTap ?? onSearchTap,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  child: const Text('🏆', style: TextStyle(fontSize: 18)),
-                ),
+              IconButton(
+                icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFFF59E0B), size: 24),
+                tooltip: 'Leaderboard & Ranks',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                onPressed: onRankTap,
               ),
             ],
           ),

@@ -18,6 +18,7 @@ import '../../call/services/call_api_service.dart';
 import '../../call/services/streaming_service.dart';
 
 import '../../party/screens/party_rooms_screen.dart';
+import '../../rank/screens/rank_leaderboard_screen.dart';
 
 class HotExploreScreen extends StatefulWidget {
   final VoidCallback? onMenuTap;
@@ -325,6 +326,15 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
     }).catchError((_) {});
   }
 
+  void _openRankLeaderboardScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const RankLeaderboardScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -341,6 +351,7 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
                   onTabSelected: _onTabSelected,
                   onSearchTap: _showSearchDialog,
                   onCountryTap: _showCountrySelector,
+                  onRankTap: _openRankLeaderboardScreen,
                   onMenuTap: widget.onMenuTap ?? () {
                     Scaffold.maybeOf(context)?.openDrawer();
                   },

@@ -93,6 +93,11 @@ class ApiConstants {
   static String get sellerWithdraw => '$baseUrl/seller/withdraw';
   static String get sellerWithdrawMethods => '$baseUrl/seller/withdraw-methods';
   static String get sellerWithdrawHistory => '$baseUrl/seller/withdraw-history';
+
+  // Ranks & Leaderboard endpoints
+  static String get ranksLeaderboard => '$baseUrl/ranks/leaderboard';
+  static String get ranksLeaderboardAlt => '$baseUrl/leaderboard';
+  static String get rankBadgesConfig => '$baseUrl/app/rank-badges-config';
   
   // Video & Audio Calling endpoints (Legacy & Standard RESTful /api/calls)
   static String get calls => '$baseUrl/calls';

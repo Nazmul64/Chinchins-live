@@ -418,6 +418,17 @@ class ProfileApiService {
           if (root['video_call_rate'] != null) userRaw['video_call_rate'] = root['video_call_rate'];
           if (root['likes'] != null) userRaw['likes'] = root['likes'];
           if (root['gifts_received'] != null) userRaw['gifts_received'] = root['gifts_received'];
+          if (root['is_live'] != null) userRaw['is_live'] = root['is_live'];
+          if (root['live_stream_id'] != null) userRaw['live_stream_id'] = root['live_stream_id'];
+          if (root['active_live_stream_id'] != null) userRaw['active_live_stream_id'] = root['active_live_stream_id'];
+          if (root['channel_name'] != null) userRaw['channel_name'] = root['channel_name'];
+          if (root['live_channel_name'] != null) userRaw['live_channel_name'] = root['live_channel_name'];
+          if (root['live_stream'] is Map) {
+            final ls = root['live_stream'] as Map;
+            userRaw['is_live'] = true;
+            userRaw['live_stream_id'] = ls['id'] ?? ls['stream_id'];
+            userRaw['channel_name'] = ls['channel_name'];
+          }
 
           return ModelProfile.fromJson(userRaw);
         }
