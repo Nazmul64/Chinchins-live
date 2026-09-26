@@ -1394,7 +1394,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                     _incomingCallOverlayEntry?.remove();
                     _incomingCallOverlayEntry = null;
                     if (callId != null) {
-                      CallApiService.rejectCall(callId.toString());
+                      CallApiService.rejectCall(callId: callId.toString());
                     }
                   },
                   child: Container(
@@ -1420,7 +1420,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
                     // 2. Accept call on backend
                     if (callId != null) {
-                      CallApiService.acceptCall(callId.toString());
+                      CallApiService.acceptCall(callId: callId.toString());
                     }
 
                     // 3. Open Video Call Screen
@@ -1430,6 +1430,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                       name: callerName,
                       avatarUrl: callerAvatar,
                       pricePerMin: 100,
+                      age: 22,
+                      location: 'Bangladesh',
+                      intro: 'Incoming 1-on-1 Call',
+                      languages: const ['English', 'Bengali'],
+                      galleryUrls: [callerAvatar],
                     );
 
                     if (!mounted) return;
@@ -1437,10 +1442,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                       context,
                       MaterialPageRoute(
                         builder: (_) => VideoCallScreen(
-                          callSessionId: callId?.toString(),
+                          callId: callId?.toString(),
                           channelName: channelName,
                           model: callerModel,
-                          isCaller: false,
+                          isIncoming: true,
                         ),
                       ),
                     );
