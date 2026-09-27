@@ -82,7 +82,7 @@ class ProfileApiService {
       }
     }
 
-    if (userList != null && userList.isNotEmpty) {
+    if (userList != null) {
       final parsed = <ModelProfile>[];
       for (final item in userList) {
         if (item is Map) {
@@ -113,10 +113,9 @@ class ProfileApiService {
         }
       }
 
-      if (parsed.isNotEmpty) {
-        _inMemoryHomeCache = parsed;
-        HiveCacheService.saveHomeFeed(parsed.map((p) => p.toJson()).toList());
-      }
+      // Overwrite local memory and Hive box with fresh server data
+      _inMemoryHomeCache = parsed;
+      HiveCacheService.saveHomeFeed(parsed.map((p) => p.toJson()).toList());
       return parsed;
     }
     return [];
@@ -127,9 +126,9 @@ class ProfileApiService {
     try {
       final token = await AuthApiService.getToken();
       await FastApiClient.fetchWithInstantCache(
-        endpoint: ApiConstants.homeFeed,
+        endpoint: ApiConstants.usersFeed,
         token: token,
-        queryParams: {'per_page': '20'},
+        queryParams: {'per_page': '50'},
         onData: (data, isFromCache) {
           _parseUserList(data);
         },
@@ -138,9 +137,10 @@ class ProfileApiService {
   }
 
   /// Fetch streamers/users for Home Feed with SWR
+  /// Prioritizes GET /api/users/feed (Infinite dynamic scalable feed)
   static Future<void> getHomeFeedSWR({
     int page = 1,
-    int perPage = 20,
+    int perPage = 50,
     String? country,
     String? gender,
     String? search,
@@ -165,8 +165,9 @@ class ProfileApiService {
       queryParams['is_active'] = isActive ? '1' : '0';
     }
 
+    // 1. Primary: GET /api/users/feed (Scalable registered user feed)
     await FastApiClient.fetchWithInstantCache(
-      endpoint: ApiConstants.homeFeed,
+      endpoint: ApiConstants.usersFeed,
       token: token,
       queryParams: queryParams,
       onData: (data, isFromCache) {
@@ -175,15 +176,26 @@ class ProfileApiService {
           onResult(users, isFromCache);
         }
         if (users.isEmpty && !isFromCache) {
-          // Seamless fallback to /api/users/feed
+          // 2. Fallback to /api/all-users-feed
           FastApiClient.fetchWithInstantCache(
-            endpoint: ApiConstants.usersFeed,
+            endpoint: ApiConstants.allUsersFeed,
             token: token,
             queryParams: queryParams,
-            onData: (feedData, _) {
-              final feedUsers = _parseUserList(feedData);
-              if (feedUsers.isNotEmpty) {
-                onResult(feedUsers, false);
+            onData: (allData, _) {
+              final allUsers = _parseUserList(allData);
+              if (allUsers.isNotEmpty) {
+                onResult(allUsers, false);
+              } else {
+                // 3. Fallback to /api/home
+                FastApiClient.fetchWithInstantCache(
+                  endpoint: ApiConstants.homeFeed,
+                  token: token,
+                  queryParams: queryParams,
+                  onData: (homeData, _) {
+                    final homeUsers = _parseUserList(homeData);
+                    onResult(homeUsers, false);
+                  },
+                );
               }
             },
           );

@@ -29,6 +29,7 @@ import '../widgets/gift_animation_overlay.dart';
 import '../widgets/top_gift_alert_banner.dart';
 import '../widgets/host_on_call_photo_carousel.dart';
 import '../../../core/services/gifts_api_service.dart';
+import '../../../core/services/hive_cache_service.dart';
 import 'video_call_screen.dart';
 
 /// Auto-hiding VS Banner when Co-Host / PK connects (fades out after 2 seconds)
@@ -1843,7 +1844,15 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     _liveKitRoom = null;
     _rtcEngine = null;
 
-    // ⚡ Fire-and-forget background cleanup — NEVER blocks UI
+    // ⚡ 1. Instantly delete from local Hive memory (0.00ms screen cleanup)
+    if (liveId != null) {
+      HiveCacheService.removeLiveStream(liveId);
+    }
+    if (channelName.isNotEmpty) {
+      HiveCacheService.removeLiveStream(channelName);
+    }
+
+    // ⚡ 2. Fire-and-forget background cleanup — NEVER blocks UI
     unawaited(Future.microtask(() async {
       try {
         liveKitRoomRef?.disconnect();
@@ -1867,21 +1876,20 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       } catch (_) {}
 
       if (widget.isHost && liveId != null) {
-        // ✅ Fire both primary and legacy endpoint for maximum reliability
+        // ✅ Fire all live end endpoints
         unawaited(LiveStreamingApiService.endLiveStream(liveStreamId: liveId));
         try {
           final token = await AuthApiService.getToken();
           if (token != null) {
-            unawaited(
-              http.post(
-                Uri.parse('${ApiConstants.baseUrl}/live/$liveId/end'),
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json',
-                  'Authorization': 'Bearer $token',
-                },
-              ).timeout(const Duration(seconds: 10)),
-            );
+            final headers = {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            };
+            unawaited(http.post(Uri.parse('https://chinchins.live/api/live/stream/$liveId/end'), headers: headers).timeout(const Duration(seconds: 10)));
+            unawaited(http.post(Uri.parse('${ApiConstants.baseUrl}/live/stream/$liveId/end'), headers: headers).timeout(const Duration(seconds: 10)));
+            unawaited(http.post(Uri.parse('${ApiConstants.baseUrl}/live/$liveId/end'), headers: headers).timeout(const Duration(seconds: 10)));
+            unawaited(http.post(Uri.parse('${ApiConstants.baseUrl}/v1/stream/end'), headers: headers, body: jsonEncode({'stream_id': liveId, 'channel_name': channelName})).timeout(const Duration(seconds: 10)));
           }
         } catch (_) {}
       }

@@ -115,10 +115,7 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
             ).toList();
           }
 
-          if (filtered.isNotEmpty) {
-            _cachedHomeFeed = filtered;
-          }
-
+          _cachedHomeFeed = filtered;
           if (mounted) {
             setState(() {
               _models = filtered;

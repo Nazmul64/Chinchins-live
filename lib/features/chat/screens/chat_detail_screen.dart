@@ -25,7 +25,6 @@ import '../../wallet/services/wallet_api_service.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../call/screens/live_room_screen.dart';
 import '../../../core/services/gifts_api_service.dart';
-import '../../../core/data/mock_data.dart';
 
 import '../../../core/services/signaling_service.dart';
 
@@ -777,19 +776,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   void _openProfile() {
-    final model = MockData.models.firstWhere(
-      (m) => m.id == widget.thread.modelId || m.name == widget.thread.name,
-      orElse: () => ModelProfile(
-        id: widget.thread.modelId,
-        name: widget.thread.name,
-        age: _partnerAge,
-        location: _partnerCountryName,
-        intro: _partnerGreeting,
-        languages: const ['Bengali', 'English'],
-        avatarUrl: _partnerAvatar.isNotEmpty ? _partnerAvatar : widget.thread.avatarUrl,
-        galleryUrls: widget.thread.avatarUrl.isNotEmpty ? [widget.thread.avatarUrl] : [],
-        pricePerMin: widget.thread.videoCallRate > 0 ? widget.thread.videoCallRate : 1800,
-      ),
+    final model = ModelProfile(
+      id: widget.thread.modelId,
+      accountId: widget.thread.modelId,
+      name: widget.thread.name,
+      age: _partnerAge,
+      location: _partnerCountryName,
+      intro: _partnerGreeting,
+      languages: const ['Bengali', 'English'],
+      avatarUrl: _partnerAvatar.isNotEmpty ? _partnerAvatar : widget.thread.avatarUrl,
+      galleryUrls: widget.thread.avatarUrl.isNotEmpty ? [widget.thread.avatarUrl] : [],
+      pricePerMin: widget.thread.videoCallRate > 0 ? widget.thread.videoCallRate : 100,
     );
 
     Navigator.push(

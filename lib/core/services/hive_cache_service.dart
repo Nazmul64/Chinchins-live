@@ -89,7 +89,7 @@ class HiveCacheService {
     return [];
   }
 
-  /// Save live streams to Hive
+  /// Save live streams to Hive (overwrites completely)
   static Future<void> saveLiveStreams(List<dynamic> streams) async {
     try {
       if (_liveBox != null && _liveBox!.isOpen) {
@@ -97,6 +97,35 @@ class HiveCacheService {
       }
     } catch (e) {
       debugPrint('[HiveCacheService] saveLiveStreams error: $e');
+    }
+  }
+
+  /// Instantly remove a closed live stream from Hive cache (0.00ms cleanup)
+  static Future<void> removeLiveStream(dynamic streamId) async {
+    try {
+      if (_liveBox != null && _liveBox!.isOpen) {
+        final current = getCachedLiveStreams();
+        current.removeWhere((s) {
+          final sId = (s['id'] ?? s['stream_id'] ?? s['live_stream_id'] ?? s['room_id'])?.toString();
+          final sChannel = (s['channel_name'] ?? s['room_name'])?.toString();
+          final target = streamId.toString();
+          return sId == target || sChannel == target;
+        });
+        await _liveBox!.put('live_streams', current);
+      }
+    } catch (e) {
+      debugPrint('[HiveCacheService] removeLiveStream error: $e');
+    }
+  }
+
+  /// Clear all cached live streams
+  static Future<void> clearLiveStreams() async {
+    try {
+      if (_liveBox != null && _liveBox!.isOpen) {
+        await _liveBox!.put('live_streams', <dynamic>[]);
+      }
+    } catch (e) {
+      debugPrint('[HiveCacheService] clearLiveStreams error: $e');
     }
   }
 

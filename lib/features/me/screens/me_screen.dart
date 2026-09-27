@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../../core/widgets/avatar_with_frame.dart';
-import '../../../core/data/mock_data.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/services/local_image_cache.dart';
@@ -469,7 +468,7 @@ class _MeScreenState extends State<MeScreen> {
     final userCountry = _myProfile?.location ?? 'Bangladesh';
     final avatar = (_myProfile?.avatarUrl != null && _myProfile!.avatarUrl.isNotEmpty)
         ? _myProfile!.avatarUrl
-        : (LocalImageCache.localAvatar ?? MockData.imgLivePreview);
+        : (LocalImageCache.localAvatar ?? '');
 
     final List<String> gallery = [];
     if (_myProfile?.galleryUrls != null) {
