@@ -22,8 +22,13 @@ import '../../rank/screens/rank_leaderboard_screen.dart';
 
 class HotExploreScreen extends StatefulWidget {
   final VoidCallback? onMenuTap;
+  final bool refreshOnStart;
 
-  const HotExploreScreen({super.key, this.onMenuTap});
+  const HotExploreScreen({
+    super.key,
+    this.onMenuTap,
+    this.refreshOnStart = false,
+  });
 
   @override
   State<HotExploreScreen> createState() => _HotExploreScreenState();
@@ -54,8 +59,10 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
       _models = [];
     }
 
-    // 2. Fetch fresh updates in parallel in background silently (SWR)
-    _loadHomeFeed();
+    // 2. Auto-fetch feed immediately upon screen entry in background (PostFrameCallback)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadHomeFeed();
+    });
   }
 
   Future<void> _loadHomeFeed() async {

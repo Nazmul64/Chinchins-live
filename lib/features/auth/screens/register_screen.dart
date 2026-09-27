@@ -139,12 +139,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
 
+      // ⚡ Instant Global Auth Token Injection
+      final dynamic token = result['token'];
+      if (token != null) {
+        AuthApiService.setBearerToken(token.toString());
+      }
+
       // ⚡ Pre-fetch all post-authentication essentials into RAM cache (<0.00ms home load)
       unawaited(AuthApiService.prefetchPostAuthEssentials());
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
+        MaterialPageRoute(builder: (context) => const MainNavigationScreen(refreshOnStart: true)),
         (route) => false,
       );
     } else {

@@ -73,12 +73,18 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
 
+      // ⚡ Instant Global Auth Token Injection
+      final dynamic token = result['token'];
+      if (token != null) {
+        AuthApiService.setBearerToken(token.toString());
+      }
+
       // ⚡ Pre-fetch all post-authentication essentials into RAM cache (<0.00ms home load)
       unawaited(AuthApiService.prefetchPostAuthEssentials());
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
+        MaterialPageRoute(builder: (context) => const MainNavigationScreen(refreshOnStart: true)),
       );
     } else if (result['is_deleted'] == true) {
       _showAccountDeletedDialog(result['message']);

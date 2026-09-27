@@ -18,7 +18,12 @@ import '../widgets/app_side_drawer.dart';
 import '../../../main.dart';
 
 class MainNavigationScreen extends StatefulWidget {
-  const MainNavigationScreen({super.key});
+  final bool refreshOnStart;
+
+  const MainNavigationScreen({
+    super.key,
+    this.refreshOnStart = false,
+  });
 
   @override
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
@@ -34,6 +39,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   late final List<Widget> _screens = [
     HotExploreScreen(
       onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+      refreshOnStart: widget.refreshOnStart,
     ),
     const MessagesScreen(),
     const MeScreen(),

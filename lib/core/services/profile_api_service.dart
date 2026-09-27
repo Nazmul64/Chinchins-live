@@ -124,20 +124,18 @@ class ProfileApiService {
   /// Preload home feed in background during startup
   static Future<void> preloadHomeFeedInBackground() async {
     try {
-      final token = await AuthApiService.getToken();
-      await FastApiClient.fetchWithInstantCache(
-        endpoint: ApiConstants.usersFeed,
-        token: token,
-        queryParams: {'per_page': '50'},
-        onData: (data, isFromCache) {
-          _parseUserList(data);
+      await getHomeFeedSWR(
+        perPage: 50,
+        onResult: (users, isFromCache) {
+          if (users.isNotEmpty) {
+            _inMemoryHomeCache = users;
+          }
         },
       );
     } catch (_) {}
   }
 
-  /// Fetch streamers/users for Home Feed with SWR
-  /// Prioritizes GET /api/users/feed (Infinite dynamic scalable feed)
+  /// Fetch streamers/users for Home Feed with SWR & Multi-Endpoint High Availability Failover
   static Future<void> getHomeFeedSWR({
     int page = 1,
     int perPage = 50,
@@ -147,10 +145,17 @@ class ProfileApiService {
     bool? isActive,
     required Function(List<ModelProfile> users, bool isFromCache) onResult,
   }) async {
+    // 1. Instant 0.00ms Cache Dispatch (L1 RAM + L2 Hive)
+    final cachedUsers = getCachedHomeFeed();
+    if (cachedUsers.isNotEmpty) {
+      onResult(cachedUsers, true);
+    }
+
+    // 2. Fetch fresh users from server with resilient failover endpoints
     final token = await AuthApiService.getToken();
-    final queryParams = <String, dynamic>{
-      'page': page,
-      'per_page': perPage,
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'per_page': perPage.toString(),
     };
     if (country != null && country.isNotEmpty && country != 'All') {
       queryParams['country'] = country;
@@ -165,43 +170,45 @@ class ProfileApiService {
       queryParams['is_active'] = isActive ? '1' : '0';
     }
 
-    // 1. Primary: GET /api/users/feed (Scalable registered user feed)
-    await FastApiClient.fetchWithInstantCache(
-      endpoint: ApiConstants.usersFeed,
-      token: token,
-      queryParams: queryParams,
-      onData: (data, isFromCache) {
-        final users = _parseUserList(data);
-        if (users.isNotEmpty || !isFromCache) {
-          onResult(users, isFromCache);
+    final endpoints = [
+      ApiConstants.allUsersFeed,
+      ApiConstants.homeFeed,
+      ApiConstants.usersFeed,
+      ApiConstants.users,
+    ];
+
+    final headers = {
+      'Accept': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+
+    bool fetched = false;
+    for (final endpoint in endpoints) {
+      try {
+        final uri = Uri.parse(endpoint).replace(queryParameters: queryParams);
+        final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 8));
+        if (response.statusCode == 200) {
+          final decoded = _safeJsonDecode(response.body);
+          if (decoded != null) {
+            final users = _parseUserList(decoded);
+            if (users.isNotEmpty) {
+              _inMemoryHomeCache = users;
+              HiveCacheService.saveHomeFeed(users.map((p) => p.toJson()).toList());
+              await FastApiClient.putCache(endpoint, decoded, queryParams);
+              onResult(users, false);
+              fetched = true;
+              break;
+            }
+          }
         }
-        if (users.isEmpty && !isFromCache) {
-          // 2. Fallback to /api/all-users-feed
-          FastApiClient.fetchWithInstantCache(
-            endpoint: ApiConstants.allUsersFeed,
-            token: token,
-            queryParams: queryParams,
-            onData: (allData, _) {
-              final allUsers = _parseUserList(allData);
-              if (allUsers.isNotEmpty) {
-                onResult(allUsers, false);
-              } else {
-                // 3. Fallback to /api/home
-                FastApiClient.fetchWithInstantCache(
-                  endpoint: ApiConstants.homeFeed,
-                  token: token,
-                  queryParams: queryParams,
-                  onData: (homeData, _) {
-                    final homeUsers = _parseUserList(homeData);
-                    onResult(homeUsers, false);
-                  },
-                );
-              }
-            },
-          );
-        }
-      },
-    );
+      } catch (e) {
+        debugPrint('[ProfileApiService] Error fetching from $endpoint: $e');
+      }
+    }
+
+    if (!fetched && cachedUsers.isEmpty) {
+      onResult([], false);
+    }
   }
 
   /// Fetch authenticated user profile

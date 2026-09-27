@@ -12,6 +12,15 @@ class FastApiClient {
   static final Map<String, dynamic> _memoryCache = {};
   static SharedPreferences? _prefs;
   static bool _isInitialized = false;
+  static String? _currentToken;
+
+  /// Global instantaneous Bearer Token Setter for 0-latency auth headers
+  static void setBearerToken(String? token) {
+    _currentToken = token;
+  }
+
+  /// Get currently active in-memory token
+  static String? get currentToken => _currentToken;
 
   /// Initialize FastApiClient (preloads disk cache index)
   static Future<void> init() async {
@@ -136,9 +145,10 @@ class FastApiClient {
         });
       }
 
+      final effectiveToken = (token != null && token.isNotEmpty) ? token : _currentToken;
       final headers = <String, String>{
         'Accept': 'application/json',
-        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (effectiveToken != null && effectiveToken.isNotEmpty) 'Authorization': 'Bearer $effectiveToken',
         if (customHeaders != null) ...customHeaders,
       };
 
@@ -180,9 +190,10 @@ class FastApiClient {
         });
       }
 
+      final effectiveToken = (token != null && token.isNotEmpty) ? token : _currentToken;
       final headers = <String, String>{
         'Accept': 'application/json',
-        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (effectiveToken != null && effectiveToken.isNotEmpty) 'Authorization': 'Bearer $effectiveToken',
       };
 
       final response = await http.get(uri, headers: headers).timeout(timeout);

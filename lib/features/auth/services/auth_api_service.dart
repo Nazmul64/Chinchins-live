@@ -11,10 +11,20 @@ import '../../../core/services/profile_api_service.dart';
 import '../../../core/services/app_cache_service.dart';
 import '../../../core/services/app_preloader.dart';
 import '../../../core/services/hive_cache_service.dart';
+import '../../../core/services/fast_api_client.dart';
 
 class AuthApiService {
   static const String _keyToken = 'auth_token';
   static const String _keyUser = 'auth_user';
+
+  static String? _inMemoryToken;
+  static Map<String, dynamic>? _inMemoryUser;
+
+  /// Global instantaneous Bearer Token Setter for 0-latency auth headers
+  static void setBearerToken(String? token) {
+    _inMemoryToken = token;
+    FastApiClient.setBearerToken(token);
+  }
 
   /// Register a new user with RESTful API
   static Future<Map<String, dynamic>> register({
@@ -423,6 +433,11 @@ class AuthApiService {
     required String token,
     Map<String, dynamic>? user,
   }) async {
+    _inMemoryToken = token;
+    FastApiClient.setBearerToken(token);
+    if (user != null) {
+      _inMemoryUser = user;
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyToken, token);
     if (user != null) {
@@ -444,6 +459,7 @@ class AuthApiService {
 
   /// Update locally stored user data
   static Future<void> saveUser(Map<String, dynamic> user) async {
+    _inMemoryUser = user;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyUser, jsonEncode(user));
     await HiveCacheService.saveUserProfile(user);
@@ -451,14 +467,26 @@ class AuthApiService {
 
   /// Retrieve stored auth token
   static Future<String?> getToken() async {
+    if (_inMemoryToken != null && _inMemoryToken!.isNotEmpty) {
+      return _inMemoryToken;
+    }
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyToken);
+    final token = prefs.getString(_keyToken);
+    if (token != null && token.isNotEmpty) {
+      _inMemoryToken = token;
+      FastApiClient.setBearerToken(token);
+    }
+    return token;
   }
 
   /// Retrieve stored user data (0.00ms Hive instant lookup first)
   static Future<Map<String, dynamic>?> getSavedUser() async {
+    if (_inMemoryUser != null) {
+      return _inMemoryUser;
+    }
     final hiveUser = HiveCacheService.getCachedUserProfile();
     if (hiveUser != null) {
+      _inMemoryUser = hiveUser;
       return hiveUser;
     }
     final prefs = await SharedPreferences.getInstance();
@@ -466,6 +494,7 @@ class AuthApiService {
     if (userStr != null) {
       try {
         final decoded = jsonDecode(userStr) as Map<String, dynamic>;
+        _inMemoryUser = decoded;
         HiveCacheService.saveUserProfile(decoded);
         return decoded;
       } catch (_) {}
@@ -475,6 +504,9 @@ class AuthApiService {
 
   /// Clear session on explicit manual logout (Revokes server token & wipes local state)
   static Future<bool> logout({bool allDevices = false, bool clearFcm = true}) async {
+    _inMemoryToken = null;
+    _inMemoryUser = null;
+    FastApiClient.setBearerToken(null);
     try {
       final token = await getToken();
       if (token != null && token.isNotEmpty) {
