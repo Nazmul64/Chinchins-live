@@ -1827,7 +1827,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
           await _rtcEngine!.stopPreview();
         }
         await LiveStreamingApiService.leaveCohost(
-          _activeLiveId ?? widget.host.id,
+          roomId: _activeLiveId ?? widget.host.id,
           guestUserId: _myUid,
         );
         if (mounted) {
