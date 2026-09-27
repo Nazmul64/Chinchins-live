@@ -25,6 +25,7 @@ class HexColor {
 class AvatarWithFrame extends StatelessWidget {
   final String avatarUrl;
   final String? frameUrl;
+  final String? rankBadgeIconUrl;
   final int level;
   final String? badgeColor;
   final String? badgeIcon;
@@ -37,6 +38,7 @@ class AvatarWithFrame extends StatelessWidget {
     super.key,
     required this.avatarUrl,
     this.frameUrl,
+    this.rankBadgeIconUrl,
     this.level = 0,
     this.badgeColor,
     this.badgeIcon,
@@ -96,7 +98,22 @@ class AvatarWithFrame extends StatelessWidget {
                 ),
               ),
 
-            // 3. Level Badge Pill (Bottom Center)
+            // 3. Rank 1/2/3 Medal or Crown Badge Icon (Top Left)
+            if (rankBadgeIconUrl != null && rankBadgeIconUrl!.isNotEmpty)
+              Positioned(
+                top: 0,
+                left: 0,
+                child: SizedBox(
+                  width: size * 0.38,
+                  height: size * 0.38,
+                  child: CachedImageLoader(
+                    imageUrl: rankBadgeIconUrl!,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+
+            // 4. Level Badge Pill (Bottom Center)
             if (showLevelBadge)
               Positioned(
                 bottom: -2,
@@ -151,3 +168,7 @@ class AvatarWithFrame extends StatelessWidget {
     );
   }
 }
+
+/// Reusable alias for compatibility across profile and me screens
+typedef UserAvatarWithFrame = AvatarWithFrame;
+

@@ -82,16 +82,18 @@ class ExploreHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-
-              // Trophy / Leaderboard 🏆 (Screenshot 1 & 2)
-              IconButton(
-                icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFFF59E0B), size: 24),
-                tooltip: 'Leaderboard & Ranks',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                onPressed: onRankTap,
-              ),
+              // 🏆 Trophy / Leaderboard Icon: Visible ONLY on Live Tab (index 1), hidden on Hot and other tabs
+              if (selectedTabIndex == 1 && onRankTap != null) ...[
+                const SizedBox(width: 6),
+                IconButton(
+                  icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFFF59E0B), size: 24),
+                  tooltip: 'Leaderboard & Ranks',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  onPressed: onRankTap,
+                ),
+              ] else
+                const SizedBox(width: 4),
             ],
           ),
         ],
