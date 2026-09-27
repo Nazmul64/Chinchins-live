@@ -174,6 +174,20 @@ class ProfileApiService {
         if (users.isNotEmpty || !isFromCache) {
           onResult(users, isFromCache);
         }
+        if (users.isEmpty && !isFromCache) {
+          // Seamless fallback to /api/users/feed
+          FastApiClient.fetchWithInstantCache(
+            endpoint: ApiConstants.usersFeed,
+            token: token,
+            queryParams: queryParams,
+            onData: (feedData, _) {
+              final feedUsers = _parseUserList(feedData);
+              if (feedUsers.isNotEmpty) {
+                onResult(feedUsers, false);
+              }
+            },
+          );
+        }
       },
     );
   }

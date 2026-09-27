@@ -35,6 +35,10 @@ class ApiConstants {
   static String get countries => '$baseUrl/countries';
   static String get homeFeed => '$baseUrl/home';
   static String get users => '$baseUrl/users';
+  static String get usersFeed => '$baseUrl/users/feed';
+  static String get feedUsers => '$baseUrl/feed/users';
+  static String get allUsersFeed => '$baseUrl/all-users-feed';
+  static String get feedGlobal => '$baseUrl/feed/global';
   static String get search => '$baseUrl/search';
   static String get usersSearch => '$baseUrl/users/search';
   static String searchUsers(String query) => '$baseUrl/search?q=${Uri.encodeComponent(query)}';
