@@ -2,12 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/models/chat_message.dart';
 import '../../../core/models/model_profile.dart';
+import '../../../core/services/hive_cache_service.dart';
 import '../../../core/services/profile_api_service.dart';
 import '../../../core/services/notification_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../widgets/chat_thread_tile.dart';
 import 'notifications_screen.dart';
+import 'call_history_screen.dart';
 import '../../chat/services/chat_api_service.dart';
 import '../../chat/screens/chat_detail_screen.dart';
 
@@ -28,9 +30,19 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   void initState() {
     super.initState();
-    _loadConversations(initial: true);
+    // ⚡ 1. Synchronous 0.00ms instantaneous Hive cache load
+    _loadFromCache();
+    _loadConversations(initial: _threads.isEmpty);
     _loadLiveHosts();
     _startRealtimePolling();
+  }
+
+  void _loadFromCache() {
+    final cached = HiveCacheService.getCachedConversations();
+    if (cached.isNotEmpty) {
+      _threads = cached.map((c) => ChatThread.fromJson(c)).toList();
+      _isLoading = false;
+    }
   }
 
   @override
@@ -98,6 +110,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
             if (b.lastMessageAt != null) return 1;
             return 0;
           });
+
+          // Save conversations to Hive for instant 0ms offline-first access
+          if (res['conversations'] is List) {
+            await HiveCacheService.saveConversations(res['conversations'] as List);
+          }
 
           setState(() {
             _threads = convList;
@@ -364,17 +381,27 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   const SizedBox(width: 10),
 
                   // Phone/Call Log Icon Button (with orange pill background)
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AppColors.warmOrange.withValues(alpha: 0.18),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.phone_rounded,
-                      color: AppColors.warmOrange,
-                      size: 20,
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const CallHistoryScreen(),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.warmOrange.withValues(alpha: 0.18),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.phone_rounded,
+                        color: AppColors.warmOrange,
+                        size: 20,
+                      ),
                     ),
                   ),
 

@@ -9,11 +9,15 @@ class HiveCacheService {
   static const String boxLiveStreams = 'hive_live_streams_box';
   static const String boxUserProfile = 'hive_user_profile_box';
   static const String boxAppSettings = 'hive_app_settings_box';
+  static const String boxConversations = 'hive_conversations_box';
+  static const String boxCallHistory = 'hive_call_history_box';
 
   static Box? _homeBox;
   static Box? _liveBox;
   static Box? _userBox;
   static Box? _settingsBox;
+  static Box? _conversationsBox;
+  static Box? _callHistoryBox;
   static bool _isInitialized = false;
 
   /// Initialize Hive Flutter boxes on App Startup
@@ -25,8 +29,10 @@ class HiveCacheService {
       _liveBox = await Hive.openBox(boxLiveStreams);
       _userBox = await Hive.openBox(boxUserProfile);
       _settingsBox = await Hive.openBox(boxAppSettings);
+      _conversationsBox = await Hive.openBox(boxConversations);
+      _callHistoryBox = await Hive.openBox(boxCallHistory);
       _isInitialized = true;
-      debugPrint('⚡ [HiveCacheService] Initialized successfully with 4 boxes.');
+      debugPrint('⚡ [HiveCacheService] Initialized successfully with 6 boxes.');
     } catch (e) {
       debugPrint('[HiveCacheService] Init error (fallback memory active): $e');
     }
@@ -94,6 +100,74 @@ class HiveCacheService {
     }
   }
 
+  // ==================== CONVERSATIONS CACHE ====================
+
+  /// Synchronously get cached conversations (0.00ms)
+  static List<Map<String, dynamic>> getCachedConversations() {
+    try {
+      if (_conversationsBox != null && _conversationsBox!.isOpen) {
+        final raw = _conversationsBox!.get('conversation_list');
+        if (raw is List) {
+          return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        } else if (raw is String) {
+          final decoded = jsonDecode(raw);
+          if (decoded is List) {
+            return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[HiveCacheService] getCachedConversations error: $e');
+    }
+    return [];
+  }
+
+  /// Save conversations to Hive
+  static Future<void> saveConversations(List<dynamic> convs) async {
+    try {
+      if (_conversationsBox != null && _conversationsBox!.isOpen) {
+        await _conversationsBox!.put('conversation_list', convs);
+        await _conversationsBox!.put('conversations_updated_at', DateTime.now().millisecondsSinceEpoch);
+      }
+    } catch (e) {
+      debugPrint('[HiveCacheService] saveConversations error: $e');
+    }
+  }
+
+  // ==================== CALL HISTORY CACHE ====================
+
+  /// Synchronously get cached call history (0.00ms)
+  static List<Map<String, dynamic>> getCachedCallHistory() {
+    try {
+      if (_callHistoryBox != null && _callHistoryBox!.isOpen) {
+        final raw = _callHistoryBox!.get('call_history_list');
+        if (raw is List) {
+          return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        } else if (raw is String) {
+          final decoded = jsonDecode(raw);
+          if (decoded is List) {
+            return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[HiveCacheService] getCachedCallHistory error: $e');
+    }
+    return [];
+  }
+
+  /// Save call history to Hive
+  static Future<void> saveCallHistory(List<dynamic> history) async {
+    try {
+      if (_callHistoryBox != null && _callHistoryBox!.isOpen) {
+        await _callHistoryBox!.put('call_history_list', history);
+        await _callHistoryBox!.put('call_history_updated_at', DateTime.now().millisecondsSinceEpoch);
+      }
+    } catch (e) {
+      debugPrint('[HiveCacheService] saveCallHistory error: $e');
+    }
+  }
+
   // ==================== USER PROFILE CACHE ====================
 
   /// Get current cached user profile (0.00ms)
@@ -133,8 +207,11 @@ class HiveCacheService {
       await _homeBox?.clear();
       await _liveBox?.clear();
       await _userBox?.clear();
+      await _conversationsBox?.clear();
+      await _callHistoryBox?.clear();
     } catch (e) {
       debugPrint('[HiveCacheService] clearAll error: $e');
     }
   }
 }
+

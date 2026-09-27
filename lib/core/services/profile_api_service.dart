@@ -861,35 +861,43 @@ class ProfileApiService {
   }
 
   /// Record profile view and trigger automated host greeting / callback
+  /// Hits POST /api/user/profile-visit & /api/profile-visit
   static Future<Map<String, dynamic>?> recordProfileView(dynamic hostId) async {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
       final viewerId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse(ApiConstants.profileView(hostId));
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (viewerId != null) 'X-User-Id': viewerId,
+      };
 
-      final payload = {
+      final payload = jsonEncode({
         'host_id': hostId,
         if (viewerId != null) 'viewer_id': viewerId,
         if (viewerId != null) 'user_id': viewerId,
-      };
+      });
 
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-          if (viewerId != null) 'X-User-Id': viewerId,
-        },
-        body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 8));
+      var uri = Uri.parse('${ApiConstants.baseUrl}/user/profile-visit');
+      var response = await http.post(uri, headers: headers, body: payload).timeout(const Duration(seconds: 4));
+
+      if (response.statusCode != 200) {
+        uri = Uri.parse('${ApiConstants.baseUrl}/profile-visit');
+        response = await http.post(uri, headers: headers, body: payload).timeout(const Duration(seconds: 4));
+      }
+
+      if (response.statusCode != 200) {
+        uri = Uri.parse(ApiConstants.profileView(hostId));
+        response = await http.post(uri, headers: headers, body: payload).timeout(const Duration(seconds: 4));
+      }
 
       if (response.statusCode == 200) {
-        final data = _safeJsonDecode(response.body);
-        if (data != null && data['data'] != null) {
-          return data['data'] as Map<String, dynamic>;
+        final decoded = _safeJsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
         }
       }
     } catch (e) {
@@ -933,4 +941,5 @@ class ProfileApiService {
     return null;
   }
 }
+
 

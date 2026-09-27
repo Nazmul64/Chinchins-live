@@ -27,11 +27,8 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentIndex = 0;
-  Timer? _incomingCallPollTimer;
   Timer? _heartbeatTimer;
   StreamSubscription? _wsIncomingCallSub;
-  bool _isCheckingIncoming = false;
-  bool _isLongPollingActive = true;
   int? _activeIncomingCallId;
 
   late final List<Widget> _screens = [
@@ -48,8 +45,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     ChatApiService.getConversations();
     _initWebSocketSignaling();
     _startUserHeartbeat();
-    _startIncomingCallListener();
-    _startLongPollStream();
     _initAppServices();
   }
 
@@ -101,36 +96,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     });
   }
 
-  /// Tier 1: Zero-Latency Long-Polling Stream
-  void _startLongPollStream() async {
-    while (_isLongPollingActive && mounted) {
-      try {
-        final incoming = await CallApiService.waitIncomingCall(timeoutSeconds: 15);
-        if (incoming != null && mounted) {
-          _handleIncomingCallData(incoming);
-        }
-      } catch (_) {
-        await Future.delayed(const Duration(seconds: 1));
-      }
-    }
-  }
-
-  /// Tier 2: 1-Second Fallback Poller
-  void _startIncomingCallListener() {
-    _incomingCallPollTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
-      if (_isCheckingIncoming || !mounted) return;
-      _isCheckingIncoming = true;
-      try {
-        final incoming = await CallApiService.checkIncomingCall();
-        if (incoming != null && mounted) {
-          _handleIncomingCallData(incoming);
-        }
-      } catch (_) {}
-      _isCheckingIncoming = false;
-    });
-  }
-
-  void _handleIncomingCallData(Map<String, dynamic> incoming) {
+  void _handleIncomingCallData(Map<String, dynamic> incoming) async {
     final payload = incoming['data'] is Map ? Map<String, dynamic>.from(incoming['data']) : incoming;
     final dynamic rawCallId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? payload['call_session_id'] ?? incoming['call_id'] ?? incoming['id'];
     
@@ -169,6 +135,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           payload['from_user_id']?.toString() ??
           '1';
       final callerAccountId = caller['account_id']?.toString() ?? callerId;
+
+      // Prevent Self-Calling Loop
+      final savedUser = await AuthApiService.getSavedUser();
+      final myId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString();
+      final myAccountId = savedUser?['account_id']?.toString();
+      if ((myId != null && myId.isNotEmpty && (myId == callerId || myId == callerAccountId)) ||
+          (myAccountId != null && myAccountId.isNotEmpty && (myAccountId == callerId || myAccountId == callerAccountId))) {
+        debugPrint('[MainNavigationScreen] Ignored self-call event: myId=$myId, callerId=$callerId');
+        return;
+      }
+
       final callerName = caller['name'] ??
           caller['display_name'] ??
           caller['username'] ??
@@ -206,6 +183,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               incoming['ringtone_url'])
           ?.toString();
 
+      if (!mounted) return;
       final navState = ChinchinsLiveApp.navigatorKey.currentState ?? Navigator.of(context);
       navState.push(
         MaterialPageRoute(
@@ -227,8 +205,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   void dispose() {
-    _isLongPollingActive = false;
-    _incomingCallPollTimer?.cancel();
     _heartbeatTimer?.cancel();
     _wsIncomingCallSub?.cancel();
     NotificationApiService.instance.stopNotificationPolling();

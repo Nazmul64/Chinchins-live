@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/signaling_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -50,6 +51,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   @override
   void initState() {
     super.initState();
+    try {
+      WakelockPlus.enable();
+    } catch (_) {}
     AppLogger.info('WebRTC', 'INCOMING_CALL_RECEIVED');
     _pulseController = AnimationController(
       vsync: this,
@@ -124,6 +128,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
   @override
   void dispose() {
+    try {
+      WakelockPlus.disable();
+    } catch (_) {}
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
     _wsCancelledSub?.cancel();

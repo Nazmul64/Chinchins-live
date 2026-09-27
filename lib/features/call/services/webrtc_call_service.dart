@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../core/services/signaling_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../auth/services/auth_api_service.dart';
@@ -99,6 +100,11 @@ class WebRTCCallService {
   /// Initialize Local Media with Full HD Camera & Advanced Noise Cancellation Audio
   Future<bool> initializeMedia({bool isAudioOnly = false}) async {
     try {
+      await [
+        Permission.microphone,
+        if (!isAudioOnly) Permission.camera,
+      ].request();
+
       final savedUser = await AuthApiService.getSavedUser();
       _currentUserId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString() ?? savedUser?['account_id']?.toString();
 

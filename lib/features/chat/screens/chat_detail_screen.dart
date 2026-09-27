@@ -19,11 +19,11 @@ import '../widgets/report_user_modal.dart';
 import '../services/chat_api_service.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../../call/services/call_api_service.dart';
-import '../../call/services/call_sound_manager.dart';
 import '../../call/services/streaming_service.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../../profile/screens/host_profile_screen.dart';
+import '../../call/screens/live_room_screen.dart';
 import '../../../core/services/gifts_api_service.dart';
 import '../../../core/data/mock_data.dart';
 
@@ -67,6 +67,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   String _partnerAvatar = '';
   bool _showEmojiStrip = false;
   int _videoCallRate = 100;
+  bool _isPartnerLive = false;
+  dynamic _activeLiveStreamId;
+  String? _liveChannelName;
 
   // Voice recording state
   bool _isRecording = false;
@@ -82,9 +85,30 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _videoCallRate = widget.thread.videoCallRate > 0 ? widget.thread.videoCallRate : 100;
     _initChatUserAndMessages();
     _loadCallConfig();
+    _checkPartnerLiveStatus();
     _startRealtimePolling();
     _subscribeToDirectMessages();
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  }
+
+  void _checkPartnerLiveStatus() {
+    CallApiService.getLiveStreams().then((streams) {
+      if (!mounted || streams.isEmpty) return;
+      final match = streams.firstWhere(
+        (s) =>
+            s['host_id']?.toString() == widget.thread.modelId ||
+            s['user_id']?.toString() == widget.thread.modelId ||
+            s['account_id']?.toString() == widget.thread.modelId,
+        orElse: () => <String, dynamic>{},
+      );
+      if (match.isNotEmpty && mounted) {
+        setState(() {
+          _isPartnerLive = true;
+          _activeLiveStreamId = match['id'] ?? match['stream_id'];
+          _liveChannelName = match['channel_name']?.toString();
+        });
+      }
+    }).catchError((_) {});
   }
 
   void _subscribeToDirectMessages() {
@@ -721,6 +745,37 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }).catchError((_) {});
   }
 
+  void _openLiveRoom() {
+    final model = ModelProfile(
+      id: widget.thread.modelId,
+      accountId: widget.thread.modelId,
+      name: widget.thread.name,
+      age: _partnerAge,
+      location: _partnerCountryName,
+      intro: _partnerGreeting,
+      languages: const ['Bengali', 'English'],
+      avatarUrl: _partnerAvatar.isNotEmpty ? _partnerAvatar : widget.thread.avatarUrl,
+      galleryUrls: [widget.thread.avatarUrl],
+      pricePerMin: widget.thread.videoCallRate > 0 ? widget.thread.videoCallRate : 100,
+      isLive: true,
+      activeLiveStreamId: _activeLiveStreamId,
+      liveChannelName: _liveChannelName,
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LiveRoomScreen(
+          host: model,
+          liveId: _activeLiveStreamId ?? widget.thread.modelId,
+          channelName: _liveChannelName ?? 'live_host_${widget.thread.modelId}',
+          title: '${widget.thread.name}\'s Live Room',
+          isHost: false,
+        ),
+      ),
+    );
+  }
+
   void _openProfile() {
     final model = MockData.models.firstWhere(
       (m) => m.id == widget.thread.modelId || m.name == widget.thread.name,
@@ -967,6 +1022,44 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ),
         ),
         actions: [
+          // Live Room Entry Action if Partner is currently Live
+          if (_isPartnerLive)
+            GestureDetector(
+              onTap: _openLiveRoom,
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF007A), Color(0xFF7928CA)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF007A).withValues(alpha: 0.5),
+                      blurRadius: 6,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('🔴', style: TextStyle(fontSize: 10)),
+                    SizedBox(width: 4),
+                    Text(
+                      'LIVE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           // Top Quick Video Call Action
           GestureDetector(
             onTap: _isBlockedByMe ? null : _openVideoCall,

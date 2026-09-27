@@ -9,6 +9,7 @@ import '../../../core/utils/app_logger.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../screens/agora_call_screen.dart';
 import '../screens/video_call_screen.dart';
+import 'call_api_service.dart';
 
 class StreamingService {
   /// Fetch the active streaming engine & credentials from Laravel API Engine
@@ -231,6 +232,20 @@ class StreamingService {
           ),
         ),
       );
+    }
+
+    // 4. Trigger backend call initiation & socket delivery in background (<0.00ms async)
+    if (!isIncoming) {
+      CallApiService.initiateCall(
+        receiverId: model.id,
+        receiverAccountId: model.accountId,
+        callType: callType,
+        channelName: channelName,
+      ).then((res) {
+        debugPrint('[StreamingService] Outgoing call initiated: ${res['success']}');
+      }).catchError((err) {
+        debugPrint('[StreamingService] initiateCall error: $err');
+      });
     }
   }
 }

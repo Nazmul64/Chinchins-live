@@ -633,35 +633,65 @@ class SignalingService {
     }
 
     // Check for other WebRTC signaling events
-    switch (cleanName) {
-      case 'call.accepted':
-      case 'CallAccepted':
-        _callAcceptedController.add(data);
-        break;
-      case 'call.rejected':
-      case 'CallRejected':
-        _callRejectedController.add(data);
-        break;
-      case 'call.cancelled':
-      case 'CallCancelled':
-        _callCancelledController.add(data);
-        break;
-      case 'call.ended':
-      case 'CallEnded':
-        _callEndedController.add(data);
-        break;
-      case 'webrtc.offer':
-      case 'WebRTCOffer':
-        _offerController.add(data);
-        break;
-      case 'webrtc.answer':
-      case 'WebRTCAnswer':
-        _answerController.add(data);
-        break;
-      case 'webrtc.ice_candidate':
-      case 'WebRTCICECandidate':
-        _iceCandidateController.add(data);
-        break;
+    if (cleanName == 'call.accepted' ||
+        cleanName == 'CallAccepted' ||
+        cleanName == 'CallAcceptedEvent' ||
+        cleanName.endsWith('CallAcceptedEvent') ||
+        lowerName == 'call.accepted' ||
+        lowerName == 'callaccepted' ||
+        lowerName == 'call_accepted') {
+      _callAcceptedController.add(data);
+      return;
+    }
+
+    if (cleanName == 'call.rejected' ||
+        cleanName == 'CallRejected' ||
+        cleanName == 'CallRejectedEvent' ||
+        cleanName.endsWith('CallRejectedEvent') ||
+        lowerName == 'call.rejected' ||
+        lowerName == 'callrejected' ||
+        lowerName == 'call_rejected') {
+      _callRejectedController.add(data);
+      return;
+    }
+
+    if (cleanName == 'call.cancelled' ||
+        cleanName == 'CallCancelled' ||
+        cleanName == 'CallCancelledEvent' ||
+        cleanName.endsWith('CallCancelledEvent') ||
+        lowerName == 'call.cancelled' ||
+        lowerName == 'callcancelled' ||
+        lowerName == 'call_cancelled') {
+      _callCancelledController.add(data);
+      return;
+    }
+
+    if (cleanName == 'call.ended' ||
+        cleanName == 'CallEnded' ||
+        cleanName == 'CallEndedEvent' ||
+        cleanName.endsWith('CallEndedEvent') ||
+        lowerName == 'call.ended' ||
+        lowerName == 'callended' ||
+        lowerName == 'call_ended' ||
+        (data['action'] == 'call_ended') ||
+        (data['status'] == 'completed' && isCallChannel)) {
+      _callEndedController.add(data);
+      return;
+    }
+
+    if (cleanName == 'webrtc.offer' || cleanName == 'WebRTCOffer' || cleanName.endsWith('WebRTCOffer')) {
+      _offerController.add(data);
+      return;
+    }
+
+    if (cleanName == 'webrtc.answer' || cleanName == 'WebRTCAnswer' || cleanName.endsWith('WebRTCAnswer')) {
+      _answerController.add(data);
+      return;
+    }
+
+    if (cleanName == 'webrtc.ice_candidate' || cleanName == 'WebRTCICECandidate' || cleanName.endsWith('WebRTCICECandidate')) {
+      _iceCandidateController.add(data);
+      return;
     }
   }
 

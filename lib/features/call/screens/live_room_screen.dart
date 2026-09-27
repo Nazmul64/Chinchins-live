@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:ui' as ui;
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:livekit_client/livekit_client.dart' hide VideoDimensions;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../main.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/models/model_profile.dart';
@@ -29,7 +29,6 @@ import '../widgets/gift_animation_overlay.dart';
 import '../widgets/top_gift_alert_banner.dart';
 import '../widgets/host_on_call_photo_carousel.dart';
 import '../../../core/services/gifts_api_service.dart';
-import '../../../core/services/hive_cache_service.dart';
 import 'video_call_screen.dart';
 
 /// Auto-hiding VS Banner when Co-Host / PK connects (fades out after 2 seconds)
@@ -280,6 +279,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   @override
   void initState() {
     super.initState();
+    try {
+      WakelockPlus.enable();
+    } catch (_) {}
     _activeLiveId = widget.liveId;
     _activeChannelName = widget.channelName ?? 'live_${widget.host.id}_${DateTime.now().millisecondsSinceEpoch}';
     _startPkBattleTimer();
@@ -326,6 +328,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
   @override
   void dispose() {
+    try {
+      WakelockPlus.disable();
+    } catch (_) {}
     _pkBattleTimer?.cancel();
     _privateCallStatusSub?.cancel();
     _incomingCallSub?.cancel();

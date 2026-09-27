@@ -24,11 +24,11 @@ class LiveKitService {
     required bool isAudioOnly,
     String? customServerUrl,
   }) async {
-    // Ensure audio outputs through speakerphone
+    // 1. Force in-call loud speakerphone routing
     try {
       await Hardware.instance.setSpeakerphoneOn(true);
     } catch (e) {
-      debugPrint('Hardware speakerphone error: ' + e.toString());
+      debugPrint('Hardware speakerphone error: $e');
     }
 
     if (isHost) {
@@ -73,12 +73,12 @@ class LiveKitService {
         token,
       );
 
-      // Double check speakerphone after connection
+      // 2. Re-assert speakerphone once connected
       try {
         await Hardware.instance.setSpeakerphoneOn(true);
       } catch (_) {}
 
-      // If host, enable camera and mic automatically
+      // 3. If host or publisher, enable microphone and camera automatically
       if (isHost) {
         await _room!.localParticipant?.setMicrophoneEnabled(true);
         if (!isAudioOnly) {
@@ -88,7 +88,7 @@ class LiveKitService {
 
       return _room;
     } catch (e) {
-      debugPrint('LiveKit Connection Error: ' + e.toString());
+      debugPrint('LiveKit Connection Error: $e');
       return null;
     }
   }

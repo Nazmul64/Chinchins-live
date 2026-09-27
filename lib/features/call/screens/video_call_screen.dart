@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../main.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/remote_config_service.dart';
@@ -116,6 +117,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   @override
   void initState() {
     super.initState();
+    try {
+      WakelockPlus.enable();
+    } catch (_) {}
     _isFreeTrialActive = true;
     _freeTrialRemaining = widget.freeDurationSeconds > 0 ? widget.freeDurationSeconds : 16;
     _ratePerMinute = widget.ratePerMinute > 0
@@ -454,6 +458,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     if (_isEndingCall) return;
     _isEndingCall = true;
 
+    try {
+      WakelockPlus.disable();
+    } catch (_) {}
+
     PiPCallOverlay.hideMiniWindow();
     _activeSession = null;
     _timer?.cancel();
@@ -470,6 +478,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
     // 2. Perform API end/cancel and WebRTC cleanup in background
     final callId = widget.callId;
+    final channelName = widget.channelName;
     final isConnecting = _isConnectingCall;
     final callSecs = _callSeconds;
     final webrtc = _webrtcService;
@@ -482,6 +491,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           } else {
             await CallApiService.endCall(
               callId: callId,
+              channelName: channelName,
               durationSeconds: callSecs,
             );
           }
@@ -493,12 +503,16 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   @override
   void dispose() {
+    try {
+      WakelockPlus.disable();
+    } catch (_) {}
     _timer?.cancel();
     _pollingTimer?.cancel();
     _wsEndedSub?.cancel();
     _wsRejectedSub?.cancel();
     _wsCancelledSub?.cancel();
     _wsInCallMsgSub?.cancel();
+    _wsGiftSub?.cancel();
     CallSoundManager.stopRingtone();
 
     if (PiPCallOverlay.isMinimized && _activeSession != null) {

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/constants/api_constants.dart';
+import '../../../core/services/hive_cache_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../auth/services/auth_api_service.dart';
 
@@ -139,39 +140,62 @@ class CallApiService {
     required dynamic receiverId,
     dynamic receiverAccountId,
     String callType = 'video',
+    String? channelName,
   }) async {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
-      final userId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString() ?? savedUser?['account_id']?.toString();
-      final callerAccountId = savedUser?['account_id']?.toString() ?? userId;
+      final rawUserId = savedUser?['id'] ?? savedUser?['user_id'] ?? savedUser?['account_id'];
+      final dynamic callerId = int.tryParse(rawUserId?.toString() ?? '') ?? rawUserId;
+      final dynamic parsedReceiverId = int.tryParse(receiverId.toString()) ?? receiverId;
+      final callerAccountId = savedUser?['account_id']?.toString() ?? rawUserId?.toString();
 
-      final url = Uri.parse(ApiConstants.callInitiate);
+      // Prevent Self-Calling Loop
+      if (callerId != null && parsedReceiverId != null && callerId.toString() == parsedReceiverId.toString()) {
+        debugPrint('[CallApiService] Prevented self-calling loop: callerId == receiverId ($callerId)');
+        return {
+          'success': false,
+          'message': 'Cannot call your own account.',
+        };
+      }
+
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-        if (userId != null) 'X-User-Id': userId,
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (rawUserId != null) 'X-User-Id': rawUserId.toString(),
         if (callerAccountId != null) 'X-Account-Id': callerAccountId,
       };
 
-      final dynamic parsedReceiverId = int.tryParse(receiverId.toString()) ?? receiverId;
-
       final payload = {
+        'caller_id': callerId,
         'receiver_id': parsedReceiverId,
-        'receiverId': parsedReceiverId,
-        'receiver_account_id': receiverAccountId ?? receiverId,
-        'target_id': parsedReceiverId,
-        'target_account_id': receiverAccountId ?? receiverId,
-        'user_id': userId,
-        'caller_id': userId,
-        'caller_account_id': callerAccountId,
         'call_type': callType,
+        if (channelName != null && channelName.isNotEmpty) 'channel_name': channelName,
+        'user_id': callerId,
+        'target_id': parsedReceiverId,
+        'receiver_account_id': receiverAccountId ?? receiverId,
+        'caller_account_id': callerAccountId,
       };
 
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 15));
+      var uri = Uri.parse(ApiConstants.callInitiate);
+      var response = await http
+          .post(uri, headers: headers, body: jsonEncode(payload))
+          .timeout(const Duration(seconds: 12));
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        uri = Uri.parse('${ApiConstants.baseUrl}/call/make-call');
+        response = await http
+            .post(uri, headers: headers, body: jsonEncode(payload))
+            .timeout(const Duration(seconds: 12));
+      }
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        uri = Uri.parse('${ApiConstants.baseUrl}/call/instant');
+        response = await http
+            .post(uri, headers: headers, body: jsonEncode(payload))
+            .timeout(const Duration(seconds: 12));
+      }
 
       Map<String, dynamic> decoded = {};
       try {
@@ -1028,6 +1052,7 @@ class CallApiService {
 
   static Future<Map<String, dynamic>?> endCall({
     required int callId,
+    String? channelName,
     required int durationSeconds,
   }) async {
     try {
@@ -1046,6 +1071,7 @@ class CallApiService {
       final payload = {
         'call_id': callId,
         'duration_seconds': durationSeconds,
+        if (channelName != null && channelName.isNotEmpty) 'channel_name': channelName,
       };
 
       final response = await http
@@ -1063,6 +1089,58 @@ class CallApiService {
     }
     return null;
   }
+
+  /// ⚡ Get Call History (0.00ms Hive Local Cache + API Network Sync)
+  static Future<List<Map<String, dynamic>>> getCallHistory({int page = 1, int perPage = 30}) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (userId != null) 'X-User-Id': userId,
+      };
+
+      final queryParams = <String, String>{
+        'page': page.toString(),
+        'per_page': perPage.toString(),
+      };
+
+      var url = Uri.parse(ApiConstants.callHistory).replace(queryParameters: queryParams);
+      var response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 404) {
+        url = Uri.parse('${ApiConstants.baseUrl}/calls/history').replace(queryParameters: queryParams);
+        response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+      }
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        List? list;
+        if (decoded['data'] is List) {
+          list = decoded['data'] as List;
+        } else if (decoded['data'] is Map && decoded['data']['data'] is List) {
+          list = decoded['data']['data'] as List;
+        } else if (decoded['calls'] is List) {
+          list = decoded['calls'] as List;
+        }
+
+        if (list != null) {
+          final history = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          await HiveCacheService.saveCallHistory(history);
+          return history;
+        }
+      }
+    } catch (e, st) {
+      AppLogger.error('GetCallHistoryError', e, st);
+    }
+
+    // Return cached list on failure
+    return HiveCacheService.getCachedCallHistory();
+  }
+
 
   // ==========================================
   // V2.0 CALL MINIMIZE & RESTORE SYNCHRONIZATION
