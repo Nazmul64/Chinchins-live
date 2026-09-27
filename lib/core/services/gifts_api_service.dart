@@ -183,7 +183,7 @@ class GiftsApiService {
         }
       }
 
-      if (response.statusCode == 200) {
+      if (response != null && response.statusCode == 200) {
         final json = _safeJsonDecode(response.body);
         if (json != null) {
           final data = json['data'] ?? json;

@@ -1316,20 +1316,5 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       ),
     );
   }
-
-  @override
-  void dispose() {
-    try {
-      WakelockPlus.disable();
-    } catch (_) {}
-    _timer?.cancel();
-    _pollingTimer?.cancel();
-    _wsEndedSub?.cancel();
-    _wsRejectedSub?.cancel();
-    _wsCancelledSub?.cancel();
-    _wsInCallMsgSub?.cancel();
-    _wsGiftSub?.cancel();
-    CallSoundManager.stopRingtone();
-    super.dispose();
-  }
-}
+}
+
