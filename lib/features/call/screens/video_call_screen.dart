@@ -418,6 +418,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           );
         }
       } else if (status == 'connected' || status == 'active' || status == 'accepted') {
+        timer.cancel();
+        _pollingTimer = null;
         await CallSoundManager.stopRingtone();
         if (_isConnectingCall) {
           setState(() {

@@ -264,6 +264,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   String _myAvatarUrl = '';
   int _myLevel = 1;
 
+  // Join Requests Queue for Host
+  final List<Map<String, dynamic>> _pendingJoinRequests = [];
+
   // Real-time Stream Subscriptions
   StreamSubscription? _msgSub;
   StreamSubscription? _giftSub;
@@ -966,7 +969,37 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   void _subscribeWebSocketEvents() {
     final signaling = SignalingService();
 
-    // 0. Seat Request Listener for Host
+    // 0. Co-Host / Join Request Listener for Host (✋ Live Join System)
+    _joinReqSub = signaling.onLiveJoinRequest.listen((data) {
+      if (mounted && widget.isHost) {
+        final guestName = data['user_name'] ?? data['name'] ?? (data['user'] is Map ? data['user']['name'] : 'Viewer');
+        final reqId = data['request_id'] ?? data['id'] ?? data['invitation_id'];
+        final targetUid = data['user_id'] ?? data['guest_user_id'] ?? data['sender_id'];
+
+        setState(() {
+          if (!_pendingJoinRequests.any((p) => (p['id'] ?? p['request_id'] ?? p['user_id']) == (reqId ?? targetUid))) {
+            _pendingJoinRequests.add(data);
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF1E1E2E),
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              "✋ $guestName requested to join the live broadcast!",
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            action: SnackBarAction(
+              label: 'VIEW',
+              textColor: const Color(0xFF00E5FF),
+              onPressed: _showHostJoinRequestsSheet,
+            ),
+          ),
+        );
+      }
+    });
+
     _seatRequestSub = signaling.onSeatRequest.listen((data) {
       if (mounted && widget.isHost) {
         final guestName = data['user_name'] ?? data['name'] ?? 'Viewer';
@@ -974,24 +1007,24 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         final reqId = data['invitation_id'] ?? data['id'] ?? data['request_id'];
         final targetUid = data['user_id'];
 
+        setState(() {
+          if (!_pendingJoinRequests.any((p) => (p['id'] ?? p['request_id'] ?? p['user_id']) == (reqId ?? targetUid))) {
+            _pendingJoinRequests.add(data);
+          }
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF1E1E2E),
             behavior: SnackBarBehavior.floating,
             content: Text(
-              "$guestName requested to join Seat #$seatIndex",
+              "✋ $guestName requested to join Seat #$seatIndex",
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
             action: SnackBarAction(
-              label: 'ACCEPT',
-              textColor: const Color(0xFFFF2D55),
-              onPressed: () {
-                _showCoHostRequestDialog(
-                  requestId: reqId,
-                  guestName: guestName,
-                  targetUserId: targetUid,
-                );
-              },
+              label: 'VIEW',
+              textColor: const Color(0xFF00E5FF),
+              onPressed: _showHostJoinRequestsSheet,
             ),
           ),
         );
@@ -1204,6 +1237,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
     // 6. Live Stream Ended
     _streamEndedSub = signaling.onLiveStreamEnded.listen((data) {
+      final endedId = (data['live_stream_id'] ?? data['id'] ?? data['room_id'] ?? _activeLiveId ?? widget.host.id)?.toString();
+      if (endedId != null) {
+        HiveCacheService.removeLiveStream(endedId);
+      }
       if (mounted && !widget.isHost) {
         _showStreamEndedDialog(data);
       }
@@ -1744,21 +1781,43 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     }
   }
 
-  void _handleCoHostAction() async {
+  void _handleCoHostAction() => _handleAudienceHandRaiseRequest();
+
+  Future<void> _handleAudienceHandRaiseRequest() async {
     if (widget.isHost) {
-      if (_isGuestConnected && _guestUid != null) {
-        await LiveStreamingApiService.kickGuest(
-          roomId: _activeLiveId ?? widget.host.id,
-          guestUserId: _guestUid!,
-        );
-        setState(() {
-          _isGuestConnected = false;
-          _guestUid = null;
-        });
-      }
-    } else {
-      if (_isGuestConnected) {
-        // Disconnect self from co-host
+      _showHostJoinRequestsSheet();
+      return;
+    }
+
+    if (_isGuestConnecting) return;
+
+    if (_isGuestConnected) {
+      // Prompt to leave co-host
+      final shouldLeave = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1435),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Leave Co-Host?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: const Text(
+            'Are you sure you want to disconnect your camera and return to viewer mode?',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF1744)),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Leave', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldLeave == true) {
         if (_liveKitRoom != null) {
           await _liveKitRoom!.localParticipant?.setCameraEnabled(false);
           await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(false);
@@ -1767,29 +1826,247 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
           await _rtcEngine!.setClientRole(role: ClientRoleType.clientRoleAudience);
           await _rtcEngine!.stopPreview();
         }
-        await LiveStreamingApiService.cohostAction(
-          roomId: _activeLiveId ?? widget.host.id,
-          targetUserId: _myUid,
-          action: 'remove',
+        await LiveStreamingApiService.leaveCohost(
+          _activeLiveId ?? widget.host.id,
+          guestUserId: _myUid,
         );
-        setState(() => _isGuestConnected = false);
-      } else {
-        setState(() => _isGuestConnecting = true);
-        final res = await LiveStreamingApiService.requestJoinCoHost(
-          roomId: _activeLiveId ?? widget.host.id,
-        );
-        if (res != null && mounted) {
+        if (mounted) {
+          setState(() {
+            _isGuestConnected = false;
+            _isGuestConnecting = false;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Co-Host request sent! Waiting for host approval...'),
-              backgroundColor: Color(0xFF00E5FF),
-            ),
+            const SnackBar(content: Text('Returned to viewer mode.'), backgroundColor: Colors.black87),
           );
-        } else if (mounted) {
-          setState(() => _isGuestConnecting = false);
         }
       }
+      return;
     }
+
+    setState(() => _isGuestConnecting = true);
+    final res = await LiveStreamingApiService.requestJoinCoHost(
+      roomId: _activeLiveId ?? widget.host.id,
+      liveStreamId: _activeLiveId ?? widget.host.id,
+      hostId: widget.host.id,
+    );
+
+    if (mounted) {
+      if (res != null && (res['status'] == true || res['success'] == true || res['data'] != null)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Join request sent to Host! ✋ Waiting for approval...'),
+            backgroundColor: Color(0xFF00E5FF),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      } else {
+        setState(() => _isGuestConnecting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res?['message']?.toString() ?? 'Join request sent to Host! ✋'),
+            backgroundColor: const Color(0xFFFF9100),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showHostJoinRequestsSheet() async {
+    // Fetch latest requests from server
+    final serverRequests = await LiveStreamingApiService.getJoinRequests(_activeLiveId ?? widget.host.id);
+    if (mounted && serverRequests.isNotEmpty) {
+      setState(() {
+        for (final req in serverRequests) {
+          final id = req['id'] ?? req['request_id'] ?? req['user_id'];
+          if (!_pendingJoinRequests.any((p) => (p['id'] ?? p['request_id'] ?? p['user_id']) == id)) {
+            _pendingJoinRequests.add(req);
+          }
+        }
+      });
+    }
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF1E1435),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: [
+              BoxShadow(color: Colors.black87, blurRadius: 20, spreadRadius: 5),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Icon(Icons.front_hand_rounded, color: Color(0xFFFFD54F), size: 22),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Live Join Requests',
+                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF1744).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFF1744), width: 1),
+                      ),
+                      child: Text(
+                        '${_pendingJoinRequests.length} Pending',
+                        style: const TextStyle(color: Color(0xFFFF5252), fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (_pendingJoinRequests.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 36),
+                    child: const Column(
+                      children: [
+                        Icon(Icons.person_off_rounded, color: Colors.white30, size: 48),
+                        SizedBox(height: 12),
+                        Text(
+                          'No pending join requests right now',
+                          style: TextStyle(color: Colors.white54, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.45,
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: _pendingJoinRequests.length,
+                      separatorBuilder: (_, __) => const Divider(color: Colors.white12),
+                      itemBuilder: (_, index) {
+                        final req = _pendingJoinRequests[index];
+                        final reqId = req['request_id'] ?? req['id'] ?? req['invitation_id'];
+                        final targetUid = req['user_id'] ?? req['guest_user_id'] ?? req['sender_id'];
+                        final userName = req['user_name'] ?? req['name'] ?? req['display_name'] ?? (req['user'] is Map ? req['user']['name'] : 'Viewer');
+                        final userAvatar = req['user_avatar'] ?? req['avatar'] ?? req['avatar_url'] ?? (req['user'] is Map ? req['user']['avatar_url'] : '');
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: const Color(0xFF2A1E4D),
+                                backgroundImage: (userAvatar != null && userAvatar.toString().isNotEmpty)
+                                    ? CachedNetworkImageProvider(userAvatar.toString())
+                                    : null,
+                                child: (userAvatar == null || userAvatar.toString().isEmpty)
+                                    ? const Icon(Icons.person, color: Colors.white54)
+                                    : null,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      userName.toString(),
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const Text(
+                                      'Wants to join screen',
+                                      style: TextStyle(color: Colors.white54, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              // Reject Button
+                              IconButton(
+                                icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 22),
+                                onPressed: () async {
+                                  setModalState(() {
+                                    _pendingJoinRequests.removeAt(index);
+                                  });
+                                  setState(() {});
+                                  await LiveStreamingApiService.respondJoinCoHost(
+                                    requestId: reqId,
+                                    action: 'reject',
+                                    roomId: _activeLiveId ?? widget.host.id,
+                                    targetUserId: targetUid,
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 4),
+                              // Accept Button
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00E5FF),
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                ),
+                                onPressed: () async {
+                                  setModalState(() {
+                                    _pendingJoinRequests.removeAt(index);
+                                  });
+                                  setState(() {
+                                    _guestUid = targetUid is int ? targetUid : int.tryParse('$targetUid');
+                                    _isGuestConnected = true;
+                                  });
+                                  Navigator.pop(ctx);
+                                  await LiveStreamingApiService.respondJoinCoHost(
+                                    requestId: reqId,
+                                    action: 'accept',
+                                    roomId: _activeLiveId ?? widget.host.id,
+                                    targetUserId: targetUid,
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Accepted $userName as Co-Host! 🎉'),
+                                      backgroundColor: const Color(0xFF00C853),
+                                    ),
+                                  );
+                                },
+                                child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _minimizeToPiP() {
@@ -2787,9 +3064,116 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
               ),
             ),
 
+            const SizedBox(width: 8),
+
+            // 2. ✋ Hand-Raise / Join Request Button (Audience) or Join Requests Badge (Host)
+            if (!widget.isHost)
+              GestureDetector(
+                onTap: _handleAudienceHandRaiseRequest,
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: _isGuestConnected
+                        ? const Color(0xFF00E676)
+                        : _isGuestConnecting
+                            ? const Color(0xFFFF9100)
+                            : Colors.black.withValues(alpha: 0.55),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _isGuestConnected
+                          ? const Color(0xFF69F0AE)
+                          : _isGuestConnecting
+                              ? const Color(0xFFFFD54F)
+                              : Colors.white24,
+                      width: 1,
+                    ),
+                    boxShadow: (_isGuestConnected || _isGuestConnecting)
+                        ? [
+                            BoxShadow(
+                              color: (_isGuestConnected ? const Color(0xFF00E676) : const Color(0xFFFF9100)).withValues(alpha: 0.5),
+                              blurRadius: 8,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: _isGuestConnecting
+                      ? const Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          ),
+                        )
+                      : Icon(
+                          _isGuestConnected ? Icons.videocam_rounded : Icons.front_hand_rounded,
+                          color: _isGuestConnected ? Colors.white : const Color(0xFFFFD54F),
+                          size: 20,
+                        ),
+                ),
+              )
+            else
+              GestureDetector(
+                onTap: _showHostJoinRequestsSheet,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: _pendingJoinRequests.isNotEmpty
+                            ? const Color(0xFFFF1744).withValues(alpha: 0.85)
+                            : Colors.black.withValues(alpha: 0.55),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _pendingJoinRequests.isNotEmpty ? const Color(0xFFFF5252) : Colors.white24,
+                          width: 1,
+                        ),
+                        boxShadow: _pendingJoinRequests.isNotEmpty
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFFFF1744).withValues(alpha: 0.5),
+                                  blurRadius: 8,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: const Icon(
+                        Icons.group_add_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    if (_pendingJoinRequests.isNotEmpty)
+                      Positioned(
+                        top: -4,
+                        right: -4,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFF1744),
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                          child: Text(
+                            '${_pendingJoinRequests.length}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
             const Spacer(),
 
-            // 2. Right: Gift Box Button
+            // 3. Right: Gift Box Button
             GestureDetector(
               onTap: () {
                 InCallGiftSheet.show(
@@ -2819,7 +3203,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
             ),
             const SizedBox(width: 8),
 
-            // 3. Right: Follow Heart Button (matching screenshot)
+            // 4. Right: Follow Heart Button (matching screenshot)
             GestureDetector(
               onTap: _toggleFollow,
               child: Container(
@@ -2854,7 +3238,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
               ),
             ),
 
-            // 4. Right: Red Video Call Button (Visible ONLY for Viewers to call Host; Host doesn't need to call anyone)
+            // 5. Right: Red Video Call Button (Visible ONLY for Viewers to call Host; Host doesn't need to call anyone)
             if (!widget.isHost) ...[
               const SizedBox(width: 8),
               GestureDetector(
@@ -3264,39 +3648,12 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
   Widget _buildCoverFallback() {
     return RepaintBoundary(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          BeautyFilterEngine.applyFilterToWidget(
-            filter: _currentFilter,
-            child: CachedImageLoader(
-              imageUrl: widget.host.avatarUrl,
-              fit: BoxFit.cover,
-            ),
-          ),
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(0x33000000),
-                  Color(0x66000000),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-            child: const Center(
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(
-                  color: AppColors.neonPink,
-                  strokeWidth: 2.2,
-                ),
-              ),
-            ),
-          ),
-        ],
+      child: BeautyFilterEngine.applyFilterToWidget(
+        filter: _currentFilter,
+        child: CachedImageLoader(
+          imageUrl: widget.host.avatarUrl,
+          fit: BoxFit.cover,
+        ),
       ),
     );
   }

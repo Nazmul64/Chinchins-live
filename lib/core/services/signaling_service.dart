@@ -477,6 +477,7 @@ class SignalingService {
     }
 
     // 6. Seat Request Event (SeatRequestEvent -> seat.requested / join.requested)
+    // 6. Seat / Co-Host Request Event (SeatRequestEvent -> seat.requested / join.requested / live_join.requested)
     if (cleanName == 'seat.requested' ||
         cleanName == 'SeatRequestEvent' ||
         cleanName.endsWith('SeatRequestEvent') ||
@@ -484,10 +485,16 @@ class SignalingService {
         cleanName == 'JoinRequestEvent' ||
         cleanName.endsWith('JoinRequestEvent') ||
         cleanName == 'LiveJoinRequested' ||
+        cleanName == 'LiveJoinRequestedEvent' ||
+        cleanName.endsWith('LiveJoinRequestedEvent') ||
         cleanName == 'live.join.requested' ||
+        cleanName == 'live_join.requested' ||
         lowerName == 'seat.requested' ||
         lowerName == 'seatrequestevent' ||
-        lowerName == 'join.requested') {
+        lowerName == 'join.requested' ||
+        lowerName == 'live_join.requested' ||
+        lowerName == 'live.join.requested' ||
+        lowerName.contains('joinrequest')) {
       _seatRequestController.add(data);
       _liveJoinRequestController.add(data);
       _cohostStatusController.add(data);
@@ -575,10 +582,16 @@ class SignalingService {
     }
 
     if (cleanName == 'LiveJoinResponded' ||
+        cleanName == 'LiveJoinRespondedEvent' ||
+        cleanName.endsWith('LiveJoinRespondedEvent') ||
         cleanName == 'live.join.responded' ||
+        cleanName == 'live_join.responded' ||
         cleanName == 'live.cohost.response' ||
+        lowerName == 'live_join.responded' ||
+        lowerName == 'live.join.responded' ||
         lowerName.contains('joinrespond')) {
       _liveJoinResponseController.add(data);
+      _cohostStatusController.add(data);
       return;
     }
 
@@ -603,9 +616,15 @@ class SignalingService {
     }
 
     if (cleanName == 'LiveStreamEnded' ||
+        cleanName == 'LiveStreamEndedEvent' ||
+        cleanName.endsWith('LiveStreamEndedEvent') ||
         cleanName == 'live.stream.ended' ||
+        cleanName == 'live_stream.ended' ||
         cleanName == 'live.ended' ||
-        lowerName.contains('streamended')) {
+        lowerName == 'live_stream.ended' ||
+        lowerName == 'live.stream.ended' ||
+        lowerName.contains('streamended') ||
+        lowerName.contains('livestreamended')) {
       _liveStreamEndedController.add(data);
       return;
     }

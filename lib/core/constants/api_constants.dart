@@ -176,6 +176,10 @@ class ApiConstants {
   static String get liveGetToken => '$baseUrl/live/get-token';
   static String get liveRequestJoin => '$baseUrl/live/request-join';
   static String get liveRespondRequest => '$baseUrl/live/respond-request';
+  static String liveStreamRequestJoin(dynamic streamId) => '$baseUrl/live/stream/$streamId/request-join';
+  static String liveStreamRespondJoin(dynamic streamId) => '$baseUrl/live/stream/$streamId/respond-join';
+  static String liveStreamJoinRequests(dynamic streamId) => '$baseUrl/live/stream/$streamId/join-requests';
+  static String liveStreamLeaveCohost(dynamic streamId) => '$baseUrl/live/stream/$streamId/leave-cohost';
   static String get liveSendMessage => '$baseUrl/live/send-message';
   static String get liveMessage => '$baseUrl/live/message';
   static String get liveComment => '$baseUrl/live/comment';
