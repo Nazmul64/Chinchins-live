@@ -26,6 +26,7 @@ class _RankLeaderboardScreenState extends State<RankLeaderboardScreen> {
   Map<String, dynamic>? _myRankData;
   List<dynamic> _rankings = [];
 
+  String? _bgImageUrl;
   int _countdownSeconds = 0;
   Timer? _countdownTimer;
 
@@ -58,6 +59,13 @@ class _RankLeaderboardScreenState extends State<RankLeaderboardScreen> {
     _metaData = data['meta'] is Map<String, dynamic> ? data['meta'] as Map<String, dynamic> : null;
     _myRankData = data['my_rank'] is Map<String, dynamic> ? data['my_rank'] as Map<String, dynamic> : null;
     _rankings = data['rankings'] is List ? data['rankings'] as List : [];
+
+    final themeMap = data['theme'] is Map ? data['theme'] as Map : null;
+    final bgFromTheme = themeMap?['background_image_url']?.toString();
+    final bgFromRoot = data['background_image_url']?.toString();
+    _bgImageUrl = (bgFromTheme != null && bgFromTheme.isNotEmpty)
+        ? bgFromTheme
+        : ((bgFromRoot != null && bgFromRoot.isNotEmpty) ? bgFromRoot : null);
 
     final rawSeconds = _metaData?['countdown_seconds'];
     _countdownSeconds = rawSeconds is int ? rawSeconds : (int.tryParse('$rawSeconds') ?? 68800);
@@ -147,105 +155,117 @@ class _RankLeaderboardScreenState extends State<RankLeaderboardScreen> {
           const SizedBox(width: 4),
         ],
       ),
-      body: Column(
-        children: [
-          const SizedBox(height: 8),
+      body: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF141416),
+          image: (_bgImageUrl != null && _bgImageUrl!.isNotEmpty)
+              ? DecorationImage(
+                  image: NetworkImage(_bgImageUrl!),
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
+                )
+              : null,
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
 
-          // 1. Period Selector Pills (Daily, Weekly, Monthly) matching Screenshot 1 & 2
-          _buildPeriodSelector(),
-          const SizedBox(height: 14),
+            // 1. Period Selector Pills (Daily, Weekly, Monthly) matching Screenshot 1 & 2
+            _buildPeriodSelector(),
+            const SizedBox(height: 14),
 
-          // 2. Countdown Timer & Period Status Tag matching Screenshot 1 & 2
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.access_time_rounded, color: Colors.white60, size: 16),
-                    const SizedBox(width: 6),
-                    Text(
-                      _formatCountdown(_countdownSeconds),
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-                  ),
-                  child: Row(
+            // 2. Countdown Timer & Period Status Tag matching Screenshot 1 & 2
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
                     children: [
-                      const Icon(Icons.swap_horiz_rounded, color: Colors.white70, size: 14),
-                      const SizedBox(width: 4),
+                      const Icon(Icons.access_time_rounded, color: Colors.white60, size: 16),
+                      const SizedBox(width: 6),
                       Text(
-                        periodLabel,
+                        _formatCountdown(_countdownSeconds),
                         style: const TextStyle(
                           color: Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3,
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // 3. Table Column Headers: Rank | Name | Consume 💎
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: const [
-                Text('Rank', style: TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.w600)),
-                SizedBox(width: 44),
-                Text('Name', style: TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.w600)),
-                Spacer(),
-                Text('Consume', style: TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // 4. Leaderboard Ranking List
-          Expanded(
-            child: RefreshIndicator(
-              color: const Color(0xFFF59E0B),
-              backgroundColor: const Color(0xFF1E1E22),
-              onRefresh: () => _loadLeaderboard(silent: false),
-              child: _rankings.isEmpty && !_isLoading
-                  ? const Center(
-                      child: Text(
-                        'No rankings available for this period yet',
-                        style: TextStyle(color: Colors.white54, fontSize: 13),
-                      ),
-                    )
-                  : ListView.builder(
-                      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                      itemCount: _rankings.length,
-                      itemBuilder: (context, index) {
-                        final item = _rankings[index] as Map<String, dynamic>;
-                        return _buildLeaderboardTile(item);
-                      },
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
                     ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.swap_horiz_rounded, color: Colors.white70, size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          periodLabel,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+            const SizedBox(height: 12),
 
-          // 5. Sticky Bottom Bar: "Distance from rank is: ... 💎" matching Screenshot 1 & 2
-          _buildBottomUserStatusBar(),
-        ],
+            // 3. Table Column Headers: Rank | Name | Consume 💎
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: const [
+                  Text('Rank', style: TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.w600)),
+                  SizedBox(width: 44),
+                  Text('Name', style: TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.w600)),
+                  Spacer(),
+                  Text('Consume', style: TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // 4. Leaderboard Ranking List
+            Expanded(
+              child: RefreshIndicator(
+                color: const Color(0xFFF59E0B),
+                backgroundColor: const Color(0xFF1E1E22),
+                onRefresh: () => _loadLeaderboard(silent: false),
+                child: _rankings.isEmpty && !_isLoading
+                    ? const Center(
+                        child: Text(
+                          'No rankings available for this period yet',
+                          style: TextStyle(color: Colors.white54, fontSize: 13),
+                        ),
+                      )
+                    : ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        itemCount: _rankings.length,
+                        itemBuilder: (context, index) {
+                          final item = _rankings[index] as Map<String, dynamic>;
+                          return _buildLeaderboardTile(item);
+                        },
+                      ),
+              ),
+            ),
+
+            // 5. Sticky Bottom Bar: "Distance from rank is: ... 💎" matching Screenshot 1 & 2
+            _buildBottomUserStatusBar(),
+          ],
+        ),
       ),
     );
   }
