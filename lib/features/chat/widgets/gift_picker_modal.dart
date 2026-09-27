@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/models/gift_item.dart';
 import '../../../core/services/app_cache_service.dart';
 import '../../../core/services/gifts_api_service.dart';
+import '../../../core/services/hive_cache_service.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
@@ -72,8 +73,13 @@ class _GiftPickerModalState extends State<GiftPickerModal> {
     _formattedBalance = GiftItem.formatCoinValue(cached);
     _categories = GiftsApiService.getPredefinedGiftCategories();
 
-    // ⚡ Zero-Loading: Initialize from in-memory RAM cache immediately
-    if (AppCacheService.cachedGifts.isNotEmpty) {
+    // ⚡ Zero-Loading: Initialize from Hive / RAM cache immediately in 0.00ms
+    final hiveGifts = HiveCacheService.getCachedGifts();
+    if (hiveGifts.isNotEmpty) {
+      _allGifts = hiveGifts.map((e) => GiftItem.fromJson(e)).toList();
+      _filterGiftsByCategory(_selectedCategory);
+      _isLoading = false;
+    } else if (AppCacheService.cachedGifts.isNotEmpty) {
       _allGifts = List.from(AppCacheService.cachedGifts);
       _filterGiftsByCategory(_selectedCategory);
       _isLoading = false;

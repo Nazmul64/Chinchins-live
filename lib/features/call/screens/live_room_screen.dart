@@ -764,7 +764,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     try {
       // 1. Force audio through loud speakerphone for live stream
       try {
-        await Hardware.instance.setSpeakerphoneOn(true);
+        await AudioManager.instance.setSpeakerOutputPreferred(true);
       } catch (e) {
         debugPrint('[LiveRoomScreen] Speakerphone init error: $e');
       }
@@ -817,7 +817,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
       // Ensure speakerphone is maintained after connect
       try {
-        await Hardware.instance.setSpeakerphoneOn(true);
+        await AudioManager.instance.setSpeakerOutputPreferred(true);
       } catch (_) {}
 
       // Host or Co-Host publishes camera and microphone automatically

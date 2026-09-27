@@ -6,6 +6,7 @@ import '../constants/api_constants.dart';
 import '../models/gift_item.dart';
 import '../../features/auth/services/auth_api_service.dart';
 import '../../features/wallet/services/wallet_api_service.dart';
+import 'hive_cache_service.dart';
 
 class GiftsApiService {
   // In-Memory Fast Caches for Zero-Lag Instant Rendering
@@ -29,7 +30,17 @@ class GiftsApiService {
   }
 
   /// Get cached catalog instantly
-  static List<GiftItem>? get cachedCatalog => _catalogMemCache;
+  static List<GiftItem>? get cachedCatalog {
+    if (_catalogMemCache != null && _catalogMemCache!.isNotEmpty) {
+      return _catalogMemCache;
+    }
+    final hive = HiveCacheService.getCachedGifts();
+    if (hive.isNotEmpty) {
+      _catalogMemCache = hive.map((e) => GiftItem.fromJson(e)).toList();
+      return _catalogMemCache;
+    }
+    return null;
+  }
   static int? get cachedUserCoins => _userCoinBalance;
 
   /// 1. Fetch User Received Gifts, Charm Level, Top Fan, and Summary
@@ -122,18 +133,21 @@ class GiftsApiService {
     String? category,
     bool forceRefresh = false,
   }) async {
-    if (!forceRefresh && (category == null || category.isEmpty || category == 'all') && _catalogMemCache != null && _catalogMemCache!.isNotEmpty) {
-      final effectiveCoins = _userCoinBalance ?? WalletApiService.getCachedCoins();
-      return {
-        'user_balance': {
-          'coins': effectiveCoins,
-          'formatted_coins': GiftItem.formatCoinValue(effectiveCoins),
-        },
-        'categories_list': getPredefinedGiftCategories(),
-        'gifts': _catalogMemCache!,
-        'multipliers': [1, 10, 66, 99, 520, 1314],
-        'default_multiplier': 1,
-      };
+    if (!forceRefresh && (category == null || category.isEmpty || category == 'all')) {
+      final catalog = cachedCatalog;
+      if (catalog != null && catalog.isNotEmpty) {
+        final effectiveCoins = _userCoinBalance ?? WalletApiService.getCachedCoins();
+        return {
+          'user_balance': {
+            'coins': effectiveCoins,
+            'formatted_coins': GiftItem.formatCoinValue(effectiveCoins),
+          },
+          'categories_list': getPredefinedGiftCategories(),
+          'gifts': catalog,
+          'multipliers': [1, 10, 66, 99, 520, 1314],
+          'default_multiplier': 1,
+        };
+      }
     }
 
     try {
@@ -148,12 +162,25 @@ class GiftsApiService {
         queryParams['category'] = category;
       }
 
-      Uri uri = Uri.parse(ApiConstants.giftsCatalog).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
-      var response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 6));
+      final targetEndpoints = [
+        ApiConstants.giftsActive,
+        ApiConstants.giftsCatalog,
+        ApiConstants.giftsStore,
+        ApiConstants.gifts,
+      ];
 
-      if (response.statusCode == 404) {
-        uri = Uri.parse(ApiConstants.giftsStore).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
-        response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 6));
+      http.Response? response;
+      for (final endpoint in targetEndpoints) {
+        try {
+          final uri = Uri.parse(endpoint).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+          final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 5));
+          if (res.statusCode == 200) {
+            response = res;
+            break;
+          }
+        } catch (_) {
+          continue;
+        }
       }
 
       if (response.statusCode == 200) {
@@ -194,6 +221,7 @@ class GiftsApiService {
                 .map((item) => GiftItem.fromJson(item))
                 .toList();
             _catalogMemCache = parsedGifts;
+            unawaited(HiveCacheService.saveGifts(giftsJson));
           }
 
           // Parse dynamic multipliers from API: [1, 10, 66, 99, 520, 1314]

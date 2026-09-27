@@ -26,9 +26,9 @@ class LiveKitService {
   }) async {
     // 1. Force in-call loud speakerphone routing
     try {
-      await Hardware.instance.setSpeakerphoneOn(true);
+      await AudioManager.instance.setSpeakerOutputPreferred(true);
     } catch (e) {
-      debugPrint('Hardware speakerphone error: $e');
+      debugPrint('AudioManager speakerphone error: $e');
     }
 
     if (isHost) {
@@ -75,7 +75,7 @@ class LiveKitService {
 
       // 2. Re-assert speakerphone once connected
       try {
-        await Hardware.instance.setSpeakerphoneOn(true);
+        await AudioManager.instance.setSpeakerOutputPreferred(true);
       } catch (_) {}
 
       // 3. If host or publisher, enable microphone and camera automatically

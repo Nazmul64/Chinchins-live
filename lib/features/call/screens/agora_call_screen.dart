@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../main.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/remote_config_service.dart';
@@ -141,6 +142,9 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   @override
   void initState() {
     super.initState();
+    try {
+      WakelockPlus.enable();
+    } catch (_) {}
     _isFreeTrialActive = true;
     _freeTrialRemaining = widget.freeDurationSeconds > 0 ? widget.freeDurationSeconds : 16;
     _ratePerMinute = widget.ratePerMinute > 0
@@ -1609,4 +1613,21 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       ],
     );
   }
+
+  @override
+  void dispose() {
+    try {
+      WakelockPlus.disable();
+    } catch (_) {}
+    _timer?.cancel();
+    _pollingTimer?.cancel();
+    _wsEndedSub?.cancel();
+    _wsRejectedSub?.cancel();
+    _wsCancelledSub?.cancel();
+    _wsInCallMsgSub?.cancel();
+    _wsGiftSub?.cancel();
+    CallSoundManager.stopRingtone();
+    super.dispose();
+  }
 }
+

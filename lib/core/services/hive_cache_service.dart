@@ -11,6 +11,7 @@ class HiveCacheService {
   static const String boxAppSettings = 'hive_app_settings_box';
   static const String boxConversations = 'hive_conversations_box';
   static const String boxCallHistory = 'hive_call_history_box';
+  static const String boxGifts = 'gifts_box';
 
   static Box? _homeBox;
   static Box? _liveBox;
@@ -18,6 +19,7 @@ class HiveCacheService {
   static Box? _settingsBox;
   static Box? _conversationsBox;
   static Box? _callHistoryBox;
+  static Box? _giftsBox;
   static bool _isInitialized = false;
 
   /// Initialize Hive Flutter boxes on App Startup
@@ -31,8 +33,9 @@ class HiveCacheService {
       _settingsBox = await Hive.openBox(boxAppSettings);
       _conversationsBox = await Hive.openBox(boxConversations);
       _callHistoryBox = await Hive.openBox(boxCallHistory);
+      _giftsBox = await Hive.openBox(boxGifts);
       _isInitialized = true;
-      debugPrint('⚡ [HiveCacheService] Initialized successfully with 6 boxes.');
+      debugPrint('⚡ [HiveCacheService] Initialized successfully with 7 boxes.');
     } catch (e) {
       debugPrint('[HiveCacheService] Init error (fallback memory active): $e');
     }
@@ -230,6 +233,39 @@ class HiveCacheService {
     }
   }
 
+  // ==================== GIFTS CACHE ====================
+  /// Synchronously get cached active gifts list (0.00ms)
+  static List<Map<String, dynamic>> getCachedGifts() {
+    try {
+      if (_giftsBox != null && _giftsBox!.isOpen) {
+        final raw = _giftsBox!.get('active_gifts');
+        if (raw is List) {
+          return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        } else if (raw is String) {
+          final decoded = jsonDecode(raw);
+          if (decoded is List) {
+            return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[HiveCacheService] getCachedGifts error: $e');
+    }
+    return [];
+  }
+
+  /// Save dynamic active gifts to Hive
+  static Future<void> saveGifts(List<dynamic> gifts) async {
+    try {
+      if (_giftsBox != null && _giftsBox!.isOpen) {
+        await _giftsBox!.put('active_gifts', gifts);
+        await _giftsBox!.put('gifts_updated_at', DateTime.now().millisecondsSinceEpoch);
+      }
+    } catch (e) {
+      debugPrint('[HiveCacheService] saveGifts error: $e');
+    }
+  }
+
   /// Clear all Hive caches on logout
   static Future<void> clearAll() async {
     try {
@@ -238,6 +274,7 @@ class HiveCacheService {
       await _userBox?.clear();
       await _conversationsBox?.clear();
       await _callHistoryBox?.clear();
+      await _giftsBox?.clear();
     } catch (e) {
       debugPrint('[HiveCacheService] clearAll error: $e');
     }

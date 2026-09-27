@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/models/gift_item.dart';
 import '../../../core/services/app_cache_service.dart';
 import '../../../core/services/gifts_api_service.dart';
+import '../../../core/services/hive_cache_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../wallet/services/wallet_api_service.dart';
@@ -66,8 +67,12 @@ class _InCallGiftSheetState extends State<InCallGiftSheet> {
     super.initState();
     _userCoins = WalletApiService.getCachedCoins();
 
-    // ⚡ Zero-Loading: Instant catalog from in-memory RAM cache
-    if (AppCacheService.cachedGifts.isNotEmpty) {
+    // ⚡ Zero-Loading: Instant catalog from Hive Cache (0.00ms) or RAM
+    final hiveGifts = HiveCacheService.getCachedGifts();
+    if (hiveGifts.isNotEmpty) {
+      _gifts = hiveGifts.map((e) => GiftItem.fromJson(e)).toList();
+      _selectedGift = _gifts.first;
+    } else if (AppCacheService.cachedGifts.isNotEmpty) {
       _gifts = List.from(AppCacheService.cachedGifts);
       _selectedGift = _gifts.first;
     } else {

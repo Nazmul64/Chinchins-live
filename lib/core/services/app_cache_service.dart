@@ -9,6 +9,8 @@ import '../../features/wallet/models/payment_option_model.dart';
 import '../../features/wallet/services/wallet_api_service.dart';
 import 'gifts_api_service.dart';
 
+import 'hive_cache_service.dart';
+
 /// ⚡ AppCacheService: High-Speed In-Memory & Local RAM Cache (<1ms)
 /// Pre-fetches catalog, gateways, packages, and user profiles at launch for Zero-Loading UI.
 class AppCacheService {
@@ -24,8 +26,13 @@ class AppCacheService {
     if (isPreloaded) return;
 
     try {
-      // 1. Preload gifts from memory/fallback immediately
-      cachedGifts = GiftsApiService.cachedCatalog ?? GiftsApiService.getFallbackGifts();
+      // 1. Preload gifts from Hive Cache (0.00ms) or memory/fallback immediately
+      final hiveGifts = HiveCacheService.getCachedGifts();
+      if (hiveGifts.isNotEmpty) {
+        cachedGifts = hiveGifts.map((e) => GiftItem.fromJson(e)).toList();
+      } else {
+        cachedGifts = GiftsApiService.cachedCatalog ?? GiftsApiService.getFallbackGifts();
+      }
       if (cachedGifts.isEmpty) {
         cachedGifts = GiftsApiService.getFallbackGifts();
       }
@@ -39,7 +46,7 @@ class AppCacheService {
       };
 
       await Future.wait([
-        // A. Gifts Catalog (Zero-DB Hit Cache from /api/gifts/catalog)
+        // A. Gifts Catalog (Zero-DB Hit Cache from /api/gifts/active)
         _fetchGiftsCatalog(headers),
         // B. Payment Gateways (/api/payment/gateways or /api/payment-options)
         _fetchPaymentGateways(headers),
@@ -62,19 +69,33 @@ class AppCacheService {
 
   static Future<void> _fetchGiftsCatalog(Map<String, String> headers) async {
     try {
-      final res = await http.get(Uri.parse(ApiConstants.gifts), headers: headers).timeout(const Duration(seconds: 4));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        List? list;
-        if (data is Map && data['data'] is List) {
-          list = data['data'];
-        } else if (data is List) {
-          list = data;
-        }
+      final targetUrls = [
+        ApiConstants.giftsActive,
+        ApiConstants.gifts,
+        ApiConstants.giftsStore,
+      ];
 
-        if (list != null && list.isNotEmpty) {
-          cachedGifts = list.map((e) => GiftItem.fromJson(e as Map<String, dynamic>)).toList();
-          _rebuildGiftMap();
+      for (final url in targetUrls) {
+        try {
+          final res = await http.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 4));
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            List? list;
+            if (data is Map && data['data'] is List) {
+              list = data['data'];
+            } else if (data is List) {
+              list = data;
+            }
+
+            if (list != null && list.isNotEmpty) {
+              cachedGifts = list.map((e) => GiftItem.fromJson(e as Map<String, dynamic>)).toList();
+              _rebuildGiftMap();
+              unawaited(HiveCacheService.saveGifts(list));
+              break;
+            }
+          }
+        } catch (_) {
+          continue;
         }
       }
     } catch (_) {}

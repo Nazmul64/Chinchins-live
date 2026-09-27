@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/models/group_room.dart';
 import '../../../core/models/live_gift_event.dart';
 import '../../../core/services/party_room_api_service.dart';
@@ -64,6 +65,9 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
   @override
   void initState() {
     super.initState();
+    try {
+      WakelockPlus.enable();
+    } catch (_) {}
     _currentRoom = widget.room;
     _seats = List.from(widget.room.seats);
 
@@ -239,7 +243,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
 
       // Ensure audio outputs through phone loudspeaker
       try {
-        await Hardware.instance.setSpeakerphoneOn(true);
+        await AudioManager.instance.setSpeakerOutputPreferred(true);
       } catch (e) {
         debugPrint('[VoiceParty] Speakerphone error: $e');
       }
@@ -296,7 +300,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
         }
 
         try {
-          await Hardware.instance.setSpeakerphoneOn(true);
+          await AudioManager.instance.setSpeakerOutputPreferred(true);
         } catch (_) {}
 
         if (mounted) {
@@ -507,6 +511,9 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
 
   @override
   void dispose() {
+    try {
+      WakelockPlus.disable();
+    } catch (_) {}
     LiveGiftReverbService().unsubscribeFromLiveRoom(widget.room.id);
     _pollingTimer?.cancel();
     _billingTimer?.cancel();
@@ -1551,3 +1558,5 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
     );
   }
 }
+
+

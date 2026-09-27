@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/models/group_room.dart';
 import '../../../core/models/live_gift_event.dart';
 import '../../../core/services/party_room_api_service.dart';
@@ -51,6 +52,9 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
   @override
   void initState() {
     super.initState();
+    try {
+      WakelockPlus.enable();
+    } catch (_) {}
     _currentRoom = widget.room;
     _videoSeats = List.from(widget.room.seats);
 
@@ -216,6 +220,9 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
 
   @override
   void dispose() {
+    try {
+      WakelockPlus.disable();
+    } catch (_) {}
     LiveGiftReverbService().unsubscribeFromLiveRoom(widget.room.id);
     _pollingTimer?.cancel();
     _billingTimer?.cancel();
@@ -1074,3 +1081,5 @@ class _VideoPartyRoomScreenState extends State<VideoPartyRoomScreen> {
     );
   }
 }
+
+

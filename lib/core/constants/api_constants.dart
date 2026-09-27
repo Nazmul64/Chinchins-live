@@ -254,6 +254,8 @@ class ApiConstants {
 
   // Gifts & Rewards Endpoints
   static String get gifts => '$baseUrl/gifts';
+  static String get giftsActive => '$baseUrl/gifts/active';
+  static String get activeGifts => '$baseUrl/gifts/active';
   static String get giftsCatalog => '$baseUrl/gifts';
   static String get giftsStore => '$baseUrl/gifts/catalog';
   static String giftsReceived(dynamic userId) => '$baseUrl/gifts/received/$userId';
