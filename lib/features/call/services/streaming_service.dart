@@ -13,6 +13,9 @@ import '../screens/video_call_screen.dart';
 import 'call_api_service.dart';
 
 class StreamingService {
+  /// Global lock to prevent overlapping or duplicate incoming calls during active session
+  static bool isCallActive = false;
+
   /// Fetch the active streaming engine & credentials from Laravel API Engine
   /// Supports POST /api/calls, POST /api/stream/session-token, and POST /api/calls/initiate
   static Future<Map<String, dynamic>> fetchSessionToken({

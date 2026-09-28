@@ -9,6 +9,7 @@ import '../../../core/models/group_room.dart';
 import '../../../core/models/live_gift_event.dart';
 import '../../../core/services/party_room_api_service.dart';
 import '../../../core/services/live_gift_reverb_service.dart';
+import '../../../core/services/signaling_service.dart';
 import '../../../core/widgets/live_gift_animation_overlay.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../../services/livekit_service.dart';
@@ -515,6 +516,7 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
       WakelockPlus.disable();
     } catch (_) {}
     LiveGiftReverbService().unsubscribeFromLiveRoom(widget.room.id);
+    SignalingService().leavePartyRoom(widget.room.id);
     _pollingTimer?.cancel();
     _pollingTimer = null;
     _billingTimer?.cancel();

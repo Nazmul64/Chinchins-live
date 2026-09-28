@@ -14,6 +14,7 @@ import '../../call/screens/incoming_call_screen.dart';
 import '../../call/services/call_api_service.dart';
 import '../../chat/services/chat_api_service.dart';
 import '../../call/screens/go_live_screen.dart';
+import '../../call/services/streaming_service.dart';
 import '../widgets/app_side_drawer.dart';
 import '../../../main.dart';
 
@@ -118,6 +119,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _handleIncomingCallData(Map<String, dynamic> incoming) async {
+    // 🛑 Block all incoming call screens if user is already inside an active call or in incoming call screen
+    if (StreamingService.isCallActive) {
+      debugPrint('[MainNavigationScreen] Blocked incoming call: User is already active in a call session.');
+      return;
+    }
+
     final payload = incoming['data'] is Map ? Map<String, dynamic>.from(incoming['data']) : incoming;
     final dynamic rawCallId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? payload['call_session_id'] ?? incoming['call_id'] ?? incoming['id'];
     
@@ -135,6 +142,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     if (callId != _activeIncomingCallId) {
       _activeIncomingCallId = callId;
+      StreamingService.isCallActive = true;
       final rawCaller = (payload['caller'] is Map ? payload['caller'] : null) ??
           (payload['sender'] is Map ? payload['sender'] : null) ??
           (payload['user'] is Map ? payload['user'] : null) ??

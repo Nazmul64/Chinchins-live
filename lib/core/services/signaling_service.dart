@@ -22,22 +22,58 @@ class SignalingService {
   final Map<String, int> _recentEventSignatures = {};
 
   bool _isDuplicateEvent(String eventName, Map<String, dynamic> data) {
-    // NEVER drop WebRTC signaling events (offer, answer, candidate) or call state transitions
-    final lower = eventName.toLowerCase();
-    if (lower.contains('signal') ||
+    final clean = eventName.startsWith('.') ? eventName.substring(1) : eventName;
+    final lower = clean.toLowerCase();
+
+    // NEVER drop WebRTC signaling raw SDP / ICE candidate packets
+    if (lower.contains('sdp') ||
         lower.contains('offer') ||
         lower.contains('answer') ||
         lower.contains('candidate') ||
-        lower.contains('webrtc') ||
         lower.contains('ice') ||
-        lower.contains('call')) {
+        lower == 'webrtc.signal' ||
+        lower == 'call.signal') {
+      return false;
+    }
+
+    // Deduplicate Incoming Call events by Call ID / Channel Name / Caller ID
+    if (lower.contains('incoming') ||
+        lower.contains('call.initiated') ||
+        lower.contains('call_initiated') ||
+        lower.contains('call_invite') ||
+        lower.contains('callinvitation')) {
+      final payload = (data['data'] is Map) ? data['data'] : data;
+      final callId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? payload['channel_name'] ?? data['call_id'];
+      final callerId = payload['caller_id'] ?? payload['from_user_id'] ?? payload['caller']?['id'] ?? data['caller_id'];
+      final sig = 'incoming_${callId ?? callerId ?? ''}';
+      final now = DateTime.now().millisecondsSinceEpoch;
+      _recentEventSignatures.removeWhere((_, time) => now - time > 15000);
+      if (_recentEventSignatures.containsKey(sig)) {
+        AppLogger.info('SignalingService', 'Dropped duplicate incoming call event: $sig');
+        return true;
+      }
+      _recentEventSignatures[sig] = now;
+      return false;
+    }
+
+    // Deduplicate Call Termination events (ended, rejected, cancelled)
+    if (lower.contains('ended') || lower.contains('rejected') || lower.contains('cancelled')) {
+      final payload = (data['data'] is Map) ? data['data'] : data;
+      final callId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? data['call_id'];
+      final sig = '${clean}_${callId ?? ''}';
+      final now = DateTime.now().millisecondsSinceEpoch;
+      _recentEventSignatures.removeWhere((_, time) => now - time > 6000);
+      if (_recentEventSignatures.containsKey(sig)) {
+        return true;
+      }
+      _recentEventSignatures[sig] = now;
       return false;
     }
 
     final msgId = data['id'] ?? data['message_id'] ?? data['message']?['id'];
     final msgText = data['message'] is String ? data['message'] : data['message']?['message'] ?? data['text'];
     final senderId = data['sender_id'] ?? data['user_id'] ?? data['message']?['sender_id'];
-    final sig = '${eventName}_${msgId ?? ''}_${senderId ?? ''}_${msgText ?? ''}';
+    final sig = '${clean}_${msgId ?? ''}_${senderId ?? ''}_${msgText ?? ''}';
 
     final now = DateTime.now().millisecondsSinceEpoch;
     _recentEventSignatures.removeWhere((_, time) => now - time > 3500);

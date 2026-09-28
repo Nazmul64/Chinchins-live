@@ -132,6 +132,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   @override
   void initState() {
     super.initState();
+    StreamingService.isCallActive = true;
     try {
       WakelockPlus.enable();
     } catch (_) {}
@@ -448,6 +449,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   void disposeCallSession() {
     _isEndingCall = true;
     _hasInitiatedCall = true;
+    StreamingService.isCallActive = false;
     _timer?.cancel();
     _timer = null;
     _pollingTimer?.cancel();
@@ -474,6 +476,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _liveKitRoom = null;
     }
     _webrtcService.dispose();
+    final callIdStr = _callId?.toString() ?? widget.callId?.toString() ?? _channelName ?? widget.channelName;
+    if (callIdStr.isNotEmpty) {
+      SignalingService().leaveCallRoom(callIdStr);
+    }
     _callId = null;
     _channelName = null;
   }

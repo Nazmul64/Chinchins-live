@@ -53,6 +53,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   @override
   void initState() {
     super.initState();
+    StreamingService.isCallActive = true;
     try {
       WakelockPlus.enable();
     } catch (_) {}
@@ -116,6 +117,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   }
 
   void _stopRingtoneAndDismiss(String reason) {
+    StreamingService.isCallActive = false;
     _statusPollTimer?.cancel();
     _statusPollTimer = null;
     _timeoutTimer?.cancel();
@@ -142,6 +144,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     try {
       WakelockPlus.disable();
     } catch (_) {}
+    if (!_isProcessingAction) {
+      StreamingService.isCallActive = false;
+    }
     _statusPollTimer?.cancel();
     _statusPollTimer = null;
     _timeoutTimer?.cancel();
