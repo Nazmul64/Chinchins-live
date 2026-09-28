@@ -39,6 +39,7 @@ class _RandomMatchScreenState extends State<RandomMatchScreen>
   void dispose() {
     _radarController.dispose();
     _countdownTimer?.cancel();
+    _countdownTimer = null;
     super.dispose();
   }
 

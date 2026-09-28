@@ -112,9 +112,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
   void _stopRingtoneAndDismiss(String reason) {
     _statusPollTimer?.cancel();
+    _statusPollTimer = null;
     _timeoutTimer?.cancel();
+    _timeoutTimer = null;
     _wsCancelledSub?.cancel();
+    _wsCancelledSub = null;
     _wsEndedSub?.cancel();
+    _wsEndedSub = null;
     CallSoundManager.stopRingtone();
     if (mounted) {
       Navigator.pop(context);
@@ -134,9 +138,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       WakelockPlus.disable();
     } catch (_) {}
     _statusPollTimer?.cancel();
+    _statusPollTimer = null;
     _timeoutTimer?.cancel();
+    _timeoutTimer = null;
     _wsCancelledSub?.cancel();
+    _wsCancelledSub = null;
     _wsEndedSub?.cancel();
+    _wsEndedSub = null;
     CallSoundManager.stopRingtone();
     _pulseController.dispose();
     super.dispose();
@@ -148,7 +156,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     AppLogger.info('WebRTC', 'CALL_ACCEPTED');
     
     _statusPollTimer?.cancel();
+    _statusPollTimer = null;
     _timeoutTimer?.cancel();
+    _timeoutTimer = null;
+    _wsCancelledSub?.cancel();
+    _wsCancelledSub = null;
+    _wsEndedSub?.cancel();
+    _wsEndedSub = null;
 
     // রিংটোন সাথে সাথে বন্ধ
     CallSoundManager.stopRingtone();
@@ -180,7 +194,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     if (_isProcessingAction) return;
     _isProcessingAction = true;
     _statusPollTimer?.cancel();
+    _statusPollTimer = null;
     _timeoutTimer?.cancel();
+    _timeoutTimer = null;
+    _wsCancelledSub?.cancel();
+    _wsCancelledSub = null;
+    _wsEndedSub?.cancel();
+    _wsEndedSub = null;
 
     await CallSoundManager.stopRingtone();
 

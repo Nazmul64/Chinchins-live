@@ -516,7 +516,9 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
     } catch (_) {}
     LiveGiftReverbService().unsubscribeFromLiveRoom(widget.room.id);
     _pollingTimer?.cancel();
+    _pollingTimer = null;
     _billingTimer?.cancel();
+    _billingTimer = null;
     _chatController.dispose();
     _scrollController.dispose();
 
