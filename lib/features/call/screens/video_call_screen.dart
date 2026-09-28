@@ -96,6 +96,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   bool _isPulseInProgress = false;
   bool _hasStartedTimer = false;
 
+  StreamSubscription? _wsAcceptedSub;
   StreamSubscription? _wsEndedSub;
   StreamSubscription? _wsRejectedSub;
   StreamSubscription? _wsCancelledSub;
@@ -169,6 +170,17 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     if (widget.channelName != null && widget.channelName!.isNotEmpty && widget.channelName != widget.callId?.toString()) {
       signaling.subscribeToCallRoom(widget.channelName!);
     }
+
+    _wsAcceptedSub = signaling.onCallAccepted.listen((data) {
+      debugPrint('[VideoCallScreen] Call Accepted via WebSocket: $data');
+      CallSoundManager.stopRingtone();
+      if (mounted) {
+        setState(() {
+          _isConnectingCall = false;
+        });
+      }
+      _onMediaConnected();
+    });
 
     _wsEndedSub = signaling.onCallEnded.listen((data) {
       CallSoundManager.stopRingtone();
@@ -468,6 +480,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _activeSession = null;
     _timer?.cancel();
     _pollingTimer?.cancel();
+    _wsAcceptedSub?.cancel();
     _wsEndedSub?.cancel();
     _wsRejectedSub?.cancel();
     _wsCancelledSub?.cancel();
@@ -510,6 +523,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     } catch (_) {}
     _timer?.cancel();
     _pollingTimer?.cancel();
+    _wsAcceptedSub?.cancel();
     _wsEndedSub?.cancel();
     _wsRejectedSub?.cancel();
     _wsCancelledSub?.cancel();

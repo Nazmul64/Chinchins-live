@@ -25,6 +25,7 @@ class WebRTCCallService {
   final List<RTCIceCandidate> _pendingIceCandidates = [];
   String? _currentUserId;
 
+  StreamSubscription? _wsAcceptedSub;
   StreamSubscription? _wsOfferSub;
   StreamSubscription? _wsAnswerSub;
   StreamSubscription? _wsCandidateSub;
@@ -625,14 +626,26 @@ class WebRTCCallService {
     Function(MediaStream stream)? onRemoteStreamConnected,
     Function()? onCallEnded,
   ) {
+    _wsAcceptedSub?.cancel();
     _wsOfferSub?.cancel();
     _wsAnswerSub?.cancel();
     _wsCandidateSub?.cancel();
     _wsEndSub?.cancel();
 
     final signaling = SignalingService();
-    final roomName = channelName ?? '$callId';
-    signaling.subscribeToCallRoom(roomName);
+    if (callId != null) {
+      signaling.subscribeToCallRoom(callId.toString());
+    }
+    if (channelName != null && channelName.isNotEmpty && channelName != callId?.toString()) {
+      signaling.subscribeToCallRoom(channelName);
+    }
+
+    _wsAcceptedSub = signaling.onCallAccepted.listen((data) {
+      _log('WS_EVENT_CALL_ACCEPTED');
+      if (isCaller) {
+        enforceLoudSpeakerphone();
+      }
+    });
 
     _wsOfferSub = signaling.onWebRTCOffer.listen((data) {
       _log('WS_EVENT_OFFER');
@@ -936,6 +949,7 @@ class WebRTCCallService {
     _offerRebroadcastTimer?.cancel();
     _offerRebroadcastTimer = null;
 
+    _wsAcceptedSub?.cancel();
     _wsOfferSub?.cancel();
     _wsAnswerSub?.cancel();
     _wsCandidateSub?.cancel();

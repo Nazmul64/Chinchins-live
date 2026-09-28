@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../../core/models/group_room.dart';
 import '../../../core/services/party_room_api_service.dart';
+import '../../../core/services/signaling_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../../core/widgets/livu_empty_state_card.dart';
@@ -22,6 +24,7 @@ class _PartyRoomsScreenState extends State<PartyRoomsScreen>
   bool _isLoading = false;
   bool _showMiniPlayer = true;
   late AnimationController _equalizerController;
+  StreamSubscription? _statusSub;
 
   @override
   bool get wantKeepAlive => true;
@@ -37,10 +40,24 @@ class _PartyRoomsScreenState extends State<PartyRoomsScreen>
       duration: const Duration(milliseconds: 1000),
     )..repeat();
     _loadRooms();
+
+    // 🛑 Real-time Party Room cleanup when ended
+    _statusSub = SignalingService().onLiveStreamEnded.listen((data) {
+      final endedId = (data['party_room_id'] ?? data['room_id'] ?? data['id'] ?? data['stream_id'])?.toString();
+      final endedChannel = (data['channel_name'] ?? data['room_name'])?.toString();
+      if (mounted && (endedId != null || endedChannel != null)) {
+        setState(() {
+          _rooms.removeWhere((r) =>
+              (endedId != null && (r.id == endedId || r.channelName == endedId)) ||
+              (endedChannel != null && (r.channelName == endedChannel || r.id == endedChannel)));
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _statusSub?.cancel();
     _equalizerController.dispose();
     super.dispose();
   }

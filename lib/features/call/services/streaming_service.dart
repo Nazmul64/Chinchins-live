@@ -243,6 +243,14 @@ class StreamingService {
         channelName: channelName,
       ).then((res) {
         debugPrint('[StreamingService] Outgoing call initiated: ${res['success']}');
+        final realCallId = res['call_id'] ?? (res['data'] is Map ? res['data']['call_id'] ?? res['data']['id'] : null);
+        final realChannel = res['channel_name'] ?? (res['data'] is Map ? res['data']['channel_name'] : null);
+        if (realCallId != null) {
+          SignalingService().subscribeToCallRoom(realCallId.toString());
+        }
+        if (realChannel != null && realChannel.toString().isNotEmpty) {
+          SignalingService().subscribeToCallRoom(realChannel.toString());
+        }
       }).catchError((err) {
         debugPrint('[StreamingService] initiateCall error: $err');
       });

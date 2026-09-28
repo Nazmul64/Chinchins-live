@@ -14,7 +14,6 @@ import '../../profile/screens/host_profile_screen.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../../call/screens/random_match_screen.dart';
-import '../../call/services/call_api_service.dart';
 import '../../call/services/streaming_service.dart';
 
 import '../../party/screens/party_rooms_screen.dart';
@@ -319,15 +318,6 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
       ratePerMinute: ratePerMin,
       isIncoming: false,
     );
-
-    // Concurrently trigger backend notification, FCM VoIP push & socket event
-    CallApiService.initiateCall(
-      receiverId: model.id,
-      receiverAccountId: model.accountId,
-      callType: 'video',
-    ).then((initiateRes) {
-      // Backend signaled in background
-    }).catchError((_) {});
   }
 
   void _openRankLeaderboardScreen() {

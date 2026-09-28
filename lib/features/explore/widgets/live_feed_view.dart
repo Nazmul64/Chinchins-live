@@ -49,13 +49,13 @@ class _LiveFeedViewState extends State<LiveFeedView>
 
     // ✅ Socket: Instantly remove ended stream cards without waiting for refresh
     _liveEndedSub = SignalingService().onLiveStreamEnded.listen((data) {
-      final endedId = (data['live_stream_id'] ?? data['id'] ?? data['room_id'])?.toString();
+      final endedId = (data['live_stream_id'] ?? data['id'] ?? data['room_id'] ?? data['stream_id'])?.toString();
       final endedChannel = (data['channel_name'] ?? data['room_name'])?.toString();
-      final endedHostId = (data['host_id'] ?? data['user_id'])?.toString();
+      final endedHostId = (data['host_id'] ?? data['user_id'] ?? data['host']?['id'])?.toString();
       if (mounted && (endedId != null || endedChannel != null || endedHostId != null)) {
         setState(() {
           _activeStreams.removeWhere((s) {
-            final sId = (s['id'] ?? s['live_stream_id'])?.toString();
+            final sId = (s['id'] ?? s['live_stream_id'] ?? s['room_id'])?.toString();
             final sChannel = (s['channel_name'] ?? s['room_name'])?.toString();
             final sHostId = (s['host'] is Map ? s['host']['id'] : s['host_id'])?.toString();
             return (endedId != null && (sId == endedId || sChannel == endedId)) ||
@@ -65,6 +65,30 @@ class _LiveFeedViewState extends State<LiveFeedView>
         });
         // Persist cleaned list to Hive cache
         HiveCacheService.saveLiveStreams(_activeStreams);
+      }
+    });
+
+    SignalingService().onStreamStatusChanged.listen((data) {
+      final status = (data['status'] ?? data['action'])?.toString().toLowerCase();
+      if (status == 'ended' || status == 'closed' || status == 'stopped') {
+        final endedId = (data['live_stream_id'] ?? data['id'] ?? data['room_id'] ?? data['stream_id'])?.toString();
+        final endedChannel = (data['channel_name'] ?? data['room_name'])?.toString();
+        final endedHostId = (data['host_id'] ?? data['user_id'] ?? data['host']?['id'])?.toString();
+        if (mounted && (endedId != null || endedChannel != null || endedHostId != null)) {
+          setState(() {
+            _activeStreams.removeWhere((s) {
+              final sId = (s['id'] ?? s['live_stream_id'] ?? s['room_id'])?.toString();
+              final sChannel = (s['channel_name'] ?? s['room_name'])?.toString();
+              final sHostId = (s['host'] is Map ? s['host']['id'] : s['host_id'])?.toString();
+              return (endedId != null && (sId == endedId || sChannel == endedId)) ||
+                     (endedChannel != null && (sChannel == endedChannel || sId == endedChannel)) ||
+                     (endedHostId != null && sHostId == endedHostId);
+            });
+          });
+          HiveCacheService.saveLiveStreams(_activeStreams);
+        }
+      } else if (status == 'live') {
+        _loadActiveStreams();
       }
     });
   }

@@ -153,7 +153,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
     // ব্যাকএন্ডে রিসিভ বাটন প্রেস নোটিফাই করা (অ্যাসিনক্রোনাসলি ব্যাকগ্রাউন্ডে)
     if (widget.callId != null) {
-      unawaited(CallApiService.acceptCall(callId: widget.callId!));
+      unawaited(CallApiService.acceptCall(
+        callId: widget.callId!,
+        channelName: widget.channelName,
+      ));
     }
 
     if (mounted) {
@@ -179,7 +182,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     await CallSoundManager.stopRingtone();
 
     if (widget.callId != null) {
-      await CallApiService.rejectCall(callId: widget.callId!);
+      await CallApiService.rejectCall(
+        callId: widget.callId!,
+        reason: 'declined',
+      );
     }
 
     if (mounted) {

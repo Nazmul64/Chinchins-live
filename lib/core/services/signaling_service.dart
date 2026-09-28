@@ -68,6 +68,8 @@ class SignalingService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _liveStreamEndedController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _streamStatusChangedController =
+      StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _liveMessageSentController =
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _cohostStatusController =
@@ -105,6 +107,7 @@ class SignalingService {
   Stream<Map<String, dynamic>> get onLiveJoinResponse => _liveJoinResponseController.stream;
   Stream<Map<String, dynamic>> get onLiveGuestKicked => _liveGuestKickedController.stream;
   Stream<Map<String, dynamic>> get onLiveStreamEnded => _liveStreamEndedController.stream;
+  Stream<Map<String, dynamic>> get onStreamStatusChanged => _streamStatusChangedController.stream;
   Stream<Map<String, dynamic>> get onLiveMessageSent => _liveMessageSentController.stream;
   Stream<Map<String, dynamic>> get onCoHostStatusChanged => _cohostStatusController.stream;
   Stream<Map<String, dynamic>> get onCoHostAccepted => _coHostAcceptedController.stream;
@@ -179,6 +182,11 @@ class SignalingService {
       });
 
       await _pusherClient!.connect();
+
+      // Subscribe to global lobby & stream feeds
+      await _subscribeToChannel('global-live-feed', isPrivate: false);
+      await _subscribeToChannel('stream-lobby', isPrivate: false);
+      await _subscribeToChannel('live-feed', isPrivate: false);
     } catch (e, st) {
       AppLogger.error('SignalingServiceInitError', e, st);
     }
@@ -602,7 +610,22 @@ class SignalingService {
       return;
     }
 
-    // 9b. Live Host On 1-on-1 Call Status (LiveHostOnCallEvent -> host.call_status / host.private_call)
+    // 9b. Live Stream Status Changed / Ended (Lobby & Feed sync)
+    if (cleanName == 'StreamStatusChanged' ||
+        cleanName == 'StreamStatusChangedEvent' ||
+        cleanName.endsWith('StreamStatusChanged') ||
+        cleanName.endsWith('StreamStatusChangedEvent') ||
+        cleanName == 'stream.status.changed' ||
+        lowerName.contains('streamstatuschanged')) {
+      _streamStatusChangedController.add(data);
+      final status = (data['status'] ?? data['action'])?.toString().toLowerCase();
+      if (status == 'ended' || status == 'closed' || status == 'stopped') {
+        _liveStreamEndedController.add(data);
+      }
+      return;
+    }
+
+    // 9c. Live Host On 1-on-1 Call Status (LiveHostOnCallEvent -> host.call_status / host.private_call)
     if (cleanName == 'LiveHostOnCallEvent' ||
         cleanName.endsWith('LiveHostOnCallEvent') ||
         cleanName == 'host.call_status' ||
@@ -621,11 +644,19 @@ class SignalingService {
         cleanName == 'live.stream.ended' ||
         cleanName == 'live_stream.ended' ||
         cleanName == 'live.ended' ||
+        cleanName == 'party_room.ended' ||
+        cleanName == 'PartyRoomEnded' ||
+        cleanName == 'PartyRoomEndedEvent' ||
+        cleanName.endsWith('PartyRoomEndedEvent') ||
         lowerName == 'live_stream.ended' ||
         lowerName == 'live.stream.ended' ||
+        lowerName == 'live.ended' ||
+        lowerName == 'party_room.ended' ||
         lowerName.contains('streamended') ||
-        lowerName.contains('livestreamended')) {
+        lowerName.contains('livestreamended') ||
+        lowerName.contains('partyroomended')) {
       _liveStreamEndedController.add(data);
+      _streamStatusChangedController.add({'status': 'ended', ...data});
       return;
     }
 
@@ -651,48 +682,79 @@ class SignalingService {
       return;
     }
 
-    // Check for other WebRTC signaling events
+    // 12. Call Accepted (CallAccepted / call.accepted / private_call.accepted)
     if (cleanName == 'call.accepted' ||
         cleanName == 'CallAccepted' ||
         cleanName == 'CallAcceptedEvent' ||
+        cleanName == 'private_call.accepted' ||
+        cleanName == 'PrivateCallAccepted' ||
+        cleanName == 'PrivateCallAcceptedEvent' ||
         cleanName.endsWith('CallAcceptedEvent') ||
+        cleanName.endsWith('PrivateCallAcceptedEvent') ||
         lowerName == 'call.accepted' ||
         lowerName == 'callaccepted' ||
-        lowerName == 'call_accepted') {
+        lowerName == 'call_accepted' ||
+        lowerName == 'private_call.accepted' ||
+        lowerName == 'privatecallaccepted' ||
+        (data['status'] == 'accepted' || data['action'] == 'call_accepted' || data['type'] == 'accepted')) {
       _callAcceptedController.add(data);
       return;
     }
 
+    // 13. Call Rejected (CallRejected / call.rejected / private_call.rejected)
     if (cleanName == 'call.rejected' ||
         cleanName == 'CallRejected' ||
         cleanName == 'CallRejectedEvent' ||
+        cleanName == 'private_call.rejected' ||
+        cleanName == 'PrivateCallRejected' ||
+        cleanName == 'PrivateCallRejectedEvent' ||
         cleanName.endsWith('CallRejectedEvent') ||
+        cleanName.endsWith('PrivateCallRejectedEvent') ||
         lowerName == 'call.rejected' ||
         lowerName == 'callrejected' ||
-        lowerName == 'call_rejected') {
+        lowerName == 'call_rejected' ||
+        lowerName == 'private_call.rejected' ||
+        lowerName == 'privatecallrejected' ||
+        (data['status'] == 'rejected' || data['action'] == 'call_rejected' || data['type'] == 'rejected')) {
       _callRejectedController.add(data);
       return;
     }
 
+    // 14. Call Cancelled (CallCancelled / call.cancelled / private_call.cancelled)
     if (cleanName == 'call.cancelled' ||
         cleanName == 'CallCancelled' ||
         cleanName == 'CallCancelledEvent' ||
+        cleanName == 'private_call.cancelled' ||
+        cleanName == 'PrivateCallCancelled' ||
+        cleanName == 'PrivateCallCancelledEvent' ||
         cleanName.endsWith('CallCancelledEvent') ||
+        cleanName.endsWith('PrivateCallCancelledEvent') ||
         lowerName == 'call.cancelled' ||
         lowerName == 'callcancelled' ||
-        lowerName == 'call_cancelled') {
+        lowerName == 'call_cancelled' ||
+        lowerName == 'private_call.cancelled' ||
+        lowerName == 'privatecallcancelled' ||
+        (data['status'] == 'cancelled' || data['action'] == 'call_cancelled' || data['type'] == 'cancelled')) {
       _callCancelledController.add(data);
       return;
     }
 
+    // 15. Call Ended (CallEnded / call.ended / private_call.ended)
     if (cleanName == 'call.ended' ||
         cleanName == 'CallEnded' ||
         cleanName == 'CallEndedEvent' ||
+        cleanName == 'private_call.ended' ||
+        cleanName == 'PrivateCallEnded' ||
+        cleanName == 'PrivateCallEndedEvent' ||
         cleanName.endsWith('CallEndedEvent') ||
+        cleanName.endsWith('PrivateCallEndedEvent') ||
         lowerName == 'call.ended' ||
         lowerName == 'callended' ||
         lowerName == 'call_ended' ||
+        lowerName == 'private_call.ended' ||
+        lowerName == 'privatecallended' ||
         (data['action'] == 'call_ended') ||
+        (data['type'] == 'bye' || data['type'] == 'hangup' || data['type'] == 'ended') ||
         (data['status'] == 'completed' && isCallChannel)) {
       _callEndedController.add(data);
       return;

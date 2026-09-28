@@ -572,7 +572,10 @@ class CallApiService {
     }
   }
 
-  static Future<Map<String, dynamic>?> acceptCall({required dynamic callId}) async {
+  static Future<Map<String, dynamic>?> acceptCall({
+    required dynamic callId,
+    String? channelName,
+  }) async {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
@@ -593,6 +596,7 @@ class CallApiService {
         'user_id': userId,
         'receiver_id': userId,
         'account_id': accountId,
+        if (channelName != null && channelName.isNotEmpty) 'channel_name': channelName,
       };
 
       final response = await http
@@ -614,7 +618,10 @@ class CallApiService {
     return null;
   }
 
-  static Future<bool> rejectCall({required dynamic callId}) async {
+  static Future<bool> rejectCall({
+    required dynamic callId,
+    String reason = 'declined',
+  }) async {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
@@ -628,7 +635,10 @@ class CallApiService {
         if (userId != null) 'X-User-Id': userId,
       };
 
-      final payload = {'call_id': callId};
+      final payload = {
+        'call_id': callId,
+        'reason': reason,
+      };
 
       final response = await http
           .post(url, headers: headers, body: jsonEncode(payload))

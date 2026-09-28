@@ -433,12 +433,22 @@ class ModelProfile {
       beans: userBeans,
       isLive: json['is_live'] == true ||
           json['is_live'] == 1 ||
+          json['online_status'] == 'in_live' ||
           json['status'] == 'in_live' ||
           json['status'] == 'live' ||
+          json['call_button_mode'] == 'watch_live' ||
+          json['live_stream'] != null ||
+          json['live_room'] != null ||
           json['live_stream_id'] != null ||
           json['active_live'] != null,
-      activeLiveStreamId: json['live_stream_id'] ?? json['active_live_id'] ?? json['active_live']?['id'] ?? json['active_stream_id'],
-      liveChannelName: json['live_channel_name']?.toString() ?? json['channel_name']?.toString() ?? json['active_live']?['channel_name']?.toString(),
+      activeLiveStreamId: json['live_stream'] is Map
+          ? (json['live_stream']['id'] ?? json['live_stream']['room_id'])
+          : (json['live_stream_id'] ?? json['active_live_id'] ?? json['active_live']?['id'] ?? json['active_stream_id'] ?? json['room_id']),
+      liveChannelName: (json['live_stream'] is Map ? json['live_stream']['channel_name']?.toString() : null) ??
+          json['live_room']?.toString() ??
+          json['live_channel_name']?.toString() ??
+          json['channel_name']?.toString() ??
+          json['active_live']?['channel_name']?.toString(),
     );
   }
 

@@ -13,7 +13,6 @@ import 'level_progression_screen.dart';
 import '../../call/screens/incoming_call_screen.dart';
 import '../../call/screens/live_room_screen.dart';
 import '../../call/services/call_api_service.dart';
-import '../../call/services/call_sound_manager.dart';
 import '../../call/services/streaming_service.dart';
 import '../../chat/screens/chat_detail_screen.dart';
 import '../../../core/services/profile_api_service.dart';
@@ -219,15 +218,6 @@ class _HostProfileScreenState extends State<HostProfileScreen>
       ratePerMinute: ratePerMin,
       isIncoming: false,
     );
-
-    // Concurrently trigger backend notification, FCM VoIP push & socket event
-    CallApiService.initiateCall(
-      receiverId: _currentModel.id,
-      receiverAccountId: _currentModel.accountId,
-      callType: 'video',
-    ).then((res) {
-      // Backend signaled in background
-    }).catchError((_) {});
   }
 
   Future<void> _startAudioCall() async {
@@ -271,15 +261,6 @@ class _HostProfileScreenState extends State<HostProfileScreen>
       ratePerMinute: ratePerMin,
       isIncoming: false,
     );
-
-    // Concurrently trigger backend notification, FCM VoIP push & socket event
-    CallApiService.initiateCall(
-      receiverId: _currentModel.id,
-      receiverAccountId: _currentModel.accountId,
-      callType: 'audio',
-    ).then((res) {
-      // Backend signaled in background
-    }).catchError((_) {});
   }
 
   void _showRechargeSheet({Map<String, dynamic>? modalData}) {
