@@ -93,6 +93,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   bool _isSwappedVideo = false;
   bool _hasStartedWebRTC = false;
   bool _isEndingCall = false;
+  bool _hasInitiatedCall = false;
 
   int _callSeconds = 0;
   Timer? _timer;
@@ -164,7 +165,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       if (!widget.isIncoming) {
         _isConnectingCall = true;
         CallSoundManager.playOutgoingRingtone(widget.dialToneUrl);
-        if (_callId == null) {
+        if (_callId == null && !_hasInitiatedCall) {
           _initiateOutgoingCall();
         }
       } else {
@@ -282,6 +283,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   }
 
   Future<void> _initiateOutgoingCall() async {
+    if (_hasInitiatedCall || _isEndingCall || widget.isIncoming) return;
+    _hasInitiatedCall = true;
+
     final res = await CallApiService.initiateCall(
       receiverId: widget.model.id,
       receiverAccountId: widget.model.accountId,
@@ -442,6 +446,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   /// 🛑 Mandate 2: Centralized Call Session Disposal (Loop Killer)
   void disposeCallSession() {
+    _isEndingCall = true;
+    _hasInitiatedCall = true;
     _timer?.cancel();
     _timer = null;
     _pollingTimer?.cancel();
@@ -629,29 +635,40 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   void _startCallStatusPolling() {
     final pollCallId = _callId ?? widget.callId;
-    if (pollCallId == null) return;
+    if (pollCallId == null || _isEndingCall) return;
 
     _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
+    _pollingTimer = Timer.periodic(const Duration(milliseconds: 3000), (timer) async {
       if (!mounted || _isEndingCall) {
         timer.cancel();
+        _pollingTimer = null;
+        return;
+      }
+
+      // If media is connected and WebSockets is connected, cancel status polling
+      if (!_isConnectingCall && SignalingService().isConnected) {
+        timer.cancel();
+        _pollingTimer = null;
         return;
       }
 
       final statusData = await CallApiService.getCallStatus(pollCallId);
-      if (!mounted || statusData == null) return;
+      if (!mounted || statusData == null || _isEndingCall) return;
 
       final status = (statusData['status'] ?? statusData['data']?['status'])?.toString().toLowerCase();
       final isTerminated = statusData['is_terminated'] == true || statusData['data']?['is_terminated'] == true;
 
       if (status == 'rejected') {
         timer.cancel();
+        _pollingTimer = null;
         _terminateCallSession('Host declined the call');
       } else if (status == 'cancelled') {
         timer.cancel();
+        _pollingTimer = null;
         _terminateCallSession('Call was cancelled');
       } else if (status == 'ended' || isTerminated) {
         timer.cancel();
+        _pollingTimer = null;
         _terminateCallSession('Call ended');
       } else if (status == 'connected' || status == 'active' || status == 'accepted') {
         timer.cancel();

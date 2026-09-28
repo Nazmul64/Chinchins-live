@@ -95,9 +95,14 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
   void _startStatusPolling() {
     if (widget.callId == null) return;
-    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
+    _statusPollTimer?.cancel();
+    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 3000), (timer) async {
+      if (!mounted || _isProcessingAction) {
+        timer.cancel();
+        return;
+      }
       final statusData = await CallApiService.getCallStatus(widget.callId!);
-      if (!mounted) return;
+      if (!mounted || _isProcessingAction) return;
       if (statusData != null) {
         final status = (statusData['status'] ?? statusData['data']?['status'])?.toString().toLowerCase();
         final isTerminated = statusData['is_terminated'] == true || statusData['data']?['is_terminated'] == true;

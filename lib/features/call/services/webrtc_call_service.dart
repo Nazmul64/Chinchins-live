@@ -508,13 +508,13 @@ class WebRTCCallService {
         },
       );
 
-      // Fast re-broadcast offer every 1000ms until answer is received
+      // Fast re-broadcast offer once after 1500ms if no answer received yet
       _offerRebroadcastTimer?.cancel();
       _offerRebroadcastTimer = null;
       int rebroadcastCount = 0;
-      _offerRebroadcastTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
+      _offerRebroadcastTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) async {
         rebroadcastCount++;
-        if (_isDisposed || _hasRemoteAnswer || _peerConnection == null || rebroadcastCount > 6) {
+        if (_isDisposed || _hasRemoteAnswer || _peerConnection == null || rebroadcastCount > 2) {
           timer.cancel();
           _offerRebroadcastTimer = null;
           return;
@@ -723,14 +723,25 @@ class WebRTCCallService {
     _signalingTimer?.cancel();
     _signalingTimer = null;
     if (_isDisposed || callId == null) return;
+
+    // ⚡ If WebSockets is connected, WebSockets handles offer/answer/candidate in real-time.
+    // HTTP Polling is strictly a slow fallback (every 3000ms) only when WebSockets is disconnected or before handshake.
     bool isFetching = false;
 
-    _signalingTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
+    _signalingTimer = Timer.periodic(const Duration(milliseconds: 3000), (timer) async {
       if (_isDisposed || _peerConnection == null) {
         timer.cancel();
         _signalingTimer = null;
         return;
       }
+
+      // If peer is already connected and WebSockets is healthy, pause HTTP polling
+      if ((_hasRemoteAnswer || _hasAnsweredOffer) && SignalingService().isConnected) {
+        timer.cancel();
+        _signalingTimer = null;
+        return;
+      }
+
       if (isFetching) return;
       isFetching = true;
 
@@ -855,6 +866,8 @@ class WebRTCCallService {
             _log('SET_REMOTE_DESCRIPTION_ANSWER_SUCCESS');
             await _drainPendingCandidates();
             enforceLoudSpeakerphone();
+            _signalingTimer?.cancel();
+            _signalingTimer = null;
           } catch (e) {
             lastError = 'SetRemoteDescAnswerError: $e';
             _log('SetRemoteDescAnswerError: $e');
@@ -902,39 +915,9 @@ class WebRTCCallService {
               },
             );
 
-            // Re-broadcast Answer twice at short intervals to guarantee network transit
-            Future.delayed(const Duration(milliseconds: 300), () {
-              if (_peerConnection != null) {
-                CallApiService.sendSignal(
-                  callId: callId,
-                  channelName: channelName,
-                  type: 'answer',
-                  payload: {
-                    'sdp': sendSdp,
-                    'type': answer.type ?? 'answer',
-                    'sender_role': 'receiver',
-                    'sender_id': _currentUserId,
-                  },
-                );
-              }
-            });
-            Future.delayed(const Duration(milliseconds: 700), () {
-              if (_peerConnection != null) {
-                CallApiService.sendSignal(
-                  callId: callId,
-                  channelName: channelName,
-                  type: 'answer',
-                  payload: {
-                    'sdp': sendSdp,
-                    'type': answer.type ?? 'answer',
-                    'sender_role': 'receiver',
-                    'sender_id': _currentUserId,
-                  },
-                );
-              }
-            });
-
             enforceLoudSpeakerphone();
+            _signalingTimer?.cancel();
+            _signalingTimer = null;
           } catch (e) {
             lastError = 'SetRemoteDescOfferError: $e';
             _log('SetRemoteDescOfferError: $e');

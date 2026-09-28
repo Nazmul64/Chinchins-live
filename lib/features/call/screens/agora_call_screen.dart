@@ -102,6 +102,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   bool _localUserJoined = false;
   bool _isConnecting = true;
   bool _isEndingCall = false;
+  bool _hasInitiatedCall = false;
 
   bool _isAudioMuted = false;
   bool _isVideoOff = false;
@@ -171,7 +172,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       if (!widget.isIncoming) {
         _isConnecting = true;
         CallSoundManager.playOutgoingRingtone(widget.dialToneUrl);
-        if (_callId == null) {
+        if (_callId == null && !_hasInitiatedCall) {
           _initiateOutgoingCall();
         }
       } else {
@@ -188,6 +189,9 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   }
 
   Future<void> _initiateOutgoingCall() async {
+    if (_hasInitiatedCall || _isEndingCall || widget.isIncoming) return;
+    _hasInitiatedCall = true;
+
     final res = await CallApiService.initiateCall(
       receiverId: widget.model.id,
       receiverAccountId: widget.model.accountId,
@@ -304,9 +308,14 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
 
   void _startCallStatusPolling() {
     final effectiveCallId = _callId ?? widget.callId;
-    if (effectiveCallId == null) return;
+    if (effectiveCallId == null || _isEndingCall) return;
     _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) {
+    _pollingTimer = Timer.periodic(const Duration(milliseconds: 3000), (_) {
+      if (_isEndingCall || !mounted) {
+        _pollingTimer?.cancel();
+        _pollingTimer = null;
+        return;
+      }
       _pollCallStatus();
     });
   }
@@ -722,6 +731,8 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
 
   /// 🛑 Mandate 2: Centralized Call Session Disposal (Loop Killer)
   void disposeCallSession() {
+    _isEndingCall = true;
+    _hasInitiatedCall = true;
     _timer?.cancel();
     _timer = null;
     _pollingTimer?.cancel();
