@@ -6,7 +6,25 @@ class LiveKitService {
   Room? _room;
   Room? get room => _room;
 
-  final String serverUrl = 'wss://chinchins.live/livekit';
+  static const String defaultServerUrl = 'wss://chinchins.live/livekit';
+  final String serverUrl = defaultServerUrl;
+
+  /// Sanitize and enforce public LiveKit URL (never local IPs or plain HTTP)
+  static String sanitizeServerUrl(String? url) {
+    if (url == null || url.trim().isEmpty) {
+      return defaultServerUrl;
+    }
+    String cleaned = url.trim();
+    if (cleaned.contains('localhost') || cleaned.contains('127.0.0.1') || cleaned.contains('10.0.2.2')) {
+      return defaultServerUrl;
+    }
+    if (cleaned.startsWith('http://')) {
+      cleaned = cleaned.replaceFirst('http://', 'ws://');
+    } else if (cleaned.startsWith('https://')) {
+      cleaned = cleaned.replaceFirst('https://', 'wss://');
+    }
+    return cleaned;
+  }
 
   Future<bool> requestPermissions({bool isVideo = true}) async {
     Map<Permission, PermissionStatus> statuses = await [
@@ -68,8 +86,9 @@ class LiveKitService {
     );
 
     try {
+      final effectiveUrl = sanitizeServerUrl(customServerUrl ?? serverUrl);
       await _room!.connect(
-        customServerUrl ?? serverUrl,
+        effectiveUrl,
         token,
       );
 

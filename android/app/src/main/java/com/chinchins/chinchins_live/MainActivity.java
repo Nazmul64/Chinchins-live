@@ -15,6 +15,18 @@ public class MainActivity extends FlutterActivity {
         super.onCreate(savedInstanceState);
         // Explicitly clear FLAG_SECURE so screenshots and screen recording work freely
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+
+        // Allow incoming call UI to wake screen and display over lockscreen
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true);
+            setTurnScreenOn(true);
+        } else {
+            getWindow().addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            );
+        }
     }
 
     @Override

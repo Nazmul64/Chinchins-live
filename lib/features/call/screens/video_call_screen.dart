@@ -250,7 +250,15 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         _updateLiveKitRemoteTrack();
       });
 
-      final livekitUrl = url ?? 'wss://chinchins.live/livekit';
+      String livekitUrl = url?.trim() ?? 'wss://chinchins.live/livekit';
+      if (livekitUrl.isEmpty || livekitUrl.contains('localhost') || livekitUrl.contains('127.0.0.1')) {
+        livekitUrl = 'wss://chinchins.live/livekit';
+      }
+      if (livekitUrl.startsWith('http://')) {
+        livekitUrl = livekitUrl.replaceFirst('http://', 'ws://');
+      } else if (livekitUrl.startsWith('https://')) {
+        livekitUrl = livekitUrl.replaceFirst('https://', 'wss://');
+      }
       await _liveKitRoom!.connect(livekitUrl, token);
 
       // ⚡ Mandate 1: Immediately enable and publish microphone and camera tracks
