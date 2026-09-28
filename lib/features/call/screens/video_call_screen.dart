@@ -184,12 +184,11 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       await CallSoundManager.stopRingtone();
       if (mounted) {
         Navigator.pop(context);
-        RechargeGemsSheet.show(
+        InCallRechargeGemsSheet.show(
           context,
           model: widget.model,
-          receiverId: widget.model.id,
-          receiverName: widget.model.name,
-          receiverAvatarUrl: widget.model.avatarUrl,
+          userGems: _userGems,
+          ratePerMinute: _ratePerMinute,
         );
       }
       return;
@@ -345,6 +344,85 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _loadCallConfig() async {
+    try {
+      final cfg = await CallApiService.getCallConfig();
+      if (cfg != null && mounted) {
+        final dynamic freeSecs = cfg['free_trial_duration_seconds'] ?? cfg['free_duration_seconds'] ?? cfg['free_trial_seconds'];
+        if (freeSecs != null) {
+          final parsed = int.tryParse(freeSecs.toString());
+          if (parsed != null && parsed > 0 && _callSeconds == 0) {
+            setState(() {
+              _freeTrialRemaining = parsed;
+            });
+          }
+        }
+        final dynamic rpm = cfg['video_call_rate'] ?? cfg['rate_per_minute'];
+        if (rpm != null) {
+          final parsedRpm = int.tryParse(rpm.toString());
+          if (parsedRpm != null && parsedRpm > 0) {
+            setState(() {
+              _ratePerMinute = parsedRpm;
+            });
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadFeaturedPackage() async {
+    try {
+      final packages = await WalletApiService.getCoinPackages();
+      if (packages.isNotEmpty && mounted) {
+        setState(() {
+          _featuredPackage = packages.first;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _onMediaConnected([MediaStream? stream]) {
+    if (stream != null && _webrtcService.remoteRenderer.srcObject != stream) {
+      _webrtcService.remoteRenderer.srcObject = stream;
+    }
+    CallSoundManager.stopRingtone();
+
+    // Ensure all audio tracks are active and unmuted
+    _webrtcService.unmuteAllAudio();
+
+    // Force maximum loud speakerphone audio
+    _webrtcService.toggleSpeakerphone(true);
+    Future.delayed(const Duration(milliseconds: 200), () {
+      _webrtcService.unmuteAllAudio();
+      _webrtcService.toggleSpeakerphone(true);
+    });
+    Future.delayed(const Duration(milliseconds: 600), () {
+      _webrtcService.unmuteAllAudio();
+      _webrtcService.toggleSpeakerphone(true);
+    });
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      _webrtcService.unmuteAllAudio();
+      _webrtcService.toggleSpeakerphone(true);
+    });
+
+    if (mounted) {
+      setState(() {
+        _isConnectingCall = false;
+      });
+    }
+    if (!_hasStartedTimer) {
+      _hasStartedTimer = true;
+      final cId = _callId ?? widget.callId;
+      if (cId != null) {
+        CallApiService.notifyCallConnected(
+          callId: cId,
+          mediaStatus: 'connected',
+        );
+      }
+      _startTimer();
     }
   }
 
