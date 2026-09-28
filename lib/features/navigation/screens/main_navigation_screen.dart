@@ -34,6 +34,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
   Timer? _heartbeatTimer;
   StreamSubscription? _wsIncomingCallSub;
+  StreamSubscription? _wsEndedSub;
+  StreamSubscription? _wsCancelledSub;
+  StreamSubscription? _wsRejectedSub;
   int? _activeIncomingCallId;
 
   late final List<Widget> _screens = [
@@ -90,6 +93,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             _handleIncomingCallData(data);
           }
         });
+        _wsEndedSub?.cancel();
+        _wsEndedSub = signaling.onCallEnded.listen((_) {
+          _activeIncomingCallId = null;
+        });
+        _wsCancelledSub?.cancel();
+        _wsCancelledSub = signaling.onCallCancelled.listen((_) {
+          _activeIncomingCallId = null;
+        });
+        _wsRejectedSub?.cancel();
+        _wsRejectedSub = signaling.onCallRejected.listen((_) {
+          _activeIncomingCallId = null;
+        });
       }
     } catch (_) {}
   }
@@ -106,20 +121,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final payload = incoming['data'] is Map ? Map<String, dynamic>.from(incoming['data']) : incoming;
     final dynamic rawCallId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? payload['call_session_id'] ?? incoming['call_id'] ?? incoming['id'];
     
-    int callId = 0;
+    int? callId;
     if (rawCallId is int && rawCallId > 0) {
       callId = rawCallId;
     } else if (rawCallId != null) {
-      final digits = rawCallId.toString().replaceAll(RegExp(r'[^0-9]'), '');
-      if (digits.isNotEmpty) {
-        callId = int.tryParse(digits.length > 9 ? digits.substring(0, 9) : digits) ?? 0;
-      }
-      if (callId == 0) {
-        callId = rawCallId.toString().hashCode.abs();
-      }
+      callId = int.tryParse(rawCallId.toString());
     }
-    if (callId == 0) {
-      callId = (DateTime.now().millisecondsSinceEpoch ~/ 1000) % 10000000;
+
+    if (callId == null || callId <= 0) {
+      debugPrint('[MainNavigationScreen] Ignored incoming call event with invalid callId: $rawCallId');
+      return;
     }
 
     if (callId != _activeIncomingCallId) {
@@ -214,6 +225,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void dispose() {
     _heartbeatTimer?.cancel();
     _wsIncomingCallSub?.cancel();
+    _wsEndedSub?.cancel();
+    _wsCancelledSub?.cancel();
+    _wsRejectedSub?.cancel();
     NotificationApiService.instance.stopNotificationPolling();
     super.dispose();
   }

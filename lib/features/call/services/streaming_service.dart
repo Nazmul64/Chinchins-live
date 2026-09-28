@@ -206,7 +206,8 @@ class StreamingService {
 
     if (!context.mounted) return;
 
-    // 3. 0.00ms Instant Page Push (Dynamic Runtime Dispatch: Agora vs VPS WebRTC)
+    final isReplace = isIncoming;
+
     if (isAgoraEngine) {
       final dynamic rawUid = sessionData?['agora_uid'] ??
           sessionData?['uid'] ??
@@ -220,44 +221,50 @@ class StreamingService {
           ? agoraAppId
           : 'c13c72df342d4a1386da678ba4c95f13';
 
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => AgoraCallScreen(
-            model: model,
-            callId: callId,
-            channelName: sessionData?['channel_name']?.toString() ??
-                sessionData?['call']?['channel_name']?.toString() ??
-                channelName,
-            appId: effectiveAppId,
-            token: agoraToken ?? '',
-            uid: agoraUid,
-            isTempToken: sessionData?['is_temp_token'] == true,
-            isFreeTrial: isFreeTrial,
-            freeDurationSeconds: freeDurationSeconds,
-            ratePerMinute: ratePerMinute,
-            isIncoming: isIncoming,
-            dialToneUrl: dialToneUrl,
-            isVideo: callType == 'video',
-          ),
+      final page = MaterialPageRoute(
+        builder: (context) => AgoraCallScreen(
+          model: model,
+          callId: callId,
+          channelName: sessionData?['channel_name']?.toString() ??
+              sessionData?['call']?['channel_name']?.toString() ??
+              channelName,
+          appId: effectiveAppId,
+          token: agoraToken ?? '',
+          uid: agoraUid,
+          isTempToken: sessionData?['is_temp_token'] == true,
+          isFreeTrial: isFreeTrial,
+          freeDurationSeconds: freeDurationSeconds,
+          ratePerMinute: ratePerMinute,
+          isIncoming: isIncoming,
+          dialToneUrl: dialToneUrl,
+          isVideo: callType == 'video',
         ),
       );
+
+      if (isReplace) {
+        Navigator.pushReplacement(context, page);
+      } else {
+        Navigator.push(context, page);
+      }
     } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VideoCallScreen(
-            model: model,
-            callId: callId,
-            channelName: channelName,
-            isFreeTrial: isFreeTrial,
-            freeDurationSeconds: freeDurationSeconds,
-            ratePerMinute: ratePerMinute,
-            isIncoming: isIncoming,
-            dialToneUrl: dialToneUrl,
-          ),
+      final page = MaterialPageRoute(
+        builder: (context) => VideoCallScreen(
+          model: model,
+          callId: callId,
+          channelName: channelName,
+          isFreeTrial: isFreeTrial,
+          freeDurationSeconds: freeDurationSeconds,
+          ratePerMinute: ratePerMinute,
+          isIncoming: isIncoming,
+          dialToneUrl: dialToneUrl,
         ),
       );
+
+      if (isReplace) {
+        Navigator.pushReplacement(context, page);
+      } else {
+        Navigator.push(context, page);
+      }
     }
   }
 }
