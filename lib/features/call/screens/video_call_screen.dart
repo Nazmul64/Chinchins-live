@@ -14,6 +14,7 @@ import '../../../core/widgets/avatar_with_frame.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../../wallet/widgets/in_call_recharge_gems_sheet.dart';
 import '../../../core/services/signaling_service.dart';
+import '../../../core/utils/permission_helper.dart';
 import '../services/call_api_service.dart';
 import '../services/call_sound_manager.dart';
 import '../services/webrtc_call_service.dart';
@@ -186,7 +187,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         await AudioManager.instance.setSpeakerOutputPreferred(true);
       } catch (_) {}
 
-      await [Permission.camera, Permission.microphone].request();
+      await PermissionHelper.requestCallPermissions();
 
       _liveKitRoom = Room(
         roomOptions: const RoomOptions(
@@ -446,11 +447,17 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _pollingTimer?.cancel();
     _pollingTimer = null;
     _wsAcceptedSub?.cancel();
+    _wsAcceptedSub = null;
     _wsEndedSub?.cancel();
+    _wsEndedSub = null;
     _wsRejectedSub?.cancel();
+    _wsRejectedSub = null;
     _wsCancelledSub?.cancel();
+    _wsCancelledSub = null;
     _wsInCallMsgSub?.cancel();
+    _wsInCallMsgSub = null;
     _wsGiftSub?.cancel();
+    _wsGiftSub = null;
     CallSoundManager.stopRingtone();
     if (_liveKitRoom != null) {
       try {
@@ -461,6 +468,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _liveKitRoom = null;
     }
     _webrtcService.dispose();
+    _callId = null;
+    _channelName = null;
   }
 
   void _terminateCallSession([String? reason]) {

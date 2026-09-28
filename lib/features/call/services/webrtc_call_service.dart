@@ -4,6 +4,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../core/services/signaling_service.dart';
 import '../../../core/utils/app_logger.dart';
+import '../../../core/utils/permission_helper.dart';
 import '../../auth/services/auth_api_service.dart';
 import 'call_api_service.dart';
 
@@ -18,6 +19,7 @@ class WebRTCCallService {
   Timer? _speakerphonePulseTimer;
   Timer? _offerRebroadcastTimer;
   bool _isInitialized = false;
+  bool _isDisposed = false;
   bool _hasRemoteAnswer = false;
   bool _hasAnsweredOffer = false;
   int _lastSignalId = 0;
@@ -25,6 +27,8 @@ class WebRTCCallService {
   final List<RTCIceCandidate> _pendingIceCandidates = [];
   final List<Map> _earlyPendingSignals = [];
   String? _currentUserId;
+
+  bool get isDisposed => _isDisposed;
 
   StreamSubscription? _wsAcceptedSub;
   StreamSubscription? _wsOfferSub;
@@ -117,10 +121,8 @@ class WebRTCCallService {
   /// Initialize Local Media with Full HD Camera & Advanced Noise Cancellation Audio
   Future<bool> initializeMedia({bool isAudioOnly = false}) async {
     try {
-      await [
-        Permission.microphone,
-        if (!isAudioOnly) Permission.camera,
-      ].request();
+      _isDisposed = false;
+      await PermissionHelper.requestCallPermissions(isAudioOnly: isAudioOnly);
 
       final savedUser = await AuthApiService.getSavedUser();
       _currentUserId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString() ?? savedUser?['account_id']?.toString();
@@ -508,11 +510,13 @@ class WebRTCCallService {
 
       // Fast re-broadcast offer every 1000ms until answer is received
       _offerRebroadcastTimer?.cancel();
+      _offerRebroadcastTimer = null;
       int rebroadcastCount = 0;
       _offerRebroadcastTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
         rebroadcastCount++;
-        if (_hasRemoteAnswer || _peerConnection == null || rebroadcastCount > 10) {
+        if (_isDisposed || _hasRemoteAnswer || _peerConnection == null || rebroadcastCount > 6) {
           timer.cancel();
+          _offerRebroadcastTimer = null;
           return;
         }
         try {
@@ -717,10 +721,17 @@ class WebRTCCallService {
     Function()? onCallEnded,
   ) {
     _signalingTimer?.cancel();
+    _signalingTimer = null;
+    if (_isDisposed || callId == null) return;
     bool isFetching = false;
 
-    _signalingTimer = Timer.periodic(const Duration(milliseconds: 150), (timer) async {
-      if (isFetching || _peerConnection == null) return;
+    _signalingTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
+      if (_isDisposed || _peerConnection == null) {
+        timer.cancel();
+        _signalingTimer = null;
+        return;
+      }
+      if (isFetching) return;
       isFetching = true;
 
       try {
@@ -731,7 +742,10 @@ class WebRTCCallService {
           autoRead: false,
         );
 
+        if (_isDisposed || _peerConnection == null) return;
+
         for (final signal in signals) {
+          if (_isDisposed || _peerConnection == null) break;
           final dynamic rawSigId = signal['id'];
           final int? parsedSigId = rawSigId is int ? rawSigId : int.tryParse(rawSigId?.toString() ?? '');
           if (parsedSigId != null && parsedSigId > _lastSignalId) {
@@ -756,8 +770,11 @@ class WebRTCCallService {
     Function(MediaStream stream)? onRemoteStreamConnected,
     Function()? onCallEnded,
   ) async {
+    if (_isDisposed) return;
     if (_peerConnection == null) {
-      _earlyPendingSignals.add(signal);
+      if (!_isDisposed) {
+        _earlyPendingSignals.add(signal);
+      }
       return;
     }
 
@@ -1029,6 +1046,8 @@ class WebRTCCallService {
   }
 
   Future<void> dispose() async {
+    _isDisposed = true;
+
     _signalingTimer?.cancel();
     _signalingTimer = null;
     _speakerphonePulseTimer?.cancel();
@@ -1037,10 +1056,19 @@ class WebRTCCallService {
     _offerRebroadcastTimer = null;
 
     _wsAcceptedSub?.cancel();
+    _wsAcceptedSub = null;
     _wsOfferSub?.cancel();
+    _wsOfferSub = null;
     _wsAnswerSub?.cancel();
+    _wsAnswerSub = null;
     _wsCandidateSub?.cancel();
+    _wsCandidateSub = null;
     _wsEndSub?.cancel();
+    _wsEndSub = null;
+
+    _processedSignalIds.clear();
+    _pendingIceCandidates.clear();
+    _earlyPendingSignals.clear();
 
     try {
       SignalingService().leaveCallRoom();
@@ -1089,5 +1117,7 @@ class WebRTCCallService {
     } catch (_) {}
 
     _isInitialized = false;
+    _hasRemoteAnswer = false;
+    _hasAnsweredOffer = false;
   }
 }

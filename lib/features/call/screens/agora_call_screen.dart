@@ -13,6 +13,7 @@ import '../../../core/widgets/avatar_with_frame.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../../wallet/widgets/in_call_recharge_gems_sheet.dart';
+import '../../../core/utils/permission_helper.dart';
 import '../services/call_api_service.dart';
 import '../services/call_sound_manager.dart';
 import '../services/streaming_service.dart';
@@ -365,7 +366,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
 
   Future<void> _initAgoraEngine() async {
     try {
-      await [Permission.camera, Permission.microphone].request();
+      await PermissionHelper.requestCallPermissions(isAudioOnly: !widget.isVideo);
 
       _engine = createAgoraRtcEngine();
       await _engine!.initialize(RtcEngineContext(
@@ -726,10 +727,15 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     _pollingTimer?.cancel();
     _pollingTimer = null;
     _wsEndedSub?.cancel();
+    _wsEndedSub = null;
     _wsRejectedSub?.cancel();
+    _wsRejectedSub = null;
     _wsCancelledSub?.cancel();
+    _wsCancelledSub = null;
     _wsInCallMsgSub?.cancel();
+    _wsInCallMsgSub = null;
     _wsGiftSub?.cancel();
+    _wsGiftSub = null;
     CallSoundManager.stopRingtone();
     if (_engine != null) {
       try {
@@ -738,6 +744,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       } catch (_) {}
       _engine = null;
     }
+    _callId = null;
   }
 
   /// 🔴 Mandate 3: Immediate Call End & Cancel Action

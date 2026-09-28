@@ -165,10 +165,7 @@ class StreamingService {
     String? dialToneUrl,
     Map<String, dynamic>? initialSessionData,
   }) {
-    // 1. Request Camera and Microphone permissions asynchronously in background
-    unawaited([Permission.camera, Permission.microphone].request());
-
-    // 2. Extract driver and configuration according to Dual-Engine Specification
+    // 1. Extract driver and configuration according to Dual-Engine Specification
     final sessionData = initialSessionData;
     final bool isAgoraExplicit = sessionData != null &&
         (sessionData['is_agora'] == true ||
