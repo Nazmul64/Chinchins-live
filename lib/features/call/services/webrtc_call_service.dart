@@ -74,18 +74,33 @@ class WebRTCCallService {
     var sdp = rawSdp.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     final lines = sdp.split('\n');
     final newLines = <String>[];
+    String? opusPayload;
+
+    // Find Opus payload ID first
+    for (final line in lines) {
+      if (line.contains('a=rtpmap:') && line.toLowerCase().contains('opus/48000')) {
+        final match = RegExp(r'a=rtpmap:(\d+)\s+opus/48000', caseSensitive: false).firstMatch(line);
+        if (match != null) {
+          opusPayload = match.group(1);
+          break;
+        }
+      }
+    }
 
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i];
+
+      // If this is an existing fmtp for opus, optimize parameters in-place without duplicates
+      if (opusPayload != null && line.startsWith('a=fmtp:$opusPayload')) {
+        newLines.add('a=fmtp:$opusPayload minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=128000;cbr=1');
+        continue;
+      }
+
       newLines.add(line);
 
-      // Inject Opus stereo & noise parameters for loud & crisp voice
-      if (line.contains('a=rtpmap:') && line.toLowerCase().contains('opus/48000')) {
-        final parts = line.split(' ');
-        if (parts.isNotEmpty && parts[0].contains(':')) {
-          final payload = parts[0].split(':')[1];
-          newLines.add('a=fmtp:$payload minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=128000;cbr=1');
-        }
+      // If there was no existing fmtp for opus in the original SDP, insert right after rtpmap
+      if (opusPayload != null && line.startsWith('a=rtpmap:$opusPayload') && !sdp.contains('a=fmtp:$opusPayload')) {
+        newLines.add('a=fmtp:$opusPayload minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=128000;cbr=1');
       }
 
       // Add high bitrate bandwidth line for crystal clear HD video
@@ -117,8 +132,6 @@ class WebRTCCallService {
           'echoCancellation': true,
           'noiseSuppression': true,
           'autoGainControl': true,
-          'highpassFilter': true,
-          'typingNoiseDetection': true,
         },
         'video': isAudioOnly
             ? false
@@ -135,11 +148,7 @@ class WebRTCCallService {
       } catch (e) {
         _log('Camera HD fallback: $e');
         _localStream = await navigator.mediaDevices.getUserMedia({
-          'audio': {
-            'echoCancellation': true,
-            'noiseSuppression': true,
-            'autoGainControl': true,
-          },
+          'audio': true,
           'video': isAudioOnly ? false : {'facingMode': 'user'},
         });
       }
@@ -170,6 +179,25 @@ class WebRTCCallService {
       Helper.setSpeakerphoneOn(true);
       _isSpeakerOn = true;
     } catch (_) {}
+  }
+
+  /// Ensure all audio tracks are enabled and unmuted
+  void unmuteAllAudio() {
+    if (_localStream != null) {
+      for (final track in _localStream!.getAudioTracks()) {
+        try {
+          track.enabled = true;
+        } catch (_) {}
+      }
+    }
+    if (_remoteStream != null) {
+      for (final track in _remoteStream!.getAudioTracks()) {
+        try {
+          track.enabled = true;
+        } catch (_) {}
+      }
+    }
+    enforceLoudSpeakerphone();
   }
 
   List<Map<String, dynamic>> _sanitizeIceServers(List<Map<String, dynamic>> rawIceServers) {

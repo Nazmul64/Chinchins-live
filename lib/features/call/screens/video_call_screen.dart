@@ -277,12 +277,21 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     }
     CallSoundManager.stopRingtone();
 
+    // Ensure all audio tracks are active and unmuted
+    _webrtcService.unmuteAllAudio();
+
     // Force maximum loud speakerphone audio
     _webrtcService.toggleSpeakerphone(true);
-    Future.delayed(const Duration(milliseconds: 300), () {
+    Future.delayed(const Duration(milliseconds: 200), () {
+      _webrtcService.unmuteAllAudio();
       _webrtcService.toggleSpeakerphone(true);
     });
-    Future.delayed(const Duration(milliseconds: 800), () {
+    Future.delayed(const Duration(milliseconds: 600), () {
+      _webrtcService.unmuteAllAudio();
+      _webrtcService.toggleSpeakerphone(true);
+    });
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      _webrtcService.unmuteAllAudio();
       _webrtcService.toggleSpeakerphone(true);
     });
 

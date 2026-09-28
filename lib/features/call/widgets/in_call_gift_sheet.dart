@@ -3,7 +3,6 @@ import '../../../core/models/gift_item.dart';
 import '../../../core/services/app_cache_service.dart';
 import '../../../core/services/gifts_api_service.dart';
 import '../../../core/services/hive_cache_service.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';

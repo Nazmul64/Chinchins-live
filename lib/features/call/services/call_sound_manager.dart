@@ -80,22 +80,18 @@ class CallSoundManager {
     try {
       if (_player != null) {
         await _player!.stop();
+        await _player!.release();
+        await _player!.dispose();
+        _player = null;
       }
       _isPlaying = false;
-      AppLogger.info('CallSound', 'Calling ringtone stopped.');
+      AppLogger.info('CallSound', 'Calling ringtone stopped and audio focus released.');
     } catch (e, st) {
       AppLogger.error('StopCallSoundError', e, st);
     }
   }
 
   static Future<void> dispose() async {
-    try {
-      if (_player != null) {
-        await _player!.stop();
-        await _player!.dispose();
-        _player = null;
-      }
-      _isPlaying = false;
-    } catch (_) {}
+    await stopRingtone();
   }
 }
