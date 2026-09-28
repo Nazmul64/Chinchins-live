@@ -747,6 +747,10 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     _callId = null;
   }
 
+  void terminateCallCompletely() {
+    _endCall();
+  }
+
   /// 🔴 Mandate 3: Immediate Call End & Cancel Action
   Future<void> _endCall() async {
     if (_isEndingCall) return;

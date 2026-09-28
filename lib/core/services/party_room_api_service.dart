@@ -832,6 +832,7 @@ class PartyRoomApiService {
       final headers = await _getHeaders('application/json');
       final payload = {
         'action': action.toLowerCase(),
+        'status': action.toLowerCase() == 'accept' ? 'accepted' : 'rejected',
         'request_id': requestId,
       };
 

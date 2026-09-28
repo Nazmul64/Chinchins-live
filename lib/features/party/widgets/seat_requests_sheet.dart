@@ -50,21 +50,28 @@ class _SeatRequestsBottomSheetState extends State<SeatRequestsBottomSheet> {
     final data = await PartyRoomApiService.getSeatRequests(widget.roomId);
     if (mounted) {
       setState(() {
-        _requests = data;
+        _requests = data.where((r) {
+          final s = r.status.toLowerCase();
+          return s == 'pending' || s == '0' || s.isEmpty;
+        }).toList();
         _isLoading = false;
       });
     }
   }
 
   Future<void> _handleAction(PartyRoomSeatRequest req, bool accept) async {
-    setState(() => _processingIds.add(req.requestId));
+    // ১. তাৎক্ষণিক UI থেকে রিকোয়েস্ট সরান (Instant 0ms Feedback)
+    setState(() {
+      _processingIds.add(req.requestId);
+      _requests.removeWhere((r) => r.requestId == req.requestId);
+    });
+
     final action = accept ? 'accept' : 'reject';
     final res = await PartyRoomApiService.respondSeatRequest(widget.roomId, req.requestId, action: action);
 
     if (mounted) {
       setState(() {
         _processingIds.remove(req.requestId);
-        _requests.removeWhere((r) => r.requestId == req.requestId);
       });
 
       widget.onResponded(req, accept);

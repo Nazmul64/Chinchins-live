@@ -563,6 +563,7 @@ class LiveStreamingApiService {
       final payload = {
         'request_id': requestId,
         'action': action,
+        'status': action == 'accept' ? 'accepted' : 'rejected',
         if (id != null) 'room_id': id,
         if (id != null) 'stream_id': id,
         if (id != null) 'live_stream_id': id,
@@ -571,9 +572,10 @@ class LiveStreamingApiService {
       };
 
       final endpoints = [
+        if (action == 'accept') ApiConstants.liveAcceptRequest,
+        if (action != 'accept') '${ApiConstants.baseUrl}/live/reject-request',
         if (id != null) ApiConstants.liveStreamRespondJoin(id),
         ApiConstants.liveRespondRequest,
-        ApiConstants.liveAcceptRequest,
         '${ApiConstants.baseUrl}/live/respond-join',
       ];
 

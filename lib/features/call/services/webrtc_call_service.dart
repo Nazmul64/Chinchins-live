@@ -797,7 +797,12 @@ class WebRTCCallService {
       type = 'answer';
     } else if (rawType.contains('candidate') || rawType.contains('ice')) {
       type = 'candidate';
-    } else if (rawType.contains('bye') || rawType.contains('hangup') || rawType.contains('ended')) {
+    if (rawType.contains('bye') ||
+        rawType.contains('hangup') ||
+        rawType.contains('ended') ||
+        rawType.contains('cancel') ||
+        rawType.contains('reject') ||
+        rawType.contains('declined')) {
       type = 'call_ended';
     }
 
@@ -830,6 +835,9 @@ class WebRTCCallService {
 
     if (type == 'call_ended') {
       _signalingTimer?.cancel();
+      _signalingTimer = null;
+      _offerRebroadcastTimer?.cancel();
+      _offerRebroadcastTimer = null;
       onCallEnded?.call();
       return;
     }

@@ -1887,6 +1887,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     if (mounted && serverRequests.isNotEmpty) {
       setState(() {
         for (final req in serverRequests) {
+          final status = (req['status'] ?? req['state'] ?? 'pending').toString().toLowerCase();
+          final isAccepted = req['is_accepted'] == true || req['accepted'] == true;
+          if (isAccepted || (status != 'pending' && status != '0' && status.isNotEmpty)) {
+            continue;
+          }
           final id = req['id'] ?? req['request_id'] ?? req['user_id'];
           if (!_pendingJoinRequests.any((p) => (p['id'] ?? p['request_id'] ?? p['user_id']) == id)) {
             _pendingJoinRequests.add(req);
@@ -2020,9 +2025,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                                 icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 22),
                                 onPressed: () async {
                                   setModalState(() {
-                                    _pendingJoinRequests.removeAt(index);
+                                    _pendingJoinRequests.removeWhere((item) => (item['request_id'] ?? item['id'] ?? item['invitation_id']) == reqId);
                                   });
-                                  setState(() {});
+                                  setState(() {
+                                    _pendingJoinRequests.removeWhere((item) => (item['request_id'] ?? item['id'] ?? item['invitation_id']) == reqId);
+                                  });
                                   await LiveStreamingApiService.respondJoinCoHost(
                                     requestId: reqId,
                                     action: 'reject',
@@ -2041,26 +2048,31 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                                 ),
                                 onPressed: () async {
+                                  // ১. তাৎক্ষণিক UI থেকে রিকোয়েস্ট সরানো
                                   setModalState(() {
-                                    _pendingJoinRequests.removeAt(index);
+                                    _pendingJoinRequests.removeWhere((item) => (item['request_id'] ?? item['id'] ?? item['invitation_id']) == reqId);
                                   });
                                   setState(() {
+                                    _pendingJoinRequests.removeWhere((item) => (item['request_id'] ?? item['id'] ?? item['invitation_id']) == reqId);
                                     _guestUid = targetUid is int ? targetUid : int.tryParse('$targetUid');
                                     _isGuestConnected = true;
                                   });
                                   Navigator.pop(ctx);
+                                  // ২. সার্ভারে স্ট্যাটাস 'accepted' পাঠানো
                                   await LiveStreamingApiService.respondJoinCoHost(
                                     requestId: reqId,
                                     action: 'accept',
                                     roomId: _activeLiveId ?? widget.host.id,
                                     targetUserId: targetUid,
                                   );
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Accepted $userName as Co-Host! 🎉'),
-                                      backgroundColor: const Color(0xFF00C853),
-                                    ),
-                                  );
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Accepted $userName as Co-Host! 🎉'),
+                                        backgroundColor: const Color(0xFF00C853),
+                                      ),
+                                    );
+                                  }
                                 },
                                 child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               ),

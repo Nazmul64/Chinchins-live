@@ -472,6 +472,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _channelName = null;
   }
 
+  void terminateCallCompletely([String? reason]) {
+    _terminateCallSession(reason);
+  }
+
   void _terminateCallSession([String? reason]) {
     if (_isEndingCall) return;
     _isEndingCall = true;
