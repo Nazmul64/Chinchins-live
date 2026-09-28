@@ -1,4 +1,4 @@
-﻿# Suppress SLF4J warnings
+# Suppress SLF4J warnings
 -dontwarn org.slf4j.**
 -dontwarn org.slf4j.impl.**
 -dontwarn org.slf4j.impl.StaticLoggerBinder
@@ -32,3 +32,12 @@
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
+
+# Agora RTC SDK
+-keep class io.agora.** { *; }
+-dontwarn io.agora.**
+
+# LiveKit Client SDK
+-keep class io.livekit.** { *; }
+-dontwarn io.livekit.**
+
