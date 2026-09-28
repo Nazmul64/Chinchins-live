@@ -38,7 +38,7 @@ class RemoteConfig {
       'enable_profile_view_alert': true,
       'enable_auto_chat_greetings': true,
       'maintenance_mode': false,
-      'in_app_debug_hud': false,
+      'in_app_debug_hud': true,
       'screenshot_protection': false,
       'screen_recording_shield': false,
       'tiktok_camera_filters': false,
@@ -73,7 +73,7 @@ class RemoteConfig {
         remoteFlags['in_app_debug_hud'] ??
             remoteFlags['debug_hud_enabled'] ??
             remoteFlags['enable_debug_hud'],
-        false,
+        true,
       );
 
   bool get isScreenshotProtectionEnabled => _parseBoolFlag(

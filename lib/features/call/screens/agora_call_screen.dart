@@ -661,51 +661,64 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     }
   }
 
+  /// 🛑 Mandate 2: Centralized Call Session Disposal (Loop Killer)
+  void disposeCallSession() {
+    _timer?.cancel();
+    _timer = null;
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+    _wsEndedSub?.cancel();
+    _wsRejectedSub?.cancel();
+    _wsCancelledSub?.cancel();
+    _wsInCallMsgSub?.cancel();
+    _wsGiftSub?.cancel();
+    CallSoundManager.stopRingtone();
+    if (_engine != null) {
+      try {
+        _engine!.leaveChannel();
+        _engine!.release();
+      } catch (_) {}
+      _engine = null;
+    }
+  }
+
+  /// 🔴 Mandate 3: Immediate Call End & Cancel Action
   Future<void> _endCall() async {
     if (_isEndingCall) return;
     _isEndingCall = true;
 
     PiPCallOverlay.hideMiniWindow();
     _activeSession = null;
-    CallSoundManager.stopRingtone();
-    _timer?.cancel();
-    _pollingTimer?.cancel();
-    _wsEndedSub?.cancel();
-    _wsRejectedSub?.cancel();
-    _wsCancelledSub?.cancel();
-    _wsInCallMsgSub?.cancel();
-    _wsGiftSub?.cancel();
 
-    // ⚡ 1. Instantly close screen (0.00ms delay)
-    if (mounted) {
+    final callId = widget.callId;
+    final channelName = widget.channelName;
+    final isConnecting = _isConnecting;
+    final callSecs = _callSeconds;
+
+    // ⚡ 1. Immediately dispose all timers, players, agora engine (Mandate 2)
+    disposeCallSession();
+
+    // ⚡ 2. Instantly close screen (0.00ms delay) (Mandate 3)
+    if (mounted && Navigator.canPop(context)) {
       Navigator.of(context).pop();
     }
 
-    // 2. Perform API cancellation and Agora engine release in background
-    final callId = widget.callId;
-    final isConnecting = _isConnecting;
-    final callSecs = _callSeconds;
-    final engine = _engine;
-    _engine = null;
-
-    Future.microtask(() async {
-      try {
-        if (callId != null) {
+    // ⚡ 3. Fire POST /api/call/end (or cancel) to server (Mandate 3)
+    if (callId != null) {
+      Future.microtask(() async {
+        try {
           if (isConnecting || callSecs <= 0) {
             await CallApiService.cancelCall(callId: callId);
           } else {
             await CallApiService.endCall(
               callId: callId,
+              channelName: channelName,
               durationSeconds: callSecs,
             );
           }
-        }
-        if (engine != null) {
-          await engine.leaveChannel();
-          await engine.release();
-        }
-      } catch (_) {}
-    });
+        } catch (_) {}
+      });
+    }
   }
 
   Future<void> _handleUserHangup() async {
@@ -724,24 +737,13 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     try {
       WakelockPlus.disable();
     } catch (_) {}
-    _timer?.cancel();
-    _pollingTimer?.cancel();
-    _wsEndedSub?.cancel();
-    _wsRejectedSub?.cancel();
-    _wsCancelledSub?.cancel();
-    _wsInCallMsgSub?.cancel();
-    CallSoundManager.stopRingtone();
 
     // If minimized, preserve engine for PiP window restoration
     if (PiPCallOverlay.isMinimized && _activeSession != null) {
       debugPrint('[AgoraCallScreen] Preserving active session for PiP overlay');
     } else {
       _isEndingCall = true;
-      if (_engine != null) {
-        _engine!.leaveChannel();
-        _engine!.release();
-        _engine = null;
-      }
+      disposeCallSession();
       _activeSession = null;
     }
     super.dispose();
@@ -1039,6 +1041,15 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
                         },
                       );
                     },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 🛠️ In-Call Agora Debug Diagnostics HUD
+                  _buildFloatingActionButton(
+                    icon: Icons.bug_report_rounded,
+                    label: 'Debug',
+                    color: const Color(0xFF00E676),
+                    onTap: _showAgoraDevModeModal,
                   ),
                 ],
               ),

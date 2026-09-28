@@ -23,6 +23,7 @@ class WebRTCCallService {
   int _lastSignalId = 0;
   final Set<String> _processedSignalIds = {};
   final List<RTCIceCandidate> _pendingIceCandidates = [];
+  final List<Map> _earlyPendingSignals = [];
   String? _currentUserId;
 
   StreamSubscription? _wsAcceptedSub;
@@ -549,7 +550,13 @@ class WebRTCCallService {
     _lastSignalId = 0;
     _processedSignalIds.clear();
     _pendingIceCandidates.clear();
+    _earlyPendingSignals.clear();
 
+    // 1. Immediately subscribe to WebSocket signaling and start HTTP polling so NO offer/signal is missed
+    _setupWebSocketSignaling(callId, channelName, false, onRemoteStreamConnected, onCallEnded);
+    _startSignalingPolling(callId, channelName, false, onRemoteStreamConnected, onCallEnded);
+
+    // 2. Initialize PeerConnection
     final pc = await _createPeerConnectionInternal(
       callId,
       channelName,
@@ -559,8 +566,14 @@ class WebRTCCallService {
 
     if (pc == null) return;
 
-    _setupWebSocketSignaling(callId, channelName, false, onRemoteStreamConnected, onCallEnded);
-    _startSignalingPolling(callId, channelName, false, onRemoteStreamConnected, onCallEnded);
+    // 3. Immediately drain and process any early offer or candidate signals received during initialization
+    if (_earlyPendingSignals.isNotEmpty) {
+      final queued = List<Map>.from(_earlyPendingSignals);
+      _earlyPendingSignals.clear();
+      for (final sig in queued) {
+        await _processSignalItem(sig, false, callId, channelName, onRemoteStreamConnected, onCallEnded);
+      }
+    }
   }
 
   String _sanitizeSdp(String rawSdp) {
@@ -743,7 +756,10 @@ class WebRTCCallService {
     Function(MediaStream stream)? onRemoteStreamConnected,
     Function()? onCallEnded,
   ) async {
-    if (_peerConnection == null) return;
+    if (_peerConnection == null) {
+      _earlyPendingSignals.add(signal);
+      return;
+    }
 
     dynamic rawPayload = signal['payload'];
     if (rawPayload is String) {
@@ -755,8 +771,6 @@ class WebRTCCallService {
 
     final rawType = (signal['type'] ?? payload['type'] ?? signal['event'] ?? signal['signal_type'] ?? '').toString().toLowerCase();
     final signalId = signal['id']?.toString() ?? '${rawType}_${signal['created_at'] ?? signal.hashCode}';
-    if (_processedSignalIds.contains(signalId)) return;
-    _processedSignalIds.add(signalId);
 
     // Normalize signal type
     String type = rawType;
@@ -768,6 +782,19 @@ class WebRTCCallService {
       type = 'candidate';
     } else if (rawType.contains('bye') || rawType.contains('hangup') || rawType.contains('ended')) {
       type = 'call_ended';
+    }
+
+    // De-duplication check
+    if (type == 'offer' && !_hasAnsweredOffer) {
+      // Always allow unfulfilled offers to be processed
+    } else if (type == 'candidate') {
+      final candStr = payload['candidate']?.toString() ?? payload['ice_candidate']?.toString() ?? payload['iceCandidate']?.toString();
+      final candSig = 'cand_${candStr.hashCode}';
+      if (_processedSignalIds.contains(candSig)) return;
+      _processedSignalIds.add(candSig);
+    } else {
+      if (_processedSignalIds.contains(signalId)) return;
+      _processedSignalIds.add(signalId);
     }
 
     final senderRole = (payload['sender_role'] ?? signal['sender_role'])?.toString().toLowerCase();
@@ -849,6 +876,38 @@ class WebRTCCallService {
                 'sender_id': _currentUserId,
               },
             );
+
+            // Re-broadcast Answer twice at short intervals to guarantee network transit
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (_peerConnection != null) {
+                CallApiService.sendSignal(
+                  callId: callId,
+                  channelName: channelName,
+                  type: 'answer',
+                  payload: {
+                    'sdp': sendSdp,
+                    'type': answer.type ?? 'answer',
+                    'sender_role': 'receiver',
+                    'sender_id': _currentUserId,
+                  },
+                );
+              }
+            });
+            Future.delayed(const Duration(milliseconds: 700), () {
+              if (_peerConnection != null) {
+                CallApiService.sendSignal(
+                  callId: callId,
+                  channelName: channelName,
+                  type: 'answer',
+                  payload: {
+                    'sdp': sendSdp,
+                    'type': answer.type ?? 'answer',
+                    'sender_role': 'receiver',
+                    'sender_id': _currentUserId,
+                  },
+                );
+              }
+            });
 
             enforceLoudSpeakerphone();
           } catch (e) {

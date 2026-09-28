@@ -678,7 +678,8 @@ class CallApiService {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
-      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString() ?? savedUser?['account_id']?.toString();
+      final accountId = savedUser?['account_id']?.toString() ?? userId;
 
       final url = Uri.parse(ApiConstants.callCancel);
       final headers = <String, String>{
@@ -686,19 +687,90 @@ class CallApiService {
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
         if (userId != null) 'X-User-Id': userId,
+        if (accountId != null) 'X-Account-Id': accountId,
       };
 
-      final payload = {'call_id': callId};
+      final payload = {
+        'call_id': callId,
+        'user_id': userId,
+        'account_id': accountId,
+      };
 
       final response = await http
           .post(url, headers: headers, body: jsonEncode(payload))
           .timeout(const Duration(seconds: 8));
+
+      // Dual-notify RESTful route /api/calls/$callId/cancel
+      if (callId != null) {
+        http.post(
+          Uri.parse(ApiConstants.callCancelById(callId)),
+          headers: headers,
+          body: jsonEncode(payload),
+        ).catchError((_) => http.Response('', 404));
+      }
 
       return response.statusCode == 200;
     } catch (e, st) {
       AppLogger.error('CancelCallError', e, st);
       return false;
     }
+  }
+
+  /// 🔴 Strict Mandate: Call End Engine (POST /api/call/end)
+  static Future<Map<String, dynamic>?> endCall({
+    required dynamic callId,
+    String? channelName,
+    int durationSeconds = 0,
+    String reason = 'ended',
+  }) async {
+    try {
+      final token = await AuthApiService.getToken();
+      final savedUser = await AuthApiService.getSavedUser();
+      final userId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString() ?? savedUser?['account_id']?.toString();
+      final accountId = savedUser?['account_id']?.toString() ?? userId;
+
+      final url = Uri.parse(ApiConstants.callEnd);
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (userId != null) 'X-User-Id': userId,
+        if (accountId != null) 'X-Account-Id': accountId,
+      };
+
+      final payload = {
+        'call_id': callId,
+        'user_id': userId,
+        'account_id': accountId,
+        'duration_seconds': durationSeconds,
+        'duration': durationSeconds,
+        'reason': reason,
+        if (channelName != null && channelName.isNotEmpty) 'channel_name': channelName,
+      };
+
+      final response = await http
+          .post(url, headers: headers, body: jsonEncode(payload))
+          .timeout(const Duration(seconds: 8));
+
+      // Dual-notify RESTful route /api/calls/$callId/end
+      if (callId != null) {
+        http.post(
+          Uri.parse(ApiConstants.callEndById(callId)),
+          headers: headers,
+          body: jsonEncode(payload),
+        ).catchError((_) => http.Response('', 404));
+      }
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+      }
+    } catch (e, st) {
+      AppLogger.error('EndCallError', e, st);
+    }
+    return null;
   }
 
   static Future<bool> notifyCallConnected({
@@ -1081,46 +1153,6 @@ class CallApiService {
     } catch (_) {
       return false;
     }
-  }
-
-  static Future<Map<String, dynamic>?> endCall({
-    required int callId,
-    String? channelName,
-    required int durationSeconds,
-  }) async {
-    try {
-      final token = await AuthApiService.getToken();
-      final savedUser = await AuthApiService.getSavedUser();
-      final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
-
-      final url = Uri.parse(ApiConstants.callEnd);
-      final headers = <String, String>{
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-        if (userId != null) 'X-User-Id': userId,
-      };
-
-      final payload = {
-        'call_id': callId,
-        'duration_seconds': durationSeconds,
-        if (channelName != null && channelName.isNotEmpty) 'channel_name': channelName,
-      };
-
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded['status'] == true && decoded['data'] is Map) {
-          return decoded['data'] as Map<String, dynamic>;
-        }
-      }
-    } catch (e, st) {
-      AppLogger.error('EndCallError', e, st);
-    }
-    return null;
   }
 
   /// ⚡ Get Call History (0.00ms Hive Local Cache + API Network Sync)

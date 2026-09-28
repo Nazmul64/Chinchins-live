@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:livekit_client/livekit_client.dart' hide VideoDimensions;
+import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../main.dart';
 import '../../../core/models/model_profile.dart';
@@ -77,6 +79,13 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   final GlobalKey<InCallChatOverlayState> _chatKey = GlobalKey<InCallChatOverlayState>();
 
   FilterPreset _currentFilter = BeautyFilterEngine.presets[1]; // Default to Beauty Glow (HD radiant skin)
+
+  // LiveKit Engine State
+  Room? _liveKitRoom;
+  EventsListener<RoomEvent>? _liveKitListener;
+  VideoTrack? _remoteLiveKitVideoTrack;
+  LocalVideoTrack? _localLiveKitVideoTrack;
+  bool _isLiveKitCall = false;
 
   bool _isCameraReady = false;
   bool _isConnectingCall = true;
@@ -170,6 +179,107 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _subscribeSignalingEvents();
   }
 
+  Future<void> _connectLiveKitRoom({required String token, String? url}) async {
+    try {
+      _isLiveKitCall = true;
+      try {
+        await AudioManager.instance.setSpeakerOutputPreferred(true);
+      } catch (_) {}
+
+      await [Permission.camera, Permission.microphone].request();
+
+      _liveKitRoom = Room(
+        roomOptions: const RoomOptions(
+          adaptiveStream: true,
+          dynacast: true,
+          defaultCameraCaptureOptions: CameraCaptureOptions(
+            cameraPosition: CameraPosition.front,
+            params: VideoParameters(
+              dimensions: VideoDimensionsPresets.h720_169,
+              encoding: VideoEncoding(
+                maxBitrate: 2500 * 1000,
+                maxFramerate: 30,
+              ),
+            ),
+          ),
+          defaultVideoPublishOptions: VideoPublishOptions(
+            simulcast: false,
+            videoCodec: 'H264',
+            videoEncoding: VideoEncoding(
+              maxBitrate: 2500 * 1000,
+              maxFramerate: 30,
+            ),
+          ),
+          defaultAudioPublishOptions: AudioPublishOptions(
+            name: 'microphone',
+          ),
+        ),
+      );
+
+      _liveKitListener = _liveKitRoom!.createListener();
+      _liveKitListener!
+        ..on<TrackSubscribedEvent>((event) {
+          if (event.track is RemoteVideoTrack) {
+            if (mounted) {
+              setState(() {
+                _remoteLiveKitVideoTrack = event.track as RemoteVideoTrack;
+                _isConnectingCall = false;
+              });
+            }
+          }
+        })
+        ..on<TrackUnsubscribedEvent>((event) {
+          if (event.track is RemoteVideoTrack) {
+            if (mounted) {
+              setState(() {
+                if (_remoteLiveKitVideoTrack == event.track) {
+                  _remoteLiveKitVideoTrack = null;
+                }
+              });
+            }
+          }
+        })
+        ..on<ParticipantConnectedEvent>((event) => _updateLiveKitRemoteTrack())
+        ..on<ParticipantDisconnectedEvent>((event) => _updateLiveKitRemoteTrack());
+
+      _liveKitRoom!.addListener(() {
+        _updateLiveKitRemoteTrack();
+      });
+
+      final livekitUrl = url ?? 'wss://chinchins.live/livekit';
+      await _liveKitRoom!.connect(livekitUrl, token);
+
+      // ⚡ Mandate 1: Immediately enable and publish microphone and camera tracks
+      await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(true);
+      await _liveKitRoom!.localParticipant?.setCameraEnabled(true);
+
+      _localLiveKitVideoTrack = _liveKitRoom!.localParticipant?.videoTrackPublications.firstOrNull?.track as LocalVideoTrack?;
+
+      try {
+        await AudioManager.instance.setSpeakerOutputPreferred(true);
+      } catch (_) {}
+
+      _updateLiveKitRemoteTrack();
+      _onMediaConnected();
+    } catch (e) {
+      debugPrint('[VideoCallScreen] LiveKit connect error: $e');
+    }
+  }
+
+  void _updateLiveKitRemoteTrack() {
+    if (_liveKitRoom == null) return;
+    final remote = _liveKitRoom!.remoteParticipants.values.firstOrNull;
+    final track = remote?.videoTrackPublications.firstOrNull?.track;
+    if (track != null && track is VideoTrack) {
+      if (mounted && _remoteLiveKitVideoTrack != track) {
+        setState(() {
+          _remoteLiveKitVideoTrack = track;
+          _isConnectingCall = false;
+        });
+      }
+    }
+  }
+
   Future<void> _initiateOutgoingCall() async {
     final res = await CallApiService.initiateCall(
       receiverId: widget.model.id,
@@ -226,22 +336,28 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       SignalingService().subscribeToCallRoom(_channelName!);
     }
 
-    _startCallStatusPolling();
+    final lkToken = res['livekit_token'] ?? res['token'] ?? res['data']?['livekit_token'] ?? res['data']?['token'];
+    if (lkToken != null && lkToken.toString().isNotEmpty) {
+      final lkUrl = res['livekit_url'] ?? res['data']?['livekit_url'];
+      await _connectLiveKitRoom(token: lkToken.toString(), url: lkUrl?.toString());
+    } else {
+      _startCallStatusPolling();
 
-    if (!_hasStartedWebRTC && _isCameraReady) {
-      _hasStartedWebRTC = true;
-      await _webrtcService.startCallAsCaller(
-        callId: _callId,
-        channelName: _channelName,
-        onRemoteStreamConnected: (stream) {
-          _onMediaConnected(stream);
-        },
-        onCallEnded: () {
-          if (mounted && !_isEndingCall) {
-            _terminateCallSession('Call ended');
-          }
-        },
-      );
+      if (!_hasStartedWebRTC && _isCameraReady) {
+        _hasStartedWebRTC = true;
+        await _webrtcService.startCallAsCaller(
+          callId: _callId,
+          channelName: _channelName,
+          onRemoteStreamConnected: (stream) {
+            _onMediaConnected(stream);
+          },
+          onCallEnded: () {
+            if (mounted && !_isEndingCall) {
+              _terminateCallSession('Call ended');
+            }
+          },
+        );
+      }
     }
   }
 
@@ -264,7 +380,13 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           _isConnectingCall = false;
         });
       }
-      _onMediaConnected();
+      final lkToken = data['livekit_token'] ?? data['token'] ?? data['data']?['livekit_token'] ?? data['data']?['token'];
+      if (lkToken != null && lkToken.toString().isNotEmpty && _liveKitRoom == null) {
+        final lkUrl = data['livekit_url'] ?? data['data']?['livekit_url'];
+        _connectLiveKitRoom(token: lkToken.toString(), url: lkUrl?.toString());
+      } else {
+        _onMediaConnected();
+      }
     });
 
     _wsEndedSub = signaling.onCallEnded.listen((data) {
@@ -310,16 +432,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     });
   }
 
-  void _terminateCallSession([String? reason]) {
-    if (_isEndingCall) return;
-    _isEndingCall = true;
-
-    try {
-      WakelockPlus.disable();
-    } catch (_) {}
-
-    PiPCallOverlay.hideMiniWindow();
-    _activeSession = null;
+  /// 🛑 Mandate 2: Centralized Call Session Disposal (Loop Killer)
+  void disposeCallSession() {
     _timer?.cancel();
     _timer = null;
     _pollingTimer?.cancel();
@@ -331,7 +445,28 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _wsInCallMsgSub?.cancel();
     _wsGiftSub?.cancel();
     CallSoundManager.stopRingtone();
+    if (_liveKitRoom != null) {
+      try {
+        _liveKitListener?.dispose();
+        _liveKitRoom?.disconnect();
+        _liveKitRoom?.dispose();
+      } catch (_) {}
+      _liveKitRoom = null;
+    }
     _webrtcService.dispose();
+  }
+
+  void _terminateCallSession([String? reason]) {
+    if (_isEndingCall) return;
+    _isEndingCall = true;
+
+    try {
+      WakelockPlus.disable();
+    } catch (_) {}
+
+    PiPCallOverlay.hideMiniWindow();
+    _activeSession = null;
+    disposeCallSession();
 
     if (mounted && Navigator.canPop(context)) {
       Navigator.pop(context);
@@ -551,6 +686,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     }
   }
 
+  /// 🔴 Mandate 3: Immediate Call End & Cancel Action
   Future<void> _endCall() async {
     if (_isEndingCall) return;
     _isEndingCall = true;
@@ -561,42 +697,36 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
     PiPCallOverlay.hideMiniWindow();
     _activeSession = null;
-    _timer?.cancel();
-    _pollingTimer?.cancel();
-    _wsAcceptedSub?.cancel();
-    _wsEndedSub?.cancel();
-    _wsRejectedSub?.cancel();
-    _wsCancelledSub?.cancel();
-    _wsInCallMsgSub?.cancel();
-    _wsGiftSub?.cancel();
-    await CallSoundManager.stopRingtone();
 
-    // ⚡ 1. Instantly close screen (0.00ms delay)
-    if (mounted) Navigator.pop(context);
-
-    // 2. Perform API end/cancel and WebRTC cleanup in background
-    final callId = widget.callId;
-    final channelName = widget.channelName;
+    final effectiveCallId = _callId ?? widget.callId;
+    final channelName = _channelName ?? widget.channelName;
     final isConnecting = _isConnectingCall;
     final callSecs = _callSeconds;
-    final webrtc = _webrtcService;
 
-    Future.microtask(() async {
-      try {
-        if (callId != null) {
+    // ⚡ 1. Immediately dispose all timers, players, livekit/webrtc room (Mandate 2)
+    disposeCallSession();
+
+    // ⚡ 2. Instantly close screen (0.00ms delay) (Mandate 3)
+    if (mounted && Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+
+    // ⚡ 3. Fire POST /api/call/end (or cancel) to server (Mandate 3)
+    if (effectiveCallId != null) {
+      Future.microtask(() async {
+        try {
           if (isConnecting || callSecs <= 0) {
-            await CallApiService.cancelCall(callId: callId);
+            await CallApiService.cancelCall(callId: effectiveCallId);
           } else {
             await CallApiService.endCall(
-              callId: callId,
+              callId: effectiveCallId,
               channelName: channelName,
               durationSeconds: callSecs,
             );
           }
-        }
-        await webrtc.dispose();
-      } catch (_) {}
-    });
+        } catch (_) {}
+      });
+    }
   }
 
   @override
@@ -604,21 +734,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     try {
       WakelockPlus.disable();
     } catch (_) {}
-    _timer?.cancel();
-    _pollingTimer?.cancel();
-    _wsAcceptedSub?.cancel();
-    _wsEndedSub?.cancel();
-    _wsRejectedSub?.cancel();
-    _wsCancelledSub?.cancel();
-    _wsInCallMsgSub?.cancel();
-    _wsGiftSub?.cancel();
-    CallSoundManager.stopRingtone();
 
     if (PiPCallOverlay.isMinimized && _activeSession != null) {
       debugPrint('[VideoCallScreen] Preserving active WebRTC session for PiP overlay');
     } else {
       _isEndingCall = true;
-      _webrtcService.dispose();
+      disposeCallSession();
       _activeSession = null;
     }
     super.dispose();
@@ -886,65 +1007,104 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 ),
               ),
 
-              // ২. Ringing / Calling ডিবাগ ইন্ডিকেটর (কেবলমাত্র অ্যাডমিন থেকে Debug Mode On থাকলে প্রদর্শিত হবে)
-              if (_isConnectingCall && !_webrtcService.hasRemoteStream && RemoteConfigService.instance.config.isDebugHudEnabled)
-                Positioned(
-                  top: MediaQuery.of(context).size.height * 0.4,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: GestureDetector(
-                      onTap: () {
-                        WebRTCDebugModal.show(
-                          context,
-                          webrtcService: _webrtcService,
-                          callId: widget.callId,
-                          isIncoming: widget.isIncoming,
-                          callerOrReceiverName: widget.model.name,
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.85),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: AppColors.neonPink.withValues(alpha: 0.9), width: 1.8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.neonPink.withValues(alpha: 0.3),
-                              blurRadius: 16,
-                              spreadRadius: 2,
+              // ২. Ringing / Calling ইন্ডিকেটর এবং রেড ক্যানসেল বোতাম
+              if (_isConnectingCall && !_webrtcService.hasRemoteStream && _remoteLiveKitVideoTrack == null)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black45,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.neonPink, width: 2.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.neonPink.withValues(alpha: 0.4),
+                                blurRadius: 20,
+                                spreadRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: CachedImageLoader(
+                              imageUrl: widget.model.avatarUrl,
+                              fit: BoxFit.cover,
                             ),
-                          ],
+                          ),
                         ),
-                        child: Row(
+                        const SizedBox(height: 16),
+                        Text(
+                          widget.model.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             const SizedBox(
-                              width: 16,
-                              height: 16,
+                              width: 14,
+                              height: 14,
                               child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPink),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 8),
                             Text(
                               widget.model.isOnline ? 'Ringing...' : 'Calling...',
-                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.neonPink.withValues(alpha: 0.25),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Text(
-                                '🛠️ ডিবাগ লগ',
-                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],
                         ),
-                      ),
+                        const SizedBox(height: 36),
+                        // 🔴 লাল ক্যানসেল কল বাটন (End / Cancel Button)
+                        GestureDetector(
+                          onTap: _endCall,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 68,
+                                height: 68,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFFFF2D55),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFFF2D55).withValues(alpha: 0.6),
+                                      blurRadius: 18,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.call_end_rounded,
+                                  color: Colors.white,
+                                  size: 34,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Cancel Call',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -1142,6 +1302,23 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                     ),
                     const SizedBox(height: 12),
 
+                    // 🛠️ WebRTC / Call Debug HUD Diagnostics Button
+                    _buildFloatingActionButton(
+                      icon: Icons.bug_report_rounded,
+                      label: 'Debug',
+                      color: const Color(0xFF00E676),
+                      onTap: () {
+                        WebRTCDebugModal.show(
+                          context,
+                          webrtcService: _webrtcService,
+                          callId: _callId ?? widget.callId,
+                          isIncoming: widget.isIncoming,
+                          callerOrReceiverName: widget.model.name,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
                     // ফ্লোটিং মিনি জেম প্যাকেজ উইজেট
                     GestureDetector(
                       onTap: _showInCallRechargeSheet,
@@ -1270,27 +1447,28 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                             ),
                           ),
 
-                          // পাওয়ার/কাট সুইচ বাটন (⏻)
+                          // 🔴 লাল কল এন্ড বাটন (End Call Button)
                           GestureDetector(
                             onTap: _handleUserHangup,
                             child: Container(
-                              width: 44,
-                              height: 44,
+                              width: 46,
+                              height: 46,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.black.withValues(alpha: 0.65),
-                                border: Border.all(color: Colors.white70, width: 1.5),
+                                color: const Color(0xFFFF2D55),
+                                border: Border.all(color: Colors.white, width: 1.5),
                                 boxShadow: const [
                                   BoxShadow(
-                                    color: Colors.black45,
-                                    blurRadius: 8,
+                                    color: Color(0x88FF2D55),
+                                    blurRadius: 10,
+                                    spreadRadius: 1,
                                   ),
                                 ],
                               ),
                               child: const Icon(
-                                Icons.power_settings_new_rounded,
+                                Icons.call_end_rounded,
                                 color: Colors.white,
-                                size: 22,
+                                size: 24,
                               ),
                             ),
                           ),
@@ -1346,29 +1524,56 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   Widget _buildMainVideoView() {
     Widget videoWidget;
-    if (!_isSwappedVideo) {
-      if (_webrtcService.hasRemoteStream) {
-        videoWidget = RTCVideoView(
-          _webrtcService.remoteRenderer,
-          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-        );
+    if (_isLiveKitCall && _liveKitRoom != null) {
+      if (!_isSwappedVideo) {
+        if (_remoteLiveKitVideoTrack != null) {
+          videoWidget = VideoTrackRenderer(
+            _remoteLiveKitVideoTrack!,
+            fit: VideoViewFit.cover,
+          );
+        } else {
+          videoWidget = CachedImageLoader(
+            imageUrl: widget.model.avatarUrl,
+            fit: BoxFit.cover,
+          );
+        }
       } else {
-        videoWidget = CachedImageLoader(
-          imageUrl: widget.model.avatarUrl,
-          fit: BoxFit.cover,
-        );
+        if (_localLiveKitVideoTrack != null) {
+          videoWidget = VideoTrackRenderer(
+            _localLiveKitVideoTrack!,
+            fit: VideoViewFit.cover,
+          );
+        } else {
+          videoWidget = const Center(
+            child: CircularProgressIndicator(color: AppColors.neonPink),
+          );
+        }
       }
     } else {
-      if (_isCameraReady) {
-        videoWidget = RTCVideoView(
-          _webrtcService.localRenderer,
-          mirror: true,
-          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-        );
+      if (!_isSwappedVideo) {
+        if (_webrtcService.hasRemoteStream) {
+          videoWidget = RTCVideoView(
+            _webrtcService.remoteRenderer,
+            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+          );
+        } else {
+          videoWidget = CachedImageLoader(
+            imageUrl: widget.model.avatarUrl,
+            fit: BoxFit.cover,
+          );
+        }
       } else {
-        videoWidget = const Center(
-          child: CircularProgressIndicator(color: AppColors.neonPink),
-        );
+        if (_isCameraReady) {
+          videoWidget = RTCVideoView(
+            _webrtcService.localRenderer,
+            mirror: true,
+            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+          );
+        } else {
+          videoWidget = const Center(
+            child: CircularProgressIndicator(color: AppColors.neonPink),
+          );
+        }
       }
     }
 
@@ -1382,29 +1587,56 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   Widget _buildPipVideoView() {
     Widget pipWidget;
-    if (!_isSwappedVideo) {
-      if (_isCameraReady) {
-        pipWidget = RTCVideoView(
-          _webrtcService.localRenderer,
-          mirror: true,
-          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-        );
+    if (_isLiveKitCall && _liveKitRoom != null) {
+      if (!_isSwappedVideo) {
+        if (_localLiveKitVideoTrack != null) {
+          pipWidget = VideoTrackRenderer(
+            _localLiveKitVideoTrack!,
+            fit: VideoViewFit.cover,
+          );
+        } else {
+          pipWidget = const Center(
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPink),
+          );
+        }
       } else {
-        pipWidget = const Center(
-          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPink),
-        );
+        if (_remoteLiveKitVideoTrack != null) {
+          pipWidget = VideoTrackRenderer(
+            _remoteLiveKitVideoTrack!,
+            fit: VideoViewFit.cover,
+          );
+        } else {
+          pipWidget = CachedImageLoader(
+            imageUrl: widget.model.avatarUrl,
+            fit: BoxFit.cover,
+          );
+        }
       }
     } else {
-      if (_webrtcService.hasRemoteStream) {
-        pipWidget = RTCVideoView(
-          _webrtcService.remoteRenderer,
-          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-        );
+      if (!_isSwappedVideo) {
+        if (_isCameraReady) {
+          pipWidget = RTCVideoView(
+            _webrtcService.localRenderer,
+            mirror: true,
+            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+          );
+        } else {
+          pipWidget = const Center(
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonPink),
+          );
+        }
       } else {
-        pipWidget = CachedImageLoader(
-          imageUrl: widget.model.avatarUrl,
-          fit: BoxFit.cover,
-        );
+        if (_webrtcService.hasRemoteStream) {
+          pipWidget = RTCVideoView(
+            _webrtcService.remoteRenderer,
+            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+          );
+        } else {
+          pipWidget = CachedImageLoader(
+            imageUrl: widget.model.avatarUrl,
+            fit: BoxFit.cover,
+          );
+        }
       }
     }
 

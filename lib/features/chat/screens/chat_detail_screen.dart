@@ -728,20 +728,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       ratePerMinute: ratePerMin,
       isIncoming: false,
     );
-
-    // ⚡ Background: Fire API call concurrently (fire-and-forget)
-    CallApiService.initiateCall(
-      receiverId: model.id,
-      receiverAccountId: model.accountId,
-      callType: 'video',
-    ).then((res) {
-      if (res['is_low_balance'] == true ||
-          res['code'] == 'LOW_BALANCE_DEPOSIT_REQUIRED' ||
-          res['code'] == 'INSUFFICIENT_BALANCE') {
-        // Balance issue — will be handled on call screen side
-        debugPrint('[Chat] Call initiated but low balance flagged');
-      }
-    }).catchError((_) {});
   }
 
   void _openLiveRoom() {

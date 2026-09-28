@@ -22,6 +22,18 @@ class SignalingService {
   final Map<String, int> _recentEventSignatures = {};
 
   bool _isDuplicateEvent(String eventName, Map<String, dynamic> data) {
+    // NEVER drop WebRTC signaling events (offer, answer, candidate) or call state transitions
+    final lower = eventName.toLowerCase();
+    if (lower.contains('signal') ||
+        lower.contains('offer') ||
+        lower.contains('answer') ||
+        lower.contains('candidate') ||
+        lower.contains('webrtc') ||
+        lower.contains('ice') ||
+        lower.contains('call')) {
+      return false;
+    }
+
     final msgId = data['id'] ?? data['message_id'] ?? data['message']?['id'];
     final msgText = data['message'] is String ? data['message'] : data['message']?['message'] ?? data['text'];
     final senderId = data['sender_id'] ?? data['user_id'] ?? data['message']?['sender_id'];
@@ -535,18 +547,60 @@ class SignalingService {
       return;
     }
 
-    // 7. WebRTC Signal (WebRTCSignalEvent -> webrtc.signal)
+    // 7. WebRTC Signal (WebRTCSignalEvent / CallSignalEvent / webrtc.signal / call.signal / signal.sent / offer / answer / candidate)
     if (cleanName == 'webrtc.signal' ||
         cleanName == 'WebRTCSignalEvent' ||
+        cleanName == 'CallSignalEvent' ||
+        cleanName == 'SignalSent' ||
+        cleanName == 'SignalSentEvent' ||
+        cleanName == 'SignalEvent' ||
+        cleanName == 'call.signal' ||
+        cleanName == 'call.signal.sent' ||
+        cleanName == 'signal.sent' ||
+        cleanName == 'call_signal' ||
         cleanName.endsWith('WebRTCSignalEvent') ||
-        lowerName == 'webrtc.signal') {
+        cleanName.endsWith('CallSignalEvent') ||
+        cleanName.endsWith('SignalSentEvent') ||
+        cleanName.endsWith('SignalEvent') ||
+        lowerName == 'webrtc.signal' ||
+        lowerName == 'call.signal' ||
+        lowerName == 'signal.sent' ||
+        cleanName == 'webrtc.offer' ||
+        cleanName == 'WebRTCOffer' ||
+        cleanName == 'CallOfferEvent' ||
+        cleanName == 'call.offer' ||
+        cleanName.endsWith('WebRTCOffer') ||
+        cleanName.endsWith('CallOfferEvent') ||
+        cleanName == 'webrtc.answer' ||
+        cleanName == 'WebRTCAnswer' ||
+        cleanName == 'CallAnswerEvent' ||
+        cleanName == 'call.answer' ||
+        cleanName.endsWith('WebRTCAnswer') ||
+        cleanName.endsWith('CallAnswerEvent') ||
+        cleanName == 'webrtc.ice_candidate' ||
+        cleanName == 'WebRTCICECandidate' ||
+        cleanName == 'CallCandidateEvent' ||
+        cleanName == 'call.candidate' ||
+        cleanName.endsWith('WebRTCICECandidate') ||
+        cleanName.endsWith('CallCandidateEvent') ||
+        lowerName.contains('signal') ||
+        (isCallChannel && (data.containsKey('sdp') || data.containsKey('candidate') || (data['payload'] is Map && (data['payload']['sdp'] != null || data['payload']['candidate'] != null))))) {
       _webRTCSignalController.add(data);
-      final type = data['type']?.toString().toLowerCase();
-      if (type == 'offer') {
+      
+      dynamic rawPayload = data['payload'];
+      if (rawPayload is String) {
+        try {
+          rawPayload = jsonDecode(rawPayload);
+        } catch (_) {}
+      }
+      final Map payloadMap = (rawPayload is Map) ? rawPayload : data;
+
+      final type = (data['type'] ?? payloadMap['type'] ?? data['signal_type'] ?? cleanName).toString().toLowerCase();
+      if (type.contains('offer')) {
         _offerController.add(data);
-      } else if (type == 'answer') {
+      } else if (type.contains('answer')) {
         _answerController.add(data);
-      } else if (type == 'candidate') {
+      } else if (type.contains('candidate') || type.contains('ice')) {
         _iceCandidateController.add(data);
       }
       return;
