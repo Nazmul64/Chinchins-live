@@ -17,6 +17,7 @@ import '../../../core/services/signaling_service.dart';
 import '../../../core/utils/permission_helper.dart';
 import '../services/call_api_service.dart';
 import '../services/call_sound_manager.dart';
+import '../services/streaming_service.dart';
 import '../services/webrtc_call_service.dart';
 import '../services/beauty_filter_engine.dart';
 import '../services/pip_call_overlay.dart';
@@ -477,7 +478,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     }
     _webrtcService.dispose();
     final callIdStr = _callId?.toString() ?? widget.callId?.toString() ?? _channelName ?? widget.channelName;
-    if (callIdStr.isNotEmpty) {
+    if (callIdStr != null && callIdStr.isNotEmpty) {
       SignalingService().leaveCallRoom(callIdStr);
     }
     _callId = null;
