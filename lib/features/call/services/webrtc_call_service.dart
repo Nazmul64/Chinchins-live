@@ -797,7 +797,7 @@ class WebRTCCallService {
       type = 'answer';
     } else if (rawType.contains('candidate') || rawType.contains('ice')) {
       type = 'candidate';
-    if (rawType.contains('bye') ||
+    } else if (rawType.contains('bye') ||
         rawType.contains('hangup') ||
         rawType.contains('ended') ||
         rawType.contains('cancel') ||
