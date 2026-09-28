@@ -168,34 +168,60 @@ class StreamingService {
     // 1. Request Camera and Microphone permissions asynchronously in background
     unawaited([Permission.camera, Permission.microphone].request());
 
-    // 2. Extract driver and configuration if already provided
+    // 2. Extract driver and configuration according to Dual-Engine Specification
     final sessionData = initialSessionData;
+    final bool isAgoraExplicit = sessionData != null &&
+        (sessionData['is_agora'] == true ||
+            sessionData['engine'] == 'agora' ||
+            sessionData['driver'] == 'agora' ||
+            sessionData['active_driver'] == 'agora' ||
+            sessionData['call']?['is_agora'] == true ||
+            sessionData['call']?['engine'] == 'agora' ||
+            sessionData['call']?['driver'] == 'agora' ||
+            sessionData['data']?['is_agora'] == true ||
+            sessionData['data']?['engine'] == 'agora' ||
+            sessionData['data']?['active_driver'] == 'agora' ||
+            sessionData['data']?['driver'] == 'agora');
+
     final String? agoraAppId = sessionData != null
-        ? (sessionData['app_id']?.toString() ??
-            sessionData['agora_app_id']?.toString() ??
+        ? (sessionData['agora_app_id']?.toString() ??
+            sessionData['app_id']?.toString() ??
+            sessionData['call']?['agora_app_id']?.toString() ??
+            sessionData['call']?['app_id']?.toString() ??
             sessionData['data']?['agora_app_id']?.toString() ??
-            sessionData['data']?['app_id']?.toString())
-        : null;
+            sessionData['data']?['app_id']?.toString() ??
+            (isAgoraExplicit ? 'c13c72df342d4a1386da678ba4c95f13' : null))
+        : (isAgoraExplicit ? 'c13c72df342d4a1386da678ba4c95f13' : null);
 
     final String? agoraToken = sessionData != null
-        ? (sessionData['token']?.toString() ??
+        ? (sessionData['agora_token']?.toString() ??
+            sessionData['token']?.toString() ??
             sessionData['rtc_token']?.toString() ??
-            sessionData['agora_token']?.toString() ??
+            sessionData['call']?['agora_token']?.toString() ??
+            sessionData['call']?['token']?.toString() ??
             sessionData['data']?['agora_token']?.toString() ??
-            sessionData['data']?['token']?.toString())
+            sessionData['data']?['token']?.toString() ??
+            sessionData['data']?['rtc_token']?.toString())
         : null;
 
-    final String driver = (sessionData != null
-            ? (sessionData['driver'] ?? sessionData['data']?['driver'])?.toString().toLowerCase()
-            : null) ??
-        (agoraAppId != null && agoraAppId.isNotEmpty ? 'agora' : 'vps_webrtc');
+    final bool isAgoraEngine = isAgoraExplicit ||
+        (agoraAppId != null && agoraAppId.isNotEmpty && agoraToken != null && agoraToken.isNotEmpty);
 
     if (!context.mounted) return;
 
-    // 3. 0.00ms Instant Page Push (LiveKit / WebRTC / Agora connects in background inside the screen)
-    if (driver == 'agora' && agoraAppId != null && agoraAppId.isNotEmpty) {
-      final dynamic rawUid = sessionData?['agora_uid'] ?? sessionData?['uid'] ?? sessionData?['user_id'];
+    // 3. 0.00ms Instant Page Push (Dynamic Runtime Dispatch: Agora vs VPS WebRTC)
+    if (isAgoraEngine) {
+      final dynamic rawUid = sessionData?['agora_uid'] ??
+          sessionData?['uid'] ??
+          sessionData?['call']?['uid'] ??
+          sessionData?['call']?['agora_uid'] ??
+          sessionData?['data']?['agora_uid'] ??
+          sessionData?['data']?['uid'] ??
+          sessionData?['user_id'];
       final int agoraUid = rawUid is int ? rawUid : (int.tryParse(rawUid?.toString() ?? '0') ?? 0);
+      final effectiveAppId = (agoraAppId != null && agoraAppId.isNotEmpty)
+          ? agoraAppId
+          : 'c13c72df342d4a1386da678ba4c95f13';
 
       Navigator.push(
         context,
@@ -203,8 +229,10 @@ class StreamingService {
           builder: (context) => AgoraCallScreen(
             model: model,
             callId: callId,
-            channelName: sessionData?['channel_name']?.toString() ?? channelName,
-            appId: agoraAppId,
+            channelName: sessionData?['channel_name']?.toString() ??
+                sessionData?['call']?['channel_name']?.toString() ??
+                channelName,
+            appId: effectiveAppId,
             token: agoraToken ?? '',
             uid: agoraUid,
             isTempToken: sessionData?['is_temp_token'] == true,

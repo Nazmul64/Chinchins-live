@@ -20,6 +20,7 @@ class IncomingCallScreen extends StatefulWidget {
   final String? ringtoneUrl;
   final String? callerName;
   final String? callerAvatar;
+  final Map<String, dynamic>? initialSessionData;
 
   const IncomingCallScreen({
     super.key,
@@ -32,6 +33,7 @@ class IncomingCallScreen extends StatefulWidget {
     this.ringtoneUrl,
     this.callerName,
     this.callerAvatar,
+    this.initialSessionData,
   });
 
   @override
@@ -169,6 +171,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         freeDurationSeconds: widget.freeDurationSeconds,
         ratePerMinute: widget.ratePerMinute,
         isIncoming: true,
+        initialSessionData: widget.initialSessionData,
       );
     }
   }

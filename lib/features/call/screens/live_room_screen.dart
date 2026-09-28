@@ -3517,7 +3517,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     return HostOnCallPhotoCarousel(
       host: widget.host,
       dynamicPhotos: _hostGalleryPhotos,
-      customText: _hostBackSoonText ?? "I'll back soon...",
+      customText: _hostBackSoonText ?? "Host is in a private call. Please wait, host will come back soon.",
     );
   }
 

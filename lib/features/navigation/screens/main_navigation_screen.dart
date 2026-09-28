@@ -201,6 +201,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             freeDurationSeconds: payload['free_duration_seconds'] ?? incoming['free_duration_seconds'] ?? 10,
             ratePerMinute: payload['rate_per_minute'] ?? incoming['rate_per_minute'] ?? 100,
             ringtoneUrl: ringtoneUrl,
+            initialSessionData: payload,
           ),
         ),
       ).then((_) {
