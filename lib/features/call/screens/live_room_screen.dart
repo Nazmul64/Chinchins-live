@@ -232,6 +232,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   StreamSubscription? _incomingCallSub;
   StreamSubscription? _callAcceptedSub;
   StreamSubscription? _callEndedSub;
+  StreamSubscription? _callCancelledSub;
+  StreamSubscription? _callRejectedSub;
 
   // PK Battle State
   int _hostPkScore = 1450;
@@ -243,6 +245,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   Room? _liveKitRoom;
   LocalVideoTrack? _localVideoTrack;
   OverlayEntry? _incomingCallOverlayEntry;
+  Timer? _incomingCallOverlayTimer;
   List<VideoTrack> _activeVideos = [];
   EventsListener<RoomEvent>? _liveKitListener;
   bool _isLiveKitConnected = false;
@@ -331,22 +334,34 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     } catch (_) {}
   }
 
+  void _removeIncomingCallOverlay() {
+    _incomingCallOverlayTimer?.cancel();
+    _incomingCallOverlayTimer = null;
+    if (_incomingCallOverlayEntry != null) {
+      try {
+        _incomingCallOverlayEntry?.remove();
+      } catch (_) {}
+      _incomingCallOverlayEntry = null;
+    }
+  }
+
   @override
   void dispose() {
     try {
       WakelockPlus.disable();
     } catch (_) {}
+    _removeIncomingCallOverlay();
     _pkBattleTimer?.cancel();
     _privateCallStatusSub?.cancel();
     _incomingCallSub?.cancel();
-    _incomingCallOverlayEntry?.remove();
-    _incomingCallOverlayEntry = null;
+    _callAcceptedSub?.cancel();
+    _callEndedSub?.cancel();
+    _callCancelledSub?.cancel();
+    _callRejectedSub?.cancel();
     try {
       _localVideoTrack?.stop();
       _localVideoTrack = null;
     } catch (_) {}
-    _callAcceptedSub?.cancel();
-    _callEndedSub?.cancel();
     _roseComboTimer?.cancel();
     _msgSub?.cancel();
     _giftSub?.cancel();
@@ -396,8 +411,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     });
   }
 
-  /// Instant Zero-Loading Video Call to Host
-  void _handleDirectVideoCallToHost() {
+  /// Instant Zero-Loading Video Call to Host (Isolates Live Stream)
+  Future<void> _handleDirectVideoCallToHost() async {
     // 1. Instant local cached coin check (0ms loading!)
     final cachedCoins = WalletApiService.getCachedCoins();
     const callRate = 100; // 100 coins/min minimum
@@ -407,13 +422,39 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       return;
     }
 
-    // 2. Sufficient balance: initiate private 1-on-1 dynamic call immediately
+    // 2. Temporarily pause viewer/guest LiveKit media to avoid conflict with 1-on-1 call
+    try {
+      if (_liveKitRoom != null) {
+        await _liveKitRoom!.localParticipant?.setCameraEnabled(false);
+        await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(false);
+      }
+      if (_rtcEngine != null) {
+        await _rtcEngine!.muteLocalAudioStream(true);
+        await _rtcEngine!.muteLocalVideoStream(true);
+      }
+    } catch (_) {}
+
+    // 3. Sufficient balance: initiate private 1-on-1 dynamic call immediately
     StreamingService.startDynamicCall(
       context: context,
       model: widget.host,
       channelName: 'call_${widget.host.id}_${DateTime.now().millisecondsSinceEpoch}',
       callType: 'video',
     );
+
+    // 4. On return from private call: restore guest audio/video state if connected
+    if (mounted && _isGuestConnected) {
+      try {
+        if (_liveKitRoom != null) {
+          await _liveKitRoom!.localParticipant?.setCameraEnabled(!_isCameraOff);
+          await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(!_isAudioMuted);
+        }
+        if (_rtcEngine != null) {
+          await _rtcEngine!.muteLocalAudioStream(_isAudioMuted);
+          await _rtcEngine!.muteLocalVideoStream(_isCameraOff);
+        }
+      } catch (_) {}
+    }
   }
 
   /// Host Pause Live Stream for 1-on-1 Private Call (Live Room remains active!)
@@ -539,6 +580,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
               ),
             ),
           );
+          _localVideoTrack = localVideo;
           await _liveKitRoom!.localParticipant?.publishVideoTrack(
             localVideo,
             publishOptions: const VideoPublishOptions(
@@ -547,40 +589,18 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
             ),
           );
           await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(true);
+          await _liveKitRoom!.localParticipant?.setCameraEnabled(true);
+          if (mounted) {
+            setState(() {
+              _isGuestConnected = true;
+              _isGuestConnecting = false;
+              if (!_activeVideos.contains(localVideo)) {
+                _activeVideos.add(localVideo);
+              }
+            });
+          }
         } catch (e) {
           debugPrint('[LiveRoomScreen] Direct guest publish failed: $e');
-        }
-
-        final hasVideo = _liveKitRoom!.localParticipant?.videoTrackPublications.any((p) => p.track != null && !p.muted) ?? false;
-        if (!hasVideo && _activeChannelName.isNotEmpty) {
-          final tokenRes = await LiveStreamingApiService.generateLiveKitToken(
-            roomName: _activeChannelName,
-            role: 'co_host',
-          );
-          if (tokenRes != null && tokenRes['livekit_token'] != null) {
-            await _liveKitRoom!.disconnect();
-            await _liveKitRoom!.connect('wss://chinchins.live/livekit', tokenRes['livekit_token']!);
-            final guestVideo = await LocalVideoTrack.createCameraTrack(
-              const CameraCaptureOptions(
-                cameraPosition: CameraPosition.front,
-                params: VideoParameters(
-                  dimensions: VideoDimensionsPresets.h720_169,
-                  encoding: VideoEncoding(
-                    maxBitrate: 2500 * 1000,
-                    maxFramerate: 30,
-                  ),
-                ),
-              ),
-            );
-            await _liveKitRoom!.localParticipant?.publishVideoTrack(
-              guestVideo,
-              publishOptions: const VideoPublishOptions(
-                simulcast: false,
-                videoCodec: 'H264',
-              ),
-            );
-            await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(true);
-          }
         }
       }
       _updateActiveVideoTracks();
@@ -1337,16 +1357,24 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         }
       });
       _callAcceptedSub = signaling.onCallAccepted.listen((data) {
+        _removeIncomingCallOverlay();
         _pauseLiveStreamForPrivateCall();
       });
       _callEndedSub = signaling.onCallEnded.listen((data) {
+        _removeIncomingCallOverlay();
         _resumeLiveStreamFromPrivateCall();
+      });
+      _callCancelledSub = signaling.onCallCancelled.listen((data) {
+        _removeIncomingCallOverlay();
+      });
+      _callRejectedSub = signaling.onCallRejected.listen((data) {
+        _removeIncomingCallOverlay();
       });
     }
   }
 
   void _showIncomingCallOverlay(Map<String, dynamic> data) {
-    if (_incomingCallOverlayEntry != null) return;
+    _removeIncomingCallOverlay();
 
     final callerName = (data['caller'] is Map ? (data['caller']['name'] ?? data['caller']['display_name']) : null) ??
         data['caller_name'] ?? data['name'] ?? data['user_name'] ?? 'Viewer';
@@ -1363,151 +1391,159 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         top: MediaQuery.of(context).padding.top + 16,
         left: 14,
         right: 14,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF231838), Color(0xFF130E20)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+        child: Dismissible(
+          key: UniqueKey(),
+          direction: DismissDirection.horizontal,
+          onDismissed: (_) {
+            _removeIncomingCallOverlay();
+            if (callId != null) {
+              CallApiService.rejectCall(callId: callId.toString());
+            }
+          },
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF231838), Color(0xFF130E20)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFFF2A6D).withValues(alpha: 0.6), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.7),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFFFF2A6D).withValues(alpha: 0.25),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFFF2A6D).withValues(alpha: 0.6), width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.7),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-                BoxShadow(
-                  color: const Color(0xFFFF2A6D).withValues(alpha: 0.25),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                // Caller Avatar with Cyan Ring
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF00E5FF), width: 2),
-                  ),
-                  child: ClipOval(
-                    child: CachedImageLoader(imageUrl: callerAvatar, fit: BoxFit.cover),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Caller Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        callerName,
-                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      const Row(
-                        children: [
-                          Icon(Icons.videocam_rounded, color: Color(0xFF00E5FF), size: 13),
-                          SizedBox(width: 4),
-                          Text(
-                            'Incoming Video Call...',
-                            style: TextStyle(color: Color(0xFF00E5FF), fontSize: 11, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-
-                // Decline Button
-                GestureDetector(
-                  onTap: () {
-                    _incomingCallOverlayEntry?.remove();
-                    _incomingCallOverlayEntry = null;
-                    if (callId != null) {
-                      CallApiService.rejectCall(callId: callId.toString());
-                    }
-                  },
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: const BoxDecoration(
+              child: Row(
+                children: [
+                  // Caller Avatar with Cyan Ring
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Color(0xFFFF1744),
+                      border: Border.all(color: const Color(0xFF00E5FF), width: 2),
                     ),
-                    child: const Icon(Icons.call_end_rounded, color: Colors.white, size: 20),
+                    child: ClipOval(
+                      child: CachedImageLoader(imageUrl: callerAvatar, fit: BoxFit.cover),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
+                  const SizedBox(width: 12),
 
-                // Accept Button
-                GestureDetector(
-                  onTap: () async {
-                    _incomingCallOverlayEntry?.remove();
-                    _incomingCallOverlayEntry = null;
-
-                    // 1. Pause live stream video track & show photo slider
-                    await _pauseLiveStreamForPrivateCall();
-
-                    // 2. Accept call on backend
-                    if (callId != null) {
-                      CallApiService.acceptCall(callId: callId.toString());
-                    }
-
-                    // 3. Open Video Call Screen
-                    final callerModel = ModelProfile(
-                      id: callerId?.toString() ?? '',
-                      accountId: callerId?.toString() ?? '',
-                      name: callerName,
-                      avatarUrl: callerAvatar,
-                      pricePerMin: 100,
-                      age: 22,
-                      location: 'Bangladesh',
-                      intro: 'Incoming 1-on-1 Call',
-                      languages: const ['English', 'Bengali'],
-                      galleryUrls: [callerAvatar],
-                    );
-
-                    if (!mounted) return;
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => VideoCallScreen(
-                          callId: int.tryParse(callId?.toString() ?? ''),
-                          channelName: channelName,
-                          model: callerModel,
-                          isIncoming: true,
+                  // Caller Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          callerName,
+                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    );
-
-                    // 4. Call ended: Resume live camera broadcast
-                    await _resumeLiveStreamFromPrivateCall();
-                  },
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color(0xFF10B981),
+                        const SizedBox(height: 2),
+                        const Row(
+                          children: [
+                            Icon(Icons.videocam_rounded, color: Color(0xFF00E5FF), size: 13),
+                            SizedBox(width: 4),
+                            Text(
+                              'Incoming Video Call...',
+                              style: TextStyle(color: Color(0xFF00E5FF), fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                    child: const Icon(Icons.call_rounded, color: Colors.white, size: 20),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+
+                  // Decline Button
+                  GestureDetector(
+                    onTap: () {
+                      _removeIncomingCallOverlay();
+                      if (callId != null) {
+                        CallApiService.rejectCall(callId: callId.toString());
+                      }
+                    },
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFFFF1744),
+                      ),
+                      child: const Icon(Icons.call_end_rounded, color: Colors.white, size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+
+                  // Accept Button
+                  GestureDetector(
+                    onTap: () async {
+                      _removeIncomingCallOverlay();
+
+                      // 1. Pause live stream video track & show photo slider
+                      await _pauseLiveStreamForPrivateCall();
+
+                      // 2. Accept call on backend
+                      if (callId != null) {
+                        CallApiService.acceptCall(callId: callId.toString());
+                      }
+
+                      // 3. Open Video Call Screen
+                      final callerModel = ModelProfile(
+                        id: callerId?.toString() ?? '',
+                        accountId: callerId?.toString() ?? '',
+                        name: callerName,
+                        avatarUrl: callerAvatar,
+                        pricePerMin: 100,
+                        age: 22,
+                        location: 'Bangladesh',
+                        intro: 'Incoming 1-on-1 Call',
+                        languages: const ['English', 'Bengali'],
+                        galleryUrls: [callerAvatar],
+                      );
+
+                      if (!mounted) return;
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => VideoCallScreen(
+                            callId: int.tryParse(callId?.toString() ?? ''),
+                            channelName: channelName,
+                            model: callerModel,
+                            isIncoming: true,
+                          ),
+                        ),
+                      );
+
+                      // 4. Call ended: Resume live camera broadcast
+                      await _resumeLiveStreamFromPrivateCall();
+                    },
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFF10B981),
+                      ),
+                      child: const Icon(Icons.call_rounded, color: Colors.white, size: 20),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1516,10 +1552,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
     overlay.insert(_incomingCallOverlayEntry!);
 
-    // Auto dismiss after 30 seconds
-    Timer(const Duration(seconds: 30), () {
-      _incomingCallOverlayEntry?.remove();
-      _incomingCallOverlayEntry = null;
+    // Auto dismiss after 12 seconds
+    _incomingCallOverlayTimer = Timer(const Duration(seconds: 12), () {
+      _removeIncomingCallOverlay();
     });
   }
 
