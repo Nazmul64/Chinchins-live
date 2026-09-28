@@ -1851,7 +1851,16 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     );
 
     if (mounted) {
-      if (res != null && (res['status'] == true || res['success'] == true || res['data'] != null)) {
+      if (res != null && res['code'] == 'REQUEST_ALREADY_PENDING') {
+        setState(() => _isGuestConnecting = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Join request is already pending host approval. ✋'),
+            backgroundColor: Color(0xFFFF9100),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      } else if (res != null && (res['status'] == true || res['success'] == true || res['data'] != null)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Join request sent to Host! ✋ Waiting for approval...'),

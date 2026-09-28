@@ -115,12 +115,17 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   Map<String, dynamic>? _featuredPackage;
 
+  int? _callId;
+  String? _channelName;
+
   @override
   void initState() {
     super.initState();
     try {
       WakelockPlus.enable();
     } catch (_) {}
+    _callId = widget.callId;
+    _channelName = widget.channelName;
     _isFreeTrialActive = true;
     _freeTrialRemaining = widget.freeDurationSeconds > 0 ? widget.freeDurationSeconds : 16;
     _ratePerMinute = widget.ratePerMinute > 0
@@ -149,6 +154,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       if (!widget.isIncoming) {
         _isConnectingCall = true;
         CallSoundManager.playOutgoingRingtone(widget.dialToneUrl);
+        if (_callId == null) {
+          _initiateOutgoingCall();
+        }
       } else {
         _isConnectingCall = false;
       }
@@ -162,13 +170,91 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _subscribeSignalingEvents();
   }
 
+  Future<void> _initiateOutgoingCall() async {
+    final res = await CallApiService.initiateCall(
+      receiverId: widget.model.id,
+      receiverAccountId: widget.model.accountId,
+      callType: 'video',
+      channelName: _channelName,
+    );
+
+    if (!mounted || _isEndingCall) return;
+
+    if (res['is_low_balance'] == true || res['code'] == 'INSUFFICIENT_BALANCE') {
+      await CallSoundManager.stopRingtone();
+      if (mounted) {
+        Navigator.pop(context);
+        RechargeGemsSheet.show(
+          context,
+          model: widget.model,
+          receiverId: widget.model.id,
+          receiverName: widget.model.name,
+          receiverAvatarUrl: widget.model.avatarUrl,
+        );
+      }
+      return;
+    }
+
+    if (res['is_offline'] == true || res['is_busy'] == true || res['success'] == false) {
+      await CallSoundManager.stopRingtone();
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Call could not be connected'),
+            backgroundColor: AppColors.cardDarkElevated,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    final newCallId = res['call_id'] ?? (res['data'] is Map ? res['data']['call_id'] ?? res['data']['id'] : null);
+    final newChannel = res['channel_name'] ?? (res['data'] is Map ? res['data']['channel_name'] : null);
+
+    if (newCallId != null) {
+      _callId = newCallId is int ? newCallId : int.tryParse(newCallId.toString());
+    }
+    if (newChannel != null && newChannel.toString().isNotEmpty) {
+      _channelName = newChannel.toString();
+    }
+
+    if (_callId != null) {
+      SignalingService().subscribeToCallRoom(_callId.toString());
+    }
+    if (_channelName != null && _channelName!.isNotEmpty) {
+      SignalingService().subscribeToCallRoom(_channelName!);
+    }
+
+    _startCallStatusPolling();
+
+    if (!_hasStartedWebRTC && _isCameraReady) {
+      _hasStartedWebRTC = true;
+      await _webrtcService.startCallAsCaller(
+        callId: _callId,
+        channelName: _channelName,
+        onRemoteStreamConnected: (stream) {
+          _onMediaConnected(stream);
+        },
+        onCallEnded: () {
+          if (mounted && !_isEndingCall) {
+            _terminateCallSession('Call ended');
+          }
+        },
+      );
+    }
+  }
+
   void _subscribeSignalingEvents() {
     final signaling = SignalingService();
-    if (widget.callId != null) {
-      signaling.subscribeToCallRoom(widget.callId.toString());
+    final cId = _callId ?? widget.callId;
+    final chName = _channelName ?? widget.channelName;
+    if (cId != null) {
+      signaling.subscribeToCallRoom(cId.toString());
     }
-    if (widget.channelName != null && widget.channelName!.isNotEmpty && widget.channelName != widget.callId?.toString()) {
-      signaling.subscribeToCallRoom(widget.channelName!);
+    if (chName != null && chName.isNotEmpty && chName != cId?.toString()) {
+      signaling.subscribeToCallRoom(chName);
     }
 
     _wsAcceptedSub = signaling.onCallAccepted.listen((data) {
@@ -183,22 +269,13 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     });
 
     _wsEndedSub = signaling.onCallEnded.listen((data) {
-      CallSoundManager.stopRingtone();
-      if (mounted && !_isEndingCall) {
-        _endCall();
-      }
+      _terminateCallSession('Call ended by partner');
     });
     _wsRejectedSub = signaling.onCallRejected.listen((data) {
-      CallSoundManager.stopRingtone();
-      if (mounted && !_isEndingCall) {
-        _endCall();
-      }
+      _terminateCallSession('Call declined by host');
     });
     _wsCancelledSub = signaling.onCallCancelled.listen((data) {
-      CallSoundManager.stopRingtone();
-      if (mounted && !_isEndingCall) {
-        _endCall();
-      }
+      _terminateCallSession('Call was cancelled');
     });
     _wsInCallMsgSub = signaling.onInCallMessage.listen((data) {
       if (mounted) {
@@ -234,81 +311,40 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     });
   }
 
-  Future<void> _loadCallConfig() async {
-    try {
-      final cfg = await CallApiService.getCallConfig();
-      if (cfg != null && mounted) {
-        final dynamic freeSecs = cfg['free_trial_duration_seconds'] ?? cfg['free_duration_seconds'] ?? cfg['free_trial_seconds'];
-        if (freeSecs != null) {
-          final parsed = int.tryParse(freeSecs.toString());
-          if (parsed != null && parsed > 0 && _callSeconds == 0) {
-            setState(() {
-              _freeTrialRemaining = parsed;
-            });
-          }
-        }
-        final dynamic rpm = cfg['video_call_rate'] ?? cfg['rate_per_minute'];
-        if (rpm != null) {
-          final parsedRpm = int.tryParse(rpm.toString());
-          if (parsedRpm != null && parsedRpm > 0) {
-            setState(() {
-              _ratePerMinute = parsedRpm;
-            });
-          }
-        }
-      }
-    } catch (_) {}
-  }
+  void _terminateCallSession([String? reason]) {
+    if (_isEndingCall) return;
+    _isEndingCall = true;
 
-  Future<void> _loadFeaturedPackage() async {
     try {
-      final packages = await WalletApiService.getCoinPackages();
-      if (packages.isNotEmpty && mounted) {
-        setState(() {
-          _featuredPackage = packages.first;
-        });
-      }
+      WakelockPlus.disable();
     } catch (_) {}
-  }
 
-  void _onMediaConnected([MediaStream? stream]) {
-    if (stream != null && _webrtcService.remoteRenderer.srcObject != stream) {
-      _webrtcService.remoteRenderer.srcObject = stream;
-    }
+    PiPCallOverlay.hideMiniWindow();
+    _activeSession = null;
+    _timer?.cancel();
+    _timer = null;
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+    _wsAcceptedSub?.cancel();
+    _wsEndedSub?.cancel();
+    _wsRejectedSub?.cancel();
+    _wsCancelledSub?.cancel();
+    _wsInCallMsgSub?.cancel();
+    _wsGiftSub?.cancel();
     CallSoundManager.stopRingtone();
+    _webrtcService.dispose();
 
-    // Ensure all audio tracks are active and unmuted
-    _webrtcService.unmuteAllAudio();
-
-    // Force maximum loud speakerphone audio
-    _webrtcService.toggleSpeakerphone(true);
-    Future.delayed(const Duration(milliseconds: 200), () {
-      _webrtcService.unmuteAllAudio();
-      _webrtcService.toggleSpeakerphone(true);
-    });
-    Future.delayed(const Duration(milliseconds: 600), () {
-      _webrtcService.unmuteAllAudio();
-      _webrtcService.toggleSpeakerphone(true);
-    });
-    Future.delayed(const Duration(milliseconds: 1200), () {
-      _webrtcService.unmuteAllAudio();
-      _webrtcService.toggleSpeakerphone(true);
-    });
-
-    if (mounted) {
-      setState(() {
-        _isConnectingCall = false;
-      });
-    }
-    if (!_hasStartedTimer) {
-      _hasStartedTimer = true;
-      if (widget.callId != null) {
-        CallApiService.notifyCallConnected(
-          callId: widget.callId!,
-          mediaStatus: 'connected',
+    if (mounted && Navigator.canPop(context)) {
+      Navigator.pop(context);
+      if (reason != null && reason.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(reason),
+            backgroundColor: AppColors.cardDarkElevated,
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
-      _startTimer();
     }
   }
 
@@ -330,52 +366,41 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       if (mounted) setState(() {});
     };
 
-    _startCallStatusPolling();
+    final effectiveCallId = _callId ?? widget.callId;
+    final effectiveChannel = _channelName ?? widget.channelName;
+
+    if (effectiveCallId != null) {
+      _startCallStatusPolling();
+    }
 
     if (widget.isIncoming) {
-      if (widget.callId != null && !_hasStartedWebRTC) {
+      if (effectiveCallId != null && !_hasStartedWebRTC) {
         _hasStartedWebRTC = true;
         await _webrtcService.startCallAsReceiver(
-          callId: widget.callId,
-          channelName: widget.channelName,
+          callId: effectiveCallId,
+          channelName: effectiveChannel,
           onRemoteStreamConnected: (stream) {
             _onMediaConnected(stream);
           },
           onCallEnded: () {
             if (mounted && !_isEndingCall) {
-              _isEndingCall = true;
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Call ended'),
-                  backgroundColor: AppColors.cardDarkElevated,
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              _terminateCallSession('Call ended');
             }
           },
         );
       }
     } else {
-      if (widget.callId != null && !_hasStartedWebRTC) {
+      if (effectiveCallId != null && !_hasStartedWebRTC) {
         _hasStartedWebRTC = true;
         await _webrtcService.startCallAsCaller(
-          callId: widget.callId,
-          channelName: widget.channelName,
+          callId: effectiveCallId,
+          channelName: effectiveChannel,
           onRemoteStreamConnected: (stream) {
             _onMediaConnected(stream);
           },
           onCallEnded: () {
             if (mounted && !_isEndingCall) {
-              _isEndingCall = true;
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Call ended'),
-                  backgroundColor: AppColors.cardDarkElevated,
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              _terminateCallSession('Call ended');
             }
           },
         );
@@ -384,7 +409,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   }
 
   void _startCallStatusPolling() {
-    if (widget.callId == null) return;
+    final pollCallId = _callId ?? widget.callId;
+    if (pollCallId == null) return;
 
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
@@ -393,7 +419,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         return;
       }
 
-      final statusData = await CallApiService.getCallStatus(widget.callId!);
+      final statusData = await CallApiService.getCallStatus(pollCallId);
       if (!mounted || statusData == null) return;
 
       final status = (statusData['status'] ?? statusData['data']?['status'])?.toString().toLowerCase();
@@ -401,48 +427,18 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
       if (status == 'rejected') {
         timer.cancel();
-        await CallSoundManager.stopRingtone();
-        if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Host declined the call'),
-              backgroundColor: AppColors.cardDarkElevated,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
+        _terminateCallSession('Host declined the call');
       } else if (status == 'cancelled') {
         timer.cancel();
-        await CallSoundManager.stopRingtone();
-        if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Call was cancelled'),
-              backgroundColor: AppColors.cardDarkElevated,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
+        _terminateCallSession('Call was cancelled');
       } else if (status == 'ended' || isTerminated) {
         timer.cancel();
-        await CallSoundManager.stopRingtone();
-        if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Call ended'),
-              backgroundColor: AppColors.cardDarkElevated,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
+        _terminateCallSession('Call ended');
       } else if (status == 'connected' || status == 'active' || status == 'accepted') {
         timer.cancel();
         _pollingTimer = null;
         await CallSoundManager.stopRingtone();
-        if (_isConnectingCall) {
+        if (_isConnectingCall && mounted) {
           setState(() {
             _isConnectingCall = false;
           });

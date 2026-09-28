@@ -183,30 +183,53 @@ class CallApiService {
           .post(uri, headers: headers, body: jsonEncode(payload))
           .timeout(const Duration(seconds: 12));
 
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        uri = Uri.parse('${ApiConstants.baseUrl}/call/make-call');
-        response = await http
-            .post(uri, headers: headers, body: jsonEncode(payload))
-            .timeout(const Duration(seconds: 12));
-      }
-
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        uri = Uri.parse('${ApiConstants.baseUrl}/call/instant');
-        response = await http
-            .post(uri, headers: headers, body: jsonEncode(payload))
-            .timeout(const Duration(seconds: 12));
-      }
-
       Map<String, dynamic> decoded = {};
       try {
         final raw = jsonDecode(response.body);
         if (raw is Map<String, dynamic>) {
           decoded = raw;
         }
-      } catch (e) {
+      } catch (_) {}
+
+      // ⚠️ Mandate 1: Handle 402 Payment Required / Insufficient Balance
+      if (response.statusCode == 402 || decoded['code'] == 'INSUFFICIENT_BALANCE') {
         return {
           'success': false,
-          'message': 'Server response error (${response.statusCode})',
+          'status': false,
+          'can_call': false,
+          'is_low_balance': true,
+          'show_recharge_sheet': true,
+          'code': 'INSUFFICIENT_BALANCE',
+          'message': decoded['message'] ?? 'Insufficient balance to start call',
+          'user_balance': decoded['user_balance'] ?? decoded['current_coins'] ?? 0,
+          'required_coins': decoded['required_coins'] ?? decoded['rate_per_minute'] ?? 100,
+          'recharge_modal_data': decoded,
+        };
+      }
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        uri = Uri.parse('${ApiConstants.baseUrl}/call/make-call');
+        response = await http
+            .post(uri, headers: headers, body: jsonEncode(payload))
+            .timeout(const Duration(seconds: 12));
+        try {
+          final raw = jsonDecode(response.body);
+          if (raw is Map<String, dynamic>) decoded = raw;
+        } catch (_) {}
+      }
+
+      if (response.statusCode == 402 || decoded['code'] == 'INSUFFICIENT_BALANCE') {
+        return {
+          'success': false,
+          'status': false,
+          'can_call': false,
+          'is_low_balance': true,
+          'show_recharge_sheet': true,
+          'code': 'INSUFFICIENT_BALANCE',
+          'message': decoded['message'] ?? 'Insufficient balance to start call',
+          'user_balance': decoded['user_balance'] ?? decoded['current_coins'] ?? 0,
+          'required_coins': decoded['required_coins'] ?? decoded['rate_per_minute'] ?? 100,
+          'recharge_modal_data': decoded,
         };
       }
 

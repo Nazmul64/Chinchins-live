@@ -515,9 +515,16 @@ class LiveStreamingApiService {
               .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
               .timeout(const Duration(seconds: 8));
 
+          Map<String, dynamic>? decoded;
+          try {
+            final raw = jsonDecode(response.body);
+            if (raw is Map) decoded = Map<String, dynamic>.from(raw);
+          } catch (_) {}
+
           if (response.statusCode == 200 || response.statusCode == 201) {
-            final decoded = jsonDecode(response.body);
-            return decoded is Map<String, dynamic> ? decoded : Map<String, dynamic>.from(decoded as Map);
+            return decoded ?? {'status': true, 'message': 'Join request sent'};
+          } else if (response.statusCode == 400 && decoded != null) {
+            return decoded;
           }
         } catch (_) {
           continue;

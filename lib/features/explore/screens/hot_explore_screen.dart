@@ -13,6 +13,7 @@ import '../widgets/draggable_extra_gems_widget.dart';
 import '../../profile/screens/host_profile_screen.dart';
 import '../../wallet/widgets/recharge_gems_sheet.dart';
 import '../../wallet/services/wallet_api_service.dart';
+import '../../call/screens/live_room_screen.dart';
 import '../../call/screens/random_match_screen.dart';
 import '../../call/services/streaming_service.dart';
 
@@ -261,6 +262,21 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
   }
 
   void _openHostProfile(ModelProfile model) {
+    if (model.isLive || model.activeLiveStreamId != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LiveRoomScreen(
+            host: model,
+            isHost: false,
+            liveId: model.activeLiveStreamId ?? model.id,
+            channelName: model.liveChannelName ?? 'live_${model.id}',
+          ),
+        ),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(

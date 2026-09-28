@@ -10,7 +10,6 @@ import '../../../core/widgets/cached_image_loader.dart';
 import '../../../core/widgets/avatar_with_frame.dart';
 import '../widgets/gifts_received_card.dart';
 import 'level_progression_screen.dart';
-import '../../call/screens/incoming_call_screen.dart';
 import '../../call/screens/live_room_screen.dart';
 import '../../call/services/call_api_service.dart';
 import '../../call/services/streaming_service.dart';
@@ -105,39 +104,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
   }
 
   void _triggerProfileViewAndAutoCallback() {
-    ProfileApiService.recordProfileView(widget.model.id).then((res) {
-      if (res != null && mounted) {
-        final callback = res['callback'] as Map<String, dynamic>?;
-        if (callback != null && callback['auto_call_triggered'] == true) {
-          // Host automatically initiates callback after visiting their profile
-          Future.delayed(const Duration(milliseconds: 2200), () {
-            if (mounted && ModalRoute.of(context)?.isCurrent == true) {
-              final rawCallId = callback['call_id'];
-              final int? callId = rawCallId is int
-                  ? rawCallId
-                  : int.tryParse(rawCallId?.toString() ?? '0');
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => IncomingCallScreen(
-                    model: _currentModel,
-                    callId: callId,
-                    channelName: callback['channel_name']?.toString(),
-                    isFreeTrial: true,
-                    freeDurationSeconds: callback['free_duration_seconds'] is int
-                        ? callback['free_duration_seconds'] as int
-                        : 10,
-                    ratePerMinute: callback['required_coins'] is int
-                        ? callback['required_coins'] as int
-                        : (_currentModel.pricePerMin > 0 ? _currentModel.pricePerMin : 100),
-                  ),
-                ),
-              );
-            }
-          });
-        }
-      }
-    });
+    ProfileApiService.recordProfileView(widget.model.id);
   }
 
   Future<void> _loadHostGifts() async {
@@ -776,6 +743,95 @@ class _HostProfileScreenState extends State<HostProfileScreen>
                             ],
                           ),
                           const SizedBox(height: 14),
+
+                          // 🔴 Active Live Stream Banner
+                          if (model.isLive || _currentModel.isLive) ...[
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => LiveRoomScreen(
+                                      host: _currentModel,
+                                      isHost: false,
+                                      liveId: _currentModel.activeLiveStreamId ?? model.id,
+                                      channelName: _currentModel.liveChannelName ?? 'live_${model.id}',
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 14),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFFFF1744), Color(0xFFFF007F), Color(0xFF7C4DFF)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFFF1744).withValues(alpha: 0.4),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.2),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                                child: const Text(
+                                                  'LIVE NOW',
+                                                  style: TextStyle(
+                                                    color: Color(0xFFFF1744),
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              const Text(
+                                                'Broadcasting Live',
+                                                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
+                                          const Text(
+                                            'Tap to join and chat in the live stream',
+                                            style: TextStyle(color: Colors.white70, fontSize: 11),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 14),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
 
                           // 1. Close Friends (0/3) 3 Cards matching Screenshot 3
                           Container(

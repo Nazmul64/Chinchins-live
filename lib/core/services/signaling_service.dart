@@ -625,7 +625,38 @@ class SignalingService {
       return;
     }
 
-    // 9c. Live Host On 1-on-1 Call Status (LiveHostOnCallEvent -> host.call_status / host.private_call)
+    // 9c. Live Stream Hold & Resume Events (Mandate 2 & 4: StreamHoldEvent / StreamResumeEvent)
+    if (cleanName == 'StreamHoldEvent' ||
+        cleanName.endsWith('StreamHoldEvent') ||
+        cleanName == 'stream.hold' ||
+        cleanName == 'StreamHold' ||
+        lowerName.contains('streamhold') ||
+        (data['status'] == 'paused' && data['is_paused'] == true)) {
+      _hostPrivateCallStatusController.add({
+        'is_on_private_call': true,
+        'is_on_call': true,
+        'back_soon_text': data['message'] ?? 'I will come back soon',
+        ...data,
+      });
+      return;
+    }
+
+    if (cleanName == 'StreamResumeEvent' ||
+        cleanName.endsWith('StreamResumeEvent') ||
+        cleanName == 'stream.resume' ||
+        cleanName == 'StreamResume' ||
+        lowerName.contains('streamresume') ||
+        (data['status'] == 'live' && data['is_paused'] == false)) {
+      _hostPrivateCallStatusController.add({
+        'is_on_private_call': false,
+        'is_on_call': false,
+        'status': 'live',
+        ...data,
+      });
+      return;
+    }
+
+    // 9d. Live Host On 1-on-1 Call Status (LiveHostOnCallEvent -> host.call_status / host.private_call)
     if (cleanName == 'LiveHostOnCallEvent' ||
         cleanName.endsWith('LiveHostOnCallEvent') ||
         cleanName == 'host.call_status' ||
