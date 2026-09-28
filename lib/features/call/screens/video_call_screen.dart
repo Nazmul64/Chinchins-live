@@ -341,23 +341,30 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       final lkUrl = res['livekit_url'] ?? res['data']?['livekit_url'];
       await _connectLiveKitRoom(token: lkToken.toString(), url: lkUrl?.toString());
     } else {
-      _startCallStatusPolling();
+      _checkAndStartWebRTCCaller();
+    }
+  }
 
-      if (!_hasStartedWebRTC && _isCameraReady) {
-        _hasStartedWebRTC = true;
-        await _webrtcService.startCallAsCaller(
-          callId: _callId,
-          channelName: _channelName,
-          onRemoteStreamConnected: (stream) {
-            _onMediaConnected(stream);
-          },
-          onCallEnded: () {
-            if (mounted && !_isEndingCall) {
-              _terminateCallSession('Call ended');
-            }
-          },
-        );
-      }
+  void _checkAndStartWebRTCCaller() {
+    if (widget.isIncoming || _hasStartedWebRTC || _isEndingCall) return;
+    final effectiveCallId = _callId ?? widget.callId;
+    final effectiveChannel = _channelName ?? widget.channelName;
+
+    if (effectiveCallId != null && _isCameraReady) {
+      _hasStartedWebRTC = true;
+      _startCallStatusPolling();
+      _webrtcService.startCallAsCaller(
+        callId: effectiveCallId,
+        channelName: effectiveChannel,
+        onRemoteStreamConnected: (stream) {
+          _onMediaConnected(stream);
+        },
+        onCallEnded: () {
+          if (mounted && !_isEndingCall) {
+            _terminateCallSession('Call ended');
+          }
+        },
+      );
     }
   }
 
@@ -603,21 +610,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         );
       }
     } else {
-      if (effectiveCallId != null && !_hasStartedWebRTC) {
-        _hasStartedWebRTC = true;
-        await _webrtcService.startCallAsCaller(
-          callId: effectiveCallId,
-          channelName: effectiveChannel,
-          onRemoteStreamConnected: (stream) {
-            _onMediaConnected(stream);
-          },
-          onCallEnded: () {
-            if (mounted && !_isEndingCall) {
-              _terminateCallSession('Call ended');
-            }
-          },
-        );
-      }
+      _checkAndStartWebRTCCaller();
     }
   }
 
@@ -761,6 +754,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         }
       });
 
+      final effectiveCallId = _callId ?? widget.callId;
       if (trialJustEnded) {
         // 16s Free preview expired
         if (_userGems < _ratePerMinute) {
@@ -769,22 +763,23 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           });
           _webrtcService.setCallMuted(true);
           _showInCallRechargeSheet();
-        } else if (widget.callId != null) {
+        } else if (effectiveCallId != null) {
           _sendInCallPulse();
         }
-      } else if (widget.callId != null && _callSeconds % 60 == 0 && !_isFreeTrialActive) {
+      } else if (effectiveCallId != null && _callSeconds % 60 == 0 && !_isFreeTrialActive) {
         _sendInCallPulse();
       }
     });
   }
 
   Future<void> _sendInCallPulse() async {
-    if (_isPulseInProgress || widget.callId == null || _isRechargeSheetOpen) return;
+    final effectiveCallId = _callId ?? widget.callId;
+    if (_isPulseInProgress || effectiveCallId == null || _isRechargeSheetOpen) return;
     _isPulseInProgress = true;
 
     try {
       final res = await CallApiService.deductIntervalPulse(
-        callId: widget.callId!,
+        callId: effectiveCallId,
         elapsedSeconds: _callSeconds,
         coins: _ratePerMinute,
       );

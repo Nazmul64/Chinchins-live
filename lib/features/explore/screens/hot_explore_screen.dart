@@ -321,13 +321,13 @@ class _HotExploreScreenState extends State<HotExploreScreen> with AutomaticKeepA
     }
 
     // ⚡ 0.00ms INSTANT CALL SCREEN LAUNCH (Zero-Loader Rule)
-    final int optimisticCallId = (DateTime.now().millisecondsSinceEpoch ~/ 1000) % 10000000;
-    final String channelName = 'call_${model.id}_$optimisticCallId';
+    // Dynamic call_id is fetched from POST /api/call/initiate response
+    final String channelName = 'call_${model.id}_${DateTime.now().millisecondsSinceEpoch}';
 
     StreamingService.startDynamicCall(
       context: context,
       model: model,
-      callId: optimisticCallId,
+      callId: null, // Let backend assign real database call_id
       channelName: channelName,
       isFreeTrial: false,
       freeDurationSeconds: 16,

@@ -172,13 +172,12 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     }
 
     // ⚡ 0.00ms INSTANT CALL SCREEN LAUNCH (Zero-Loader Rule)
-    final int optimisticCallId = (DateTime.now().millisecondsSinceEpoch ~/ 1000) % 10000000;
-    final String channelName = 'call_${_currentModel.id}_$optimisticCallId';
+    final String channelName = 'call_${_currentModel.id}_${DateTime.now().millisecondsSinceEpoch}';
 
     StreamingService.startDynamicCall(
       context: context,
       model: _currentModel,
-      callId: optimisticCallId,
+      callId: null, // Let backend assign real database call_id
       channelName: channelName,
       isFreeTrial: false,
       freeDurationSeconds: 16,
@@ -214,13 +213,12 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     }
 
     // ⚡ 0.00ms INSTANT CALL SCREEN LAUNCH (Zero-Loader Rule)
-    final int optimisticCallId = (DateTime.now().millisecondsSinceEpoch ~/ 1000) % 10000000;
-    final String channelName = 'audio_call_${_currentModel.id}_$optimisticCallId';
+    final String channelName = 'audio_call_${_currentModel.id}_${DateTime.now().millisecondsSinceEpoch}';
 
     StreamingService.startDynamicCall(
       context: context,
       model: _currentModel,
-      callId: optimisticCallId,
+      callId: null, // Let backend assign real database call_id
       channelName: channelName,
       callType: 'audio',
       isFreeTrial: false,

@@ -175,18 +175,27 @@ class ModelProfile {
 
   /// Country Flag emoji helper
   String get countryFlag {
-    final loc = location.toLowerCase();
+    final loc = (location.isNotEmpty ? location : (city ?? '')).toLowerCase();
     if (loc.contains('philippines') || loc.contains('phl') || loc.contains('ph')) return '🇵🇭';
     if (loc.contains('bangladesh') || loc.contains('bgd') || loc.contains('bd')) return '🇧🇩';
     if (loc.contains('india') || loc.contains('ind') || loc.contains('in')) return '🇮🇳';
     if (loc.contains('pakistan') || loc.contains('pak') || loc.contains('pk')) return '🇵🇰';
-    if (loc.contains('united states') || loc.contains('usa') || loc.contains('us')) return '🇺🇸';
+    if (loc.contains('united states') || loc.contains('usa') || loc.contains('us') || loc.contains('america')) return '🇺🇸';
+    if (loc.contains('united kingdom') || loc.contains('uk') || loc.contains('gb') || loc.contains('england')) return '🇬🇧';
+    if (loc.contains('canada') || loc.contains('ca')) return '🇨🇦';
+    if (loc.contains('australia') || loc.contains('au')) return '🇦🇺';
     if (loc.contains('nepal') || loc.contains('npl') || loc.contains('np')) return '🇳🇵';
     if (loc.contains('indonesia') || loc.contains('idn') || loc.contains('id')) return '🇮🇩';
     if (loc.contains('vietnam') || loc.contains('vn')) return '🇻🇳';
     if (loc.contains('thailand') || loc.contains('th')) return '🇹🇭';
     if (loc.contains('malaysia') || loc.contains('my')) return '🇲🇾';
-    return '🇧🇩';
+    if (loc.contains('saudi') || loc.contains('ksa') || loc.contains('sa')) return '🇸🇦';
+    if (loc.contains('emirates') || loc.contains('uae') || loc.contains('ae') || loc.contains('dubai')) return '🇦🇪';
+    if (loc.contains('qatar') || loc.contains('qa')) return '🇶🇦';
+    if (loc.contains('kuwait') || loc.contains('kw')) return '🇰🇼';
+    if (loc.contains('brazil') || loc.contains('br')) return '🇧🇷';
+    if (loc.contains('turkey') || loc.contains('tr')) return '🇹🇷';
+    return '🌐';
   }
 
   /// Computed account ID with fallback

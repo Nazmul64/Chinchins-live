@@ -138,6 +138,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
 
   Map<String, dynamic>? _featuredPackage;
   int _featuredPackageCoins = 0;
+  int? _callId;
 
   @override
   void initState() {
@@ -145,6 +146,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     try {
       WakelockPlus.enable();
     } catch (_) {}
+    _callId = widget.callId;
     _isFreeTrialActive = true;
     _freeTrialRemaining = widget.freeDurationSeconds > 0 ? widget.freeDurationSeconds : 16;
     _ratePerMinute = widget.ratePerMinute > 0
@@ -168,6 +170,9 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       if (!widget.isIncoming) {
         _isConnecting = true;
         CallSoundManager.playOutgoingRingtone(widget.dialToneUrl);
+        if (_callId == null) {
+          _initiateOutgoingCall();
+        }
       } else {
         _isConnecting = false;
       }
@@ -181,10 +186,60 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     _subscribeSignalingEvents();
   }
 
+  Future<void> _initiateOutgoingCall() async {
+    final res = await CallApiService.initiateCall(
+      receiverId: widget.model.id,
+      receiverAccountId: widget.model.accountId,
+      callType: widget.isVideo ? 'video' : 'audio',
+      channelName: widget.channelName,
+    );
+
+    if (!mounted || _isEndingCall) return;
+
+    if (res['is_low_balance'] == true || res['code'] == 'INSUFFICIENT_BALANCE') {
+      await CallSoundManager.stopRingtone();
+      if (mounted) {
+        Navigator.pop(context);
+        InCallRechargeGemsSheet.show(
+          context,
+          model: widget.model,
+          userGems: _userGems,
+          ratePerMinute: _ratePerMinute,
+        );
+      }
+      return;
+    }
+
+    if (res['is_offline'] == true || res['is_busy'] == true || res['success'] == false) {
+      await CallSoundManager.stopRingtone();
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Call could not be connected'),
+            backgroundColor: AppColors.cardDarkElevated,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    final newCallId = res['call_id'] ?? (res['data'] is Map ? res['data']['call_id'] ?? res['data']['id'] : null);
+    if (newCallId != null) {
+      _callId = newCallId is int ? newCallId : int.tryParse(newCallId.toString());
+      if (_callId != null) {
+        SignalingService().subscribeToCallRoom(_callId.toString());
+        _startCallStatusPolling();
+      }
+    }
+  }
+
   void _subscribeSignalingEvents() {
     final signaling = SignalingService();
-    if (widget.callId != null) {
-      signaling.subscribeToCallRoom(widget.callId.toString());
+    final cId = _callId ?? widget.callId;
+    if (cId != null) {
+      signaling.subscribeToCallRoom(cId.toString());
     }
     if (widget.channelName.isNotEmpty && widget.channelName != widget.callId?.toString()) {
       signaling.subscribeToCallRoom(widget.channelName);
@@ -247,7 +302,8 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   }
 
   void _startCallStatusPolling() {
-    if (widget.callId == null) return;
+    final effectiveCallId = _callId ?? widget.callId;
+    if (effectiveCallId == null) return;
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) {
       _pollCallStatus();
@@ -504,9 +560,10 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   }
 
   Future<void> _pollCallStatus() async {
-    if (widget.callId == null || _isEndingCall) return;
+    final effectiveCallId = _callId ?? widget.callId;
+    if (effectiveCallId == null || _isEndingCall) return;
     try {
-      final statusData = await CallApiService.getCallStatus(widget.callId!);
+      final statusData = await CallApiService.getCallStatus(effectiveCallId);
       if (!mounted || statusData == null || _isEndingCall) return;
       final status = (statusData['status'] ?? statusData['data']?['status'])?.toString().toLowerCase();
       final isTerminated = statusData['is_terminated'] == true ||
@@ -525,12 +582,13 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   }
 
   Future<void> _sendInCallPulse() async {
-    if (_isPulseInProgress || widget.callId == null || _isRechargeSheetOpen) return;
+    final effectiveCallId = _callId ?? widget.callId;
+    if (_isPulseInProgress || effectiveCallId == null || _isRechargeSheetOpen) return;
     _isPulseInProgress = true;
 
     try {
       final res = await CallApiService.deductIntervalPulse(
-        callId: widget.callId!,
+        callId: effectiveCallId,
         elapsedSeconds: _callSeconds,
         coins: _ratePerMinute,
       );
@@ -690,7 +748,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     PiPCallOverlay.hideMiniWindow();
     _activeSession = null;
 
-    final callId = widget.callId;
+    final callId = _callId ?? widget.callId;
     final channelName = widget.channelName;
     final isConnecting = _isConnecting;
     final callSecs = _callSeconds;

@@ -102,7 +102,7 @@ class _ModelGridCardState extends State<ModelGridCard> with SingleTickerProvider
                   child: _buildVerifiedBadge(),
                 ),
 
-              // E. Bottom-Left Host Name & Heart / Likes Pill
+              // E. Bottom-Left Host Name, Age & Country Pill
               Positioned(
                 left: 10,
                 bottom: 10,
@@ -127,44 +127,87 @@ class _ModelGridCardState extends State<ModelGridCard> with SingleTickerProvider
                     ),
                     const SizedBox(height: 5),
 
-                    // Pink Heart Pill (❤️ 22)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [
-                            Color(0xFFFF2A6D),
-                            Color(0xFFFF007F),
-                          ],
+                    // Row with Age & Country Pill
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Pink Heart Age Pill (❤️ 22)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFFFF2A6D),
+                                Color(0xFFFF007F),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFF2A6D).withValues(alpha: 0.4),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.favorite,
+                                color: Colors.white,
+                                size: 10.5,
+                              ),
+                              const SizedBox(width: 3.5),
+                              Text(
+                                '${model.age > 0 ? model.age : (model.likeMeCount > 0 ? model.likeMeCount : 22)}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF2A6D).withValues(alpha: 0.4),
-                            blurRadius: 4,
-                            offset: const Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.favorite,
-                            color: Colors.white,
-                            size: 11,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${model.likeMeCount > 0 ? model.likeMeCount : (model.age > 0 ? model.age : 22)}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.bold,
+                        const SizedBox(width: 5),
+
+                        // Country Flag & Name Pill (🌐 BD / Country)
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white24, width: 0.7),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  model.countryFlag,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                if (model.location.trim().isNotEmpty) ...[
+                                  const SizedBox(width: 3.5),
+                                  Flexible(
+                                    child: Text(
+                                      model.location.trim(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

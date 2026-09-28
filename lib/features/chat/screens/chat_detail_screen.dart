@@ -715,13 +715,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
 
     // ⚡ INSTANT CALL SCREEN LAUNCH (0ms — NO await before navigation!)
-    final int optimisticCallId = (DateTime.now().millisecondsSinceEpoch ~/ 1000) % 10000000;
-    final String channelName = 'call_${model.id}_$optimisticCallId';
+    final String channelName = 'call_${model.id}_${DateTime.now().millisecondsSinceEpoch}';
 
     StreamingService.startDynamicCall(
       context: context,
       model: model,
-      callId: optimisticCallId,
+      callId: null, // Let backend assign real database call_id
       channelName: channelName,
       isFreeTrial: false,
       freeDurationSeconds: 16,
