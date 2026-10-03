@@ -167,57 +167,63 @@ class CallApiService {
         if (callerAccountId != null) 'X-Account-Id': callerAccountId,
       };
 
+      final String autoRoomName = channelName ?? 'call_${callType}_${callerId}_${parsedReceiverId}_${DateTime.now().millisecondsSinceEpoch}';
+
       final payload = {
         'caller_id': callerId,
         'receiver_id': parsedReceiverId,
         'call_type': callType,
-        if (channelName != null && channelName.isNotEmpty) 'channel_name': channelName,
+        'room_name': autoRoomName,
+        'channel_name': autoRoomName,
         'user_id': callerId,
         'target_id': parsedReceiverId,
         'receiver_account_id': receiverAccountId ?? receiverId,
         'caller_account_id': callerAccountId,
       };
 
-      var uri = Uri.parse(ApiConstants.callInitiate);
-      var response = await http
-          .post(uri, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 12));
+      final callEndpoints = [
+        '${ApiConstants.baseUrl}/call/make-call',
+        ApiConstants.callInitiate,
+        '${ApiConstants.baseUrl}/call/instant',
+        '${ApiConstants.baseUrl}/call/start',
+      ];
 
+      http.Response? response;
       Map<String, dynamic> decoded = {};
-      try {
-        final raw = jsonDecode(response.body);
-        if (raw is Map<String, dynamic>) {
-          decoded = raw;
-        }
-      } catch (_) {}
 
-      // ⚠️ Mandate 1: Handle 402 Payment Required / Insufficient Balance
-      if (response.statusCode == 402 || decoded['code'] == 'INSUFFICIENT_BALANCE') {
+      for (final endpoint in callEndpoints) {
+        try {
+          final res = await http
+              .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 10));
+
+          Map<String, dynamic> localDecoded = {};
+          try {
+            final raw = jsonDecode(res.body);
+            if (raw is Map<String, dynamic>) localDecoded = raw;
+          } catch (_) {}
+
+          if (res.statusCode == 200 || res.statusCode == 201 || res.statusCode == 402) {
+            response = res;
+            decoded = localDecoded;
+            break;
+          } else if (res.statusCode != 404) {
+            response = res;
+            decoded = localDecoded;
+          }
+        } catch (_) {
+          continue;
+        }
+      }
+
+      if (response == null) {
         return {
           'success': false,
-          'status': false,
-          'can_call': false,
-          'is_low_balance': true,
-          'show_recharge_sheet': true,
-          'code': 'INSUFFICIENT_BALANCE',
-          'message': decoded['message'] ?? 'Insufficient balance to start call',
-          'user_balance': decoded['user_balance'] ?? decoded['current_coins'] ?? 0,
-          'required_coins': decoded['required_coins'] ?? decoded['rate_per_minute'] ?? 100,
-          'recharge_modal_data': decoded,
+          'message': 'Failed to connect to call server.',
         };
       }
 
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        uri = Uri.parse('${ApiConstants.baseUrl}/call/make-call');
-        response = await http
-            .post(uri, headers: headers, body: jsonEncode(payload))
-            .timeout(const Duration(seconds: 12));
-        try {
-          final raw = jsonDecode(response.body);
-          if (raw is Map<String, dynamic>) decoded = raw;
-        } catch (_) {}
-      }
-
+      // ⚠️ Mandate 1: Handle 402 Payment Required / Insufficient Balance
       if (response.statusCode == 402 || decoded['code'] == 'INSUFFICIENT_BALANCE') {
         return {
           'success': false,
@@ -287,7 +293,7 @@ class CallApiService {
         }
 
         final dataMap = decoded['data'] is Map ? decoded['data'] as Map<String, dynamic> : decoded;
-        final dynamic rawCallId = dataMap['call_id'] ?? dataMap['id'] ?? decoded['call_id'] ?? decoded['id'];
+        final dynamic rawCallId = dataMap['call_id'] ?? dataMap['id'] ?? dataMap['session_id'] ?? decoded['call_id'] ?? decoded['id'] ?? decoded['session_id'];
         final int? parsedCallId = rawCallId is int
             ? rawCallId
             : int.tryParse(rawCallId?.toString() ?? '');
@@ -297,8 +303,13 @@ class CallApiService {
           'is_free_trial': dataMap['is_free_trial'] == true || decoded['is_free_trial'] == true,
           'free_duration_seconds': dataMap['free_duration_seconds'] ?? decoded['free_duration_seconds'] ?? 10,
           'call_id': parsedCallId,
-          'channel_name': dataMap['channel_name'] ?? decoded['channel_name'],
+          'session_id': parsedCallId,
+          'channel_name': dataMap['channel_name'] ?? dataMap['room_name'] ?? decoded['channel_name'] ?? decoded['room_name'] ?? autoRoomName,
+          'room_name': dataMap['room_name'] ?? dataMap['channel_name'] ?? decoded['room_name'] ?? decoded['channel_name'] ?? autoRoomName,
           'rate_per_minute': dataMap['rate_per_minute'] ?? decoded['rate_per_minute'] ?? 100,
+          'token': dataMap['token'] ?? dataMap['livekit_token'] ?? decoded['token'] ?? decoded['livekit_token'],
+          'livekit_token': dataMap['livekit_token'] ?? dataMap['token'] ?? decoded['livekit_token'] ?? decoded['token'],
+          'livekit_url': dataMap['livekit_url'] ?? decoded['livekit_url'] ?? 'wss://chinchins.live/livekit',
           'dial_tone_url': dataMap['dial_tone_url'] ?? decoded['dial_tone_url'],
           'data': dataMap,
           'message': decoded['message'] ?? 'Call initiated successfully.',
@@ -392,9 +403,11 @@ class CallApiService {
         queryParams['phone'] = phone;
       }
 
-      final url = Uri.parse(ApiConstants.callIncoming).replace(
-        queryParameters: queryParams.isNotEmpty ? queryParams : null,
-      );
+      final incomingUrls = [
+        Uri.parse(ApiConstants.callIncoming).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null),
+        Uri.parse('${ApiConstants.baseUrl}/call/check-incoming').replace(queryParameters: queryParams.isNotEmpty ? queryParams : null),
+      ];
+
       final headers = <String, String>{
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
@@ -402,37 +415,43 @@ class CallApiService {
         if (accountId != null) 'X-Account-Id': accountId,
       };
 
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+      for (final url in incomingUrls) {
+        try {
+          final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map) {
-          final callSession = decoded['call_session'];
-          final data = decoded['data'];
-          final bool hasIncoming = decoded['has_incoming_call'] == true ||
-              decoded['is_incoming'] == true ||
-              (callSession != null && callSession is Map && callSession.isNotEmpty) ||
-              (decoded['status'] == true && data != null && data is Map && data.isNotEmpty && decoded['has_incoming_call'] != false) ||
-              (decoded['call_id'] != null || (data is Map && data['call_id'] != null));
-          if (hasIncoming) {
-            final Map<String, dynamic> result = {};
-            if (callSession is Map) {
-              result.addAll(Map<String, dynamic>.from(callSession));
-            }
-            if (data is Map) {
-              result.addAll(Map<String, dynamic>.from(data));
-            }
-            decoded.forEach((k, v) {
-              if (k != 'data' && k != 'call_session' && !result.containsKey(k)) {
-                result[k.toString()] = v;
+          if (response.statusCode == 200) {
+            final decoded = jsonDecode(response.body);
+            if (decoded is Map) {
+              final callSession = decoded['call_session'];
+              final data = decoded['data'];
+              final bool hasIncoming = decoded['has_incoming_call'] == true ||
+                  decoded['is_incoming'] == true ||
+                  (callSession != null && callSession is Map && callSession.isNotEmpty) ||
+                  (decoded['status'] == true && data != null && data is Map && data.isNotEmpty && decoded['has_incoming_call'] != false) ||
+                  (decoded['call_id'] != null || (data is Map && data['call_id'] != null));
+              if (hasIncoming) {
+                final Map<String, dynamic> result = {};
+                if (callSession is Map) {
+                  result.addAll(Map<String, dynamic>.from(callSession));
+                }
+                if (data is Map) {
+                  result.addAll(Map<String, dynamic>.from(data));
+                }
+                decoded.forEach((k, v) {
+                  if (k != 'data' && k != 'call_session' && !result.containsKey(k)) {
+                    result[k.toString()] = v;
+                  }
+                });
+                // Normalize call_id and id
+                if (result['id'] != null && result['call_id'] == null) {
+                  result['call_id'] = result['id'];
+                }
+                return result;
               }
-            });
-            // Normalize call_id and id
-            if (result['id'] != null && result['call_id'] == null) {
-              result['call_id'] = result['id'];
             }
-            return result;
           }
+        } catch (_) {
+          continue;
         }
       }
     } catch (e, st) {
@@ -605,7 +624,6 @@ class CallApiService {
       final userId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString() ?? savedUser?['account_id']?.toString();
       final accountId = savedUser?['account_id']?.toString() ?? userId;
 
-      final url = Uri.parse(ApiConstants.callAccept);
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -620,19 +638,34 @@ class CallApiService {
         'receiver_id': userId,
         'account_id': accountId,
         if (channelName != null && channelName.isNotEmpty) 'channel_name': channelName,
+        if (channelName != null && channelName.isNotEmpty) 'room_name': channelName,
       };
 
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 10));
+      final endpoints = [
+        ApiConstants.callAccept,
+        '${ApiConstants.baseUrl}/call/accept',
+        '${ApiConstants.baseUrl}/call/answer',
+        '${ApiConstants.baseUrl}/call/receive',
+        '${ApiConstants.baseUrl}/call/connect',
+      ];
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map) {
-          if (decoded['data'] is Map) {
-            return Map<String, dynamic>.from(decoded['data']);
+      for (final endpoint in endpoints) {
+        try {
+          final response = await http
+              .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 10));
+
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final decoded = jsonDecode(response.body);
+            if (decoded is Map) {
+              final resMap = decoded['data'] is Map
+                  ? Map<String, dynamic>.from(decoded['data'])
+                  : Map<String, dynamic>.from(decoded);
+              return resMap;
+            }
           }
-          return Map<String, dynamic>.from(decoded);
+        } catch (_) {
+          continue;
         }
       }
     } catch (e, st) {

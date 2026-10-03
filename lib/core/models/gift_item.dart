@@ -23,6 +23,10 @@ class GiftItem {
   final bool isBroadcast;
   final int sortOrder;
 
+  final String? fileUrl;
+  final String? format;
+  final String? displayType;
+
   const GiftItem({
     required this.id,
     this.giftId = 0,
@@ -33,6 +37,9 @@ class GiftItem {
     this.pngUrl,
     this.svgUrl,
     this.animationUrl,
+    this.fileUrl,
+    this.format,
+    this.displayType,
     this.animationType = 'image',
     this.soundUrl,
     required this.coins,
@@ -95,7 +102,7 @@ class GiftItem {
 
     final String rawSvg = json['svg_url']?.toString() ?? json['svg']?.toString() ?? '';
     final String rawPng = json['png_url']?.toString() ?? json['png']?.toString() ?? '';
-    final String rawImg = json['image_url']?.toString() ?? json['image']?.toString() ?? json['photo']?.toString() ?? '';
+    final String rawImg = json['icon_url']?.toString() ?? json['image_url']?.toString() ?? json['image']?.toString() ?? json['photo']?.toString() ?? '';
 
     // Prefer live 100% compliant SVG artwork on server, then explicit image_url, then png fallback
     String rawImage = '';
@@ -117,10 +124,21 @@ class GiftItem {
     final String? normalizedPng = rawPng.isNotEmpty ? CachedImageLoader.normalize(rawPng) : null;
     final String? normalizedSvg = rawSvg.isNotEmpty ? CachedImageLoader.normalize(rawSvg) : null;
 
-    final String? rawAnim = json['animation_url']?.toString() ?? json['animation_full_url']?.toString() ?? json['animation']?.toString();
+    final String? rawAnim = json['animation_url']?.toString() ??
+        json['animation_asset_url']?.toString() ??
+        json['file_url']?.toString() ??
+        json['animation_full_url']?.toString() ??
+        json['animation']?.toString();
     final String? normalizedAnim = (rawAnim != null && rawAnim.isNotEmpty) ? CachedImageLoader.normalize(rawAnim) : null;
 
-    final String nameStr = json['name']?.toString() ?? 'Gift';
+    final String? rawFileUrl = json['file_url']?.toString() ?? json['animation_asset_url']?.toString();
+    final String? normalizedFileUrl = (rawFileUrl != null && rawFileUrl.isNotEmpty) ? CachedImageLoader.normalize(rawFileUrl) : normalizedAnim;
+
+    final String animType = json['animation_type']?.toString() ?? json['format']?.toString() ?? 'image';
+    final String? fmt = json['format']?.toString();
+    final String? dispType = json['display_type']?.toString();
+
+    final String nameStr = json['name']?.toString() ?? json['gift_name']?.toString() ?? 'Gift';
     final String countLbl = json['count_label']?.toString() ?? (qty > 0 ? 'x$qty' : 'x1');
     final String fmtCoins = json['formatted_coins']?.toString() ??
         json['display_coins']?.toString() ??
@@ -141,7 +159,7 @@ class GiftItem {
         giftEmoji = '🏰';
       } else if (lowerName.contains('dragon')) {
         giftEmoji = '🐉';
-      } else if (lowerName.contains('ship') || lowerName.contains('space')) {
+      } else if (lowerName.contains('ship') || lowerName.contains('space') || lowerName.contains('rocket')) {
         giftEmoji = '🚀';
       } else if (lowerName.contains('cake')) {
         giftEmoji = '🎂';
@@ -164,7 +182,10 @@ class GiftItem {
       pngUrl: normalizedPng,
       svgUrl: normalizedSvg,
       animationUrl: normalizedAnim,
-      animationType: json['animation_type']?.toString() ?? 'image',
+      fileUrl: normalizedFileUrl,
+      format: fmt,
+      displayType: dispType,
+      animationType: animType,
       soundUrl: json['sound_url']?.toString(),
       coins: coinsVal,
       formattedCoins: fmtCoins,

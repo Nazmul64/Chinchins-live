@@ -475,7 +475,7 @@ class LiveStreamingApiService {
     return null;
   }
 
-  /// 7b. Viewer sends Co-Hosting request (POST /api/live/stream/{stream_id}/request-join & /api/live/request-join)
+  /// 7b. Viewer sends Co-Hosting request (POST /api/live/request-join & /api/live/join-request)
   static Future<Map<String, dynamic>?> requestJoinCoHost({
     dynamic roomId,
     dynamic liveStreamId,
@@ -488,6 +488,8 @@ class LiveStreamingApiService {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
       final myUserId = savedUser?['id'] ?? savedUser?['account_id'];
+      final parsedStreamId = int.tryParse(id) ?? id;
+      final parsedUserId = int.tryParse(myUserId?.toString() ?? '') ?? myUserId;
 
       final headers = <String, String>{
         'Content-Type': 'application/json',
@@ -496,17 +498,18 @@ class LiveStreamingApiService {
       };
 
       final payload = {
+        'live_stream_id': parsedStreamId,
+        'stream_id': parsedStreamId,
         'room_id': id,
-        'live_stream_id': id,
-        'stream_id': id,
+        'user_id': parsedUserId,
         if (hostId != null) 'host_id': hostId,
-        if (myUserId != null) 'user_id': myUserId,
       };
 
       final endpoints = [
-        ApiConstants.liveStreamRequestJoin(id),
         ApiConstants.liveRequestJoin,
         '${ApiConstants.baseUrl}/live/request-join',
+        '${ApiConstants.baseUrl}/live/join-request',
+        ApiConstants.liveStreamRequestJoin(id),
       ];
 
       for (final endpoint in endpoints) {
@@ -522,7 +525,7 @@ class LiveStreamingApiService {
           } catch (_) {}
 
           if (response.statusCode == 200 || response.statusCode == 201) {
-            return decoded ?? {'status': true, 'message': 'Join request sent'};
+            return decoded ?? {'status': true, 'message': 'Co-host request sent successfully'};
           } else if (response.statusCode == 400 && decoded != null) {
             return decoded;
           }
@@ -542,7 +545,7 @@ class LiveStreamingApiService {
     );
   }
 
-  /// 7c. Host responds to Co-Hosting request (POST /api/live/stream/{stream_id}/respond-join & /api/live/respond-request)
+  /// 7c. Host responds to Co-Hosting request (POST /api/live/accept-join & /api/live/respond-request)
   static Future<Map<String, dynamic>?> respondJoinCoHost({
     required dynamic requestId,
     required String action, // "accept" or "reject"
@@ -560,23 +563,27 @@ class LiveStreamingApiService {
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
+      final parsedStreamId = id != null ? (int.tryParse(id) ?? id) : null;
+      final parsedGuestId = targetUserId != null ? (int.tryParse(targetUserId.toString()) ?? targetUserId) : null;
+
       final payload = {
         'request_id': requestId,
         'action': action,
         'status': action == 'accept' ? 'accepted' : 'rejected',
+        if (parsedStreamId != null) 'live_stream_id': parsedStreamId,
+        if (parsedStreamId != null) 'stream_id': parsedStreamId,
         if (id != null) 'room_id': id,
-        if (id != null) 'stream_id': id,
-        if (id != null) 'live_stream_id': id,
-        if (targetUserId != null) 'user_id': targetUserId,
-        if (targetUserId != null) 'guest_user_id': targetUserId,
+        if (parsedGuestId != null) 'guest_user_id': parsedGuestId,
+        if (parsedGuestId != null) 'user_id': parsedGuestId,
       };
 
       final endpoints = [
+        if (action == 'accept') '${ApiConstants.baseUrl}/live/accept-join',
+        ApiConstants.liveRespondRequest,
+        '${ApiConstants.baseUrl}/live/respond-request',
         if (action == 'accept') ApiConstants.liveAcceptRequest,
         if (action != 'accept') '${ApiConstants.baseUrl}/live/reject-request',
         if (id != null) ApiConstants.liveStreamRespondJoin(id),
-        ApiConstants.liveRespondRequest,
-        '${ApiConstants.baseUrl}/live/respond-join',
       ];
 
       for (final endpoint in endpoints) {
@@ -607,7 +614,7 @@ class LiveStreamingApiService {
     return null;
   }
 
-  /// 7d. Get Pending Join Requests for Host (GET /api/live/stream/{stream_id}/join-requests)
+  /// 7d. Get Pending Join Requests for Host (GET /api/live/join-requests?stream_id=...&status=pending)
   static Future<List<Map<String, dynamic>>> getJoinRequests(dynamic streamId) async {
     final id = streamId?.toString();
     if (id == null) return [];
@@ -620,9 +627,10 @@ class LiveStreamingApiService {
       };
 
       final endpoints = [
+        '${ApiConstants.baseUrl}/live/join-requests?stream_id=$id&status=pending',
+        '${ApiConstants.baseUrl}/live/requests?stream_id=$id&status=pending',
         ApiConstants.liveStreamJoinRequests(id),
         '${ApiConstants.baseUrl}/live/$id/join-requests',
-        '${ApiConstants.baseUrl}/live/join-requests?stream_id=$id',
       ];
 
       for (final endpoint in endpoints) {
