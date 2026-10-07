@@ -38,6 +38,7 @@ class VideoCallScreen extends StatefulWidget {
   final int ratePerMinute;
   final bool isIncoming;
   final String? dialToneUrl;
+  final Map<String, dynamic>? initialSessionData;
 
   const VideoCallScreen({
     super.key,
@@ -49,6 +50,7 @@ class VideoCallScreen extends StatefulWidget {
     this.ratePerMinute = 100,
     this.isIncoming = false,
     this.dialToneUrl,
+    this.initialSessionData,
   });
 
   @override
@@ -91,6 +93,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   bool _isCameraReady = false;
   bool _isConnectingCall = true;
+  bool _isCallAccepted = false;
   bool _isSwappedVideo = false;
   bool _hasStartedWebRTC = false;
   bool _isEndingCall = false;
@@ -99,6 +102,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   int _callSeconds = 0;
   Timer? _timer;
   Timer? _pollingTimer;
+  Timer? _ringTimeoutTimer;
   int _userGems = 0;
   bool _isRechargeSheetOpen = false;
   bool _isVideoBlurred = false;
@@ -153,6 +157,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _isVideoBlurred = _activeSession!.isVideoBlurred;
       _isCameraReady = true;
       _hasStartedWebRTC = true;
+      _isCallAccepted = true;
       _activeSession = null;
       _startTimer();
     } else {
@@ -160,18 +165,50 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _webrtcService.onIceStateChanged = (RTCIceConnectionState state) {
         if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
             state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
-          _onMediaConnected();
+          if (_isCallAccepted || widget.isIncoming) {
+            _onMediaConnected();
+          }
         }
+      };
+      _webrtcService.onCallAccepted = (data) {
+        debugPrint('[VideoCallScreen] 🟢 onCallAccepted from WebRTCCallService: $data');
+        _handleCallAccepted(data);
       };
 
       if (!widget.isIncoming) {
         _isConnectingCall = true;
+        _isCallAccepted = false;
         CallSoundManager.playOutgoingRingtone(widget.dialToneUrl);
+
+        // 🛑 ৪৫ সেকেন্ড রিংগিং টাইমআউট (অটোমেটিক কল কেটে যাওয়া)
+        _ringTimeoutTimer?.cancel();
+        _ringTimeoutTimer = Timer(const Duration(seconds: 45), () {
+          if (!_isCallAccepted && !_isEndingCall) {
+            _cancelCallOnTimeout();
+          }
+        });
+
         if (_callId == null && !_hasInitiatedCall) {
           _initiateOutgoingCall();
         }
       } else {
         _isConnectingCall = false;
+        _isCallAccepted = true;
+        _hasStartedTimer = true;
+        _startTimer();
+
+        final rawToken = widget.initialSessionData?['receiver_token'] ??
+            widget.initialSessionData?['token'] ??
+            widget.initialSessionData?['livekit_token'] ??
+            widget.initialSessionData?['data']?['receiver_token'] ??
+            widget.initialSessionData?['data']?['token'] ??
+            widget.initialSessionData?['data']?['livekit_token'];
+        final lkUrl = widget.initialSessionData?['livekit_url'] ??
+            widget.initialSessionData?['data']?['livekit_url'];
+
+        if (rawToken != null && rawToken.toString().isNotEmpty) {
+          _connectLiveKitRoom(token: rawToken.toString(), url: lkUrl?.toString());
+        }
       }
 
       _initWebRTCMediaAndFlow();
@@ -286,7 +323,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       if (mounted && _remoteLiveKitVideoTrack != track) {
         setState(() {
           _remoteLiveKitVideoTrack = track;
-          _isConnectingCall = false;
+          if (_isCallAccepted || widget.isIncoming) {
+            _isConnectingCall = false;
+          }
         });
       }
     }
@@ -395,20 +434,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     }
 
     _wsAcceptedSub = signaling.onCallAccepted.listen((data) {
-      debugPrint('[VideoCallScreen] Call Accepted via WebSocket: $data');
-      CallSoundManager.stopRingtone();
-      if (mounted) {
-        setState(() {
-          _isConnectingCall = false;
-        });
-      }
-      final lkToken = data['livekit_token'] ?? data['token'] ?? data['data']?['livekit_token'] ?? data['data']?['token'];
-      if (lkToken != null && lkToken.toString().isNotEmpty && _liveKitRoom == null) {
-        final lkUrl = data['livekit_url'] ?? data['data']?['livekit_url'];
-        _connectLiveKitRoom(token: lkToken.toString(), url: lkUrl?.toString());
-      } else {
-        _onMediaConnected();
-      }
+      debugPrint('[VideoCallScreen] 🚀 WebSocket Call Accepted event received: $data');
+      _handleCallAccepted(data);
     });
 
     _wsEndedSub = signaling.onCallEnded.listen((data) {
@@ -463,6 +490,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _timer = null;
     _pollingTimer?.cancel();
     _pollingTimer = null;
+    _ringTimeoutTimer?.cancel();
+    _ringTimeoutTimer = null;
     _wsAcceptedSub?.cancel();
     _wsAcceptedSub = null;
     _wsEndedSub?.cancel();
@@ -493,6 +522,39 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _channelName = null;
   }
 
+  /// 🛑 ৪৫ সেকেন্ড রিংগিং টাইমআউট হলে স্বয়ংক্রিয়ভাবে কল ক্যানসেল ও স্ক্রিন বন্ধ করা
+  Future<void> _cancelCallOnTimeout() async {
+    if (_isEndingCall || _isCallAccepted) return;
+    _isEndingCall = true;
+
+    final effectiveCallId = _callId ?? widget.callId;
+
+    try {
+      WakelockPlus.disable();
+    } catch (_) {}
+
+    PiPCallOverlay.hideMiniWindow();
+    _activeSession = null;
+    disposeCallSession();
+
+    if (mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${widget.model.name} did not answer (Missed)'),
+          backgroundColor: AppColors.cardDarkElevated,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    if (effectiveCallId != null) {
+      try {
+        await CallApiService.cancelCall(callId: effectiveCallId);
+      } catch (_) {}
+    }
+  }
+
   void terminateCallCompletely([String? reason]) {
     _terminateCallSession(reason);
   }
@@ -509,8 +571,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _activeSession = null;
     disposeCallSession();
 
-    if (mounted && Navigator.canPop(context)) {
-      Navigator.pop(context);
+    if (mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
       if (reason != null && reason.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -560,11 +622,60 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     } catch (_) {}
   }
 
+  void _handleCallAccepted([Map<String, dynamic>? data]) {
+    if (_isCallAccepted && _hasStartedTimer && _liveKitRoom != null) return;
+    debugPrint('[VideoCallScreen] 🟢 Call Accepted confirmed by server/socket/polling: $data');
+
+    _ringTimeoutTimer?.cancel();
+    _ringTimeoutTimer = null;
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+    CallSoundManager.stopRingtone();
+
+    if (mounted) {
+      setState(() {
+        _isCallAccepted = true;
+        _isConnectingCall = false;
+      });
+    }
+
+    final lkToken = data != null
+        ? (data['caller_token'] ??
+            data['token'] ??
+            data['livekit_token'] ??
+            data['receiver_token'] ??
+            data['data']?['caller_token'] ??
+            data['data']?['token'] ??
+            data['data']?['livekit_token'] ??
+            data['data']?['receiver_token'])
+        : null;
+    final lkUrl = data != null
+        ? (data['livekit_url'] ?? data['data']?['livekit_url'] ?? 'wss://chinchins.live/livekit')
+        : 'wss://chinchins.live/livekit';
+
+    if (lkToken != null && lkToken.toString().isNotEmpty && _liveKitRoom == null) {
+      _connectLiveKitRoom(token: lkToken.toString(), url: lkUrl?.toString());
+    } else {
+      _onMediaConnected();
+    }
+
+    if (!_hasStartedTimer) {
+      _hasStartedTimer = true;
+      final cId = _callId ?? widget.callId;
+      if (cId != null) {
+        CallApiService.notifyCallConnected(
+          callId: cId,
+          mediaStatus: 'connected',
+        );
+      }
+      _startTimer();
+    }
+  }
+
   void _onMediaConnected([MediaStream? stream]) {
     if (stream != null && _webrtcService.remoteRenderer.srcObject != stream) {
       _webrtcService.remoteRenderer.srcObject = stream;
     }
-    CallSoundManager.stopRingtone();
 
     // Ensure all audio tracks are active and unmuted
     _webrtcService.unmuteAllAudio();
@@ -584,21 +695,25 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _webrtcService.toggleSpeakerphone(true);
     });
 
-    if (mounted) {
-      setState(() {
-        _isConnectingCall = false;
-      });
-    }
-    if (!_hasStartedTimer) {
-      _hasStartedTimer = true;
-      final cId = _callId ?? widget.callId;
-      if (cId != null) {
-        CallApiService.notifyCallConnected(
-          callId: cId,
-          mediaStatus: 'connected',
-        );
+    // 🛑 STRICT GUARD: Timer and connected state transition ONLY when server confirmation / acceptance has happened!
+    if (_isCallAccepted || widget.isIncoming) {
+      CallSoundManager.stopRingtone();
+      if (mounted) {
+        setState(() {
+          _isConnectingCall = false;
+        });
       }
-      _startTimer();
+      if (!_hasStartedTimer) {
+        _hasStartedTimer = true;
+        final cId = _callId ?? widget.callId;
+        if (cId != null) {
+          CallApiService.notifyCallConnected(
+            callId: cId,
+            mediaStatus: 'connected',
+          );
+        }
+        _startTimer();
+      }
     }
   }
 
@@ -610,7 +725,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     });
 
     _webrtcService.remoteRenderer.onFirstFrameRendered = () {
-      if (mounted) {
+      if (mounted && (_isCallAccepted || widget.isIncoming)) {
         setState(() {
           _isConnectingCall = false;
         });
@@ -653,47 +768,106 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     if (pollCallId == null || _isEndingCall) return;
 
     _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(milliseconds: 3000), (timer) async {
+    _pollingTimer = Timer.periodic(const Duration(milliseconds: 2000), (timer) async {
       if (!mounted || _isEndingCall) {
         timer.cancel();
         _pollingTimer = null;
         return;
       }
 
-      // If media is connected and WebSockets is connected, cancel status polling
-      if (!_isConnectingCall && SignalingService().isConnected) {
+      // If call is accepted and WebSockets is connected, cancel status polling
+      if (_isCallAccepted && !_isConnectingCall && SignalingService().isConnected) {
         timer.cancel();
         _pollingTimer = null;
         return;
       }
 
-      final statusData = await CallApiService.getCallStatus(pollCallId);
-      if (!mounted || statusData == null || _isEndingCall) return;
+      // 1. Check incoming signals via /api/call/signal/receive
+      try {
+        final signals = await CallApiService.receiveSignals(
+          callId: pollCallId,
+          autoRead: false,
+        );
+        if (!mounted || _isEndingCall) return;
 
-      final status = (statusData['status'] ?? statusData['data']?['status'])?.toString().toLowerCase();
-      final isTerminated = statusData['is_terminated'] == true || statusData['data']?['is_terminated'] == true;
+        for (final signal in signals) {
+          dynamic rawPayload = signal['payload'];
+          if (rawPayload is String) {
+            try {
+              rawPayload = jsonDecode(rawPayload);
+            } catch (_) {}
+          }
+          final Map<String, dynamic> payload = (rawPayload is Map)
+              ? Map<String, dynamic>.from(rawPayload)
+              : Map<String, dynamic>.from(signal);
 
-      if (status == 'rejected') {
-        timer.cancel();
-        _pollingTimer = null;
-        _terminateCallSession('Host declined the call');
-      } else if (status == 'cancelled') {
-        timer.cancel();
-        _pollingTimer = null;
-        _terminateCallSession('Call was cancelled');
-      } else if (status == 'ended' || isTerminated) {
-        timer.cancel();
-        _pollingTimer = null;
-        _terminateCallSession('Call ended');
-      } else if (status == 'connected' || status == 'active' || status == 'accepted') {
-        timer.cancel();
-        _pollingTimer = null;
-        await CallSoundManager.stopRingtone();
-        if (_isConnectingCall && mounted) {
-          setState(() {
-            _isConnectingCall = false;
-          });
+          final sigType = (signal['type'] ?? payload['type'] ?? '').toString().toLowerCase();
+          final action = (payload['action'] ?? payload['event'] ?? '').toString().toLowerCase();
+          final status = (payload['status'] ?? payload['call_status'] ?? '').toString().toLowerCase();
+
+          debugPrint('[VideoCallScreen] 📡 Signal Polling: type=$sigType, action=$action, status=$status');
+
+          if (sigType == 'accepted' ||
+              sigType == 'accept' ||
+              action == 'call_accepted' ||
+              action == 'call.accepted' ||
+              status == 'connected' ||
+              status == 'accepted') {
+            debugPrint('[VideoCallScreen] 🟢 CALL ACCEPTED detected via signal polling!');
+            timer.cancel();
+            _pollingTimer = null;
+            _handleCallAccepted(payload.isNotEmpty ? payload : Map<String, dynamic>.from(signal));
+            return;
+          } else if (sigType == 'rejected' || action == 'call_rejected' || action == 'call.rejected' || status == 'rejected') {
+            timer.cancel();
+            _pollingTimer = null;
+            _terminateCallSession('Call declined by host');
+            return;
+          } else if (sigType == 'cancelled' ||
+              sigType == 'ended' ||
+              sigType == 'hangup' ||
+              sigType == 'bye' ||
+              action == 'call_cancelled' ||
+              action == 'call_ended' ||
+              status == 'cancelled' ||
+              status == 'ended') {
+            timer.cancel();
+            _pollingTimer = null;
+            _terminateCallSession('Call was ended');
+            return;
+          }
         }
+      } catch (e) {
+        debugPrint('[VideoCallScreen] receiveSignals error: $e');
+      }
+
+      // 2. Fallback: Check via /api/calls/{id}/status
+      try {
+        final statusData = await CallApiService.getCallStatus(pollCallId);
+        if (!mounted || statusData == null || _isEndingCall) return;
+
+        final status = (statusData['status'] ?? statusData['data']?['status'])?.toString().toLowerCase();
+        final isTerminated = statusData['is_terminated'] == true || statusData['data']?['is_terminated'] == true;
+
+        if (status == 'rejected') {
+          timer.cancel();
+          _pollingTimer = null;
+          _terminateCallSession('Host declined the call');
+        } else if (status == 'cancelled') {
+          timer.cancel();
+          _pollingTimer = null;
+          _terminateCallSession('Call was cancelled');
+        } else if (status == 'ended' || isTerminated) {
+          timer.cancel();
+          _pollingTimer = null;
+          _terminateCallSession('Call ended');
+        } else if (status == 'connected' || status == 'active' || status == 'accepted') {
+          timer.cancel();
+          _pollingTimer = null;
+          _handleCallAccepted(statusData);
+        }
+      } catch (e) {
+        debugPrint('[VideoCallScreen] getCallStatus error: $e');
       }
     });
   }
@@ -745,8 +919,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     disposeCallSession();
 
     // ⚡ 2. Instantly close screen (0.00ms delay) (Mandate 3)
-    if (mounted && Navigator.canPop(context)) {
-      Navigator.pop(context);
+    if (mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
 
     // ⚡ 3. Fire POST /api/call/end (or cancel) to server (Mandate 3)
@@ -1047,142 +1221,145 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 ),
               ),
 
-              // ৩. টপ হেডার বার: ব্যাক/ডাউন অ্যারো + হোস্ট প্রোফাইল ক্যাপসুল (টপ-লেফটে) এবং PiP উইন্ডো (টপ-রাইটে)
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Left: Down Arrow (⌄) [Minimizes to PiP without dropping call] + Host Profile Capsule
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 34),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                            onPressed: _minimizeToPiP,
-                          ),
-                          const SizedBox(width: 4),
-                          GestureDetector(
-                            onTap: () {
-                              InCallProfileSheet.show(context, model: widget.model);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.65),
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: Colors.white24, width: 1),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  AvatarWithFrame(
-                                    avatarUrl: widget.model.avatarUrl,
-                                    frameUrl: widget.model.avatarFrameUrl,
-                                    level: widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level,
-                                    badgeColor: widget.model.badgeColor,
-                                    glowColor: widget.model.glowColor,
-                                    size: 32,
-                                    showLevelBadge: false,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        widget.model.name,
-                                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        'Lv.${widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level}',
-                                        style: TextStyle(
-                                          color: HexColor.fromHex(widget.model.badgeColor, defaultColor: AppColors.gemYellow),
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 16),
-                                ],
-                              ),
+              // ৩. টপ হেডার বার: ব্যাক/ডাউন অ্যারো + হোস্ট প্রোফাইল ক্যাপসুল (টপ-লেফটে) এবং PiP উইন্ডো (টপ-রাইটে) - কেবল কল অ্যাকসেপ্ট হলে দৃশ্যমান
+              if (_isCallAccepted || widget.isIncoming)
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left: Down Arrow (⌄) [Minimizes to PiP without dropping call] + Host Profile Capsule
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 34),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                              onPressed: _minimizeToPiP,
                             ),
-                          ),
-                        ],
-                      ),
-
-                      // Right: PiP Window (Single Clean Instance with Timer) + Dev Mode Button
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _isSwappedVideo = !_isSwappedVideo;
-                              });
-                            },
-                            child: Container(
-                              width: 100,
-                              height: 140,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.white.withValues(alpha: 0.8), width: 1.5),
-                                boxShadow: const [
-                                  BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4)),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
-                                child: Stack(
-                                  fit: StackFit.expand,
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: () {
+                                InCallProfileSheet.show(context, model: widget.model);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.65),
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(color: Colors.white24, width: 1),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    _buildPipVideoView(),
-                                    // Call Duration Timer Label
-                                    Positioned(
-                                      bottom: 6,
-                                      right: 6,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withValues(alpha: 0.75),
-                                          borderRadius: BorderRadius.circular(8),
+                                    AvatarWithFrame(
+                                      avatarUrl: widget.model.avatarUrl,
+                                      frameUrl: widget.model.avatarFrameUrl,
+                                      level: widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level,
+                                      badgeColor: widget.model.badgeColor,
+                                      glowColor: widget.model.glowColor,
+                                      size: 32,
+                                      showLevelBadge: false,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          widget.model.name,
+                                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        child: Text(
-                                          _formatDuration(_callSeconds),
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            letterSpacing: 0.5,
+                                        Text(
+                                          'Lv.${widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level}',
+                                          style: TextStyle(
+                                            color: HexColor.fromHex(widget.model.badgeColor, defaultColor: AppColors.gemYellow),
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800,
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ),
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 16),
                                   ],
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+
+                        // Right: PiP Window (Single Clean Instance with Timer) + Dev Mode Button
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _isSwappedVideo = !_isSwappedVideo;
+                                });
+                              },
+                              child: Container(
+                                width: 100,
+                                height: 140,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.8), width: 1.5),
+                                  boxShadow: const [
+                                    BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4)),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      _buildPipVideoView(),
+                                      // Call Duration Timer Label (only visible when call is accepted/connected)
+                                      if (_isCallAccepted)
+                                        Positioned(
+                                          bottom: 6,
+                                          right: 6,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withValues(alpha: 0.75),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              _formatDuration(_callSeconds),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
 
-              // ৪. রাইট সাইডবারে ইন-কল কুইক অ্যাকশন বোতাম (ফিল্টার, লাইভ চ্যাট ও গিফট)
-              Positioned(
-                right: 14,
-                bottom: 180,
+              // ৪. রাইট সাইডবারে ইন-কল কুইক অ্যাকশন বোতাম (ফিল্টার, লাইভ চ্যাট ও গিফট) - কেবল কল অ্যাকসেপ্ট হওয়ার পর
+              if (_isCallAccepted || widget.isIncoming)
+                Positioned(
+                  right: 14,
+                  bottom: 180,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1291,8 +1468,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 ),
               ),
 
-              // ৫. ইন-কল লাইভ চ্যাট, কুইক মেসেজ এবং বটম কন্ট্রোল (একক রেসপনসিভ কলাম)
-              Positioned(
+              // ৫. ইন-কল লাইভ চ্যাট, কুইক মেসেজ এবং বটম কন্ট্রোল (একক রেসপনসিভ কলাম) - কেবল কল অ্যাকসেপ্ট হওয়ার পর
+              if (_isCallAccepted || widget.isIncoming)
+                Positioned(
                 left: 14,
                 right: 14,
                 bottom: 12,
@@ -1416,6 +1594,157 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                   ),
                 ),
               ),
+
+              // ৬. কলার রিংগিং / কলিং ফুলস্ক্রিন ওভারলে (সার্ভার থেকে CallAccepted কনফার্ম না হওয়া পর্যন্ত)
+              if (!_isCallAccepted && !widget.isIncoming)
+                _buildCallingRingingOverlay(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCallingRingingOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withValues(alpha: 0.65),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: SafeArea(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Spacer(flex: 2),
+              // Big Host Avatar with Outer Glow
+              Center(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 140,
+                      height: 140,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.neonPink.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    AvatarWithFrame(
+                      avatarUrl: widget.model.avatarUrl,
+                      frameUrl: widget.model.avatarFrameUrl,
+                      level: widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level,
+                      badgeColor: widget.model.badgeColor,
+                      glowColor: widget.model.glowColor,
+                      size: 110,
+                      showLevelBadge: false,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                widget.model.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 24),
+              // Ringing Status Pill
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.neonPink.withValues(alpha: 0.8),
+                      const Color(0xFF6A1B9A).withValues(alpha: 0.8),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.neonPink.withValues(alpha: 0.4),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                    SizedBox(width: 10),
+                    Text(
+                      'Ringing...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Waiting for ${widget.model.name} to accept...',
+                style: const TextStyle(
+                  color: Colors.white60,
+                  fontSize: 12,
+                ),
+              ),
+              const Spacer(flex: 3),
+              // Big Red Cancel Call Button
+              GestureDetector(
+                onTap: _endCall,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFFFF2D55),
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x88FF2D55),
+                            blurRadius: 16,
+                            spreadRadius: 3,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.call_end_rounded,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Cancel Call',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 36),
             ],
           ),
         ),

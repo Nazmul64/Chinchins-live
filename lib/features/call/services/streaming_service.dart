@@ -260,6 +260,7 @@ class StreamingService {
           ratePerMinute: ratePerMinute,
           isIncoming: isIncoming,
           dialToneUrl: dialToneUrl,
+          initialSessionData: sessionData,
         ),
       );
 

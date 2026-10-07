@@ -46,6 +46,7 @@ class WebRTCCallService {
   String lastError = 'None';
   Function()? onDebugUpdate;
   Function(RTCIceConnectionState state)? onIceStateChanged;
+  Function(Map<String, dynamic> data)? onCallAccepted;
 
   void _log(String msg) {
     final time = DateTime.now().toIso8601String().substring(11, 19);
@@ -841,6 +842,14 @@ class WebRTCCallService {
       return;
     }
     if (!isCaller && senderRole == 'receiver') {
+      return;
+    }
+
+    final action = (payload['action'] ?? payload['event'] ?? '').toString().toLowerCase();
+    final status = (payload['status'] ?? payload['call_status'] ?? '').toString().toLowerCase();
+    if (type == 'accepted' || type == 'accept' || action == 'call_accepted' || action == 'call.accepted' || status == 'connected' || status == 'accepted') {
+      _log('CALL_ACCEPTED_SIGNAL_RECEIVED');
+      onCallAccepted?.call(payload.isNotEmpty ? Map<String, dynamic>.from(payload) : Map<String, dynamic>.from(signal));
       return;
     }
 

@@ -632,8 +632,9 @@ class CallApiService {
         if (accountId != null) 'X-Account-Id': accountId,
       };
 
+      final parsedCallId = int.tryParse(callId.toString()) ?? callId;
       final payload = {
-        'call_id': callId,
+        'call_id': parsedCallId,
         'user_id': userId,
         'receiver_id': userId,
         'account_id': accountId,
@@ -641,12 +642,14 @@ class CallApiService {
         if (channelName != null && channelName.isNotEmpty) 'room_name': channelName,
       };
 
+      debugPrint('[CallApiService] 🚀 Sending POST /api/call/accept for callId=$parsedCallId with payload: $payload');
+
       final endpoints = [
         ApiConstants.callAccept,
         '${ApiConstants.baseUrl}/call/accept',
+        '${ApiConstants.baseUrl}/calls/$parsedCallId/accept',
         '${ApiConstants.baseUrl}/call/answer',
         '${ApiConstants.baseUrl}/call/receive',
-        '${ApiConstants.baseUrl}/call/connect',
       ];
 
       for (final endpoint in endpoints) {
@@ -654,6 +657,8 @@ class CallApiService {
           final response = await http
               .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
               .timeout(const Duration(seconds: 10));
+
+          debugPrint('[CallApiService] 📥 Accept Endpoint ($endpoint) status: ${response.statusCode}, body: ${response.body}');
 
           if (response.statusCode == 200 || response.statusCode == 201) {
             final decoded = jsonDecode(response.body);
@@ -664,7 +669,8 @@ class CallApiService {
               return resMap;
             }
           }
-        } catch (_) {
+        } catch (e) {
+          debugPrint('[CallApiService] Error hitting $endpoint: $e');
           continue;
         }
       }

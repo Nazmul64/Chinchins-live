@@ -128,7 +128,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _wsEndedSub = null;
     CallSoundManager.stopRingtone();
     if (mounted) {
-      Navigator.pop(context);
+      Navigator.of(context).popUntil((route) => route.isFirst);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(reason),
@@ -177,25 +177,42 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     // রিংটোন সাথে সাথে বন্ধ
     CallSoundManager.stopRingtone();
 
-    // ব্যাকএন্ডে রিসিভ বাটন প্রেস নোটিফাই করা (অ্যাসিনক্রোনাসলি ব্যাকগ্রাউন্ডে)
-    if (widget.callId != null) {
-      unawaited(CallApiService.acceptCall(
-        callId: widget.callId!,
-        channelName: widget.channelName,
-      ));
+    final dynamic rawCallId = widget.callId ??
+        widget.initialSessionData?['call_id'] ??
+        widget.initialSessionData?['id'] ??
+        widget.initialSessionData?['data']?['call_id'] ??
+        widget.initialSessionData?['data']?['id'];
+    final int? effectiveCallId = (rawCallId is int)
+        ? rawCallId
+        : int.tryParse(rawCallId?.toString() ?? '');
+
+    debugPrint('[IncomingCallScreen] 🟢 Green Accept Button Tapped! CallId: $effectiveCallId');
+
+    Map<String, dynamic>? acceptData;
+    if (effectiveCallId != null && effectiveCallId > 0) {
+      // 🛑 Explicitly await POST /api/call/accept to guarantee server marks call as accepted
+      try {
+        acceptData = await CallApiService.acceptCall(
+          callId: effectiveCallId,
+          channelName: widget.channelName,
+        );
+        debugPrint('[IncomingCallScreen] ✅ acceptCall response: $acceptData');
+      } catch (e) {
+        debugPrint('[IncomingCallScreen] ❌ acceptCall error: $e');
+      }
     }
 
     if (mounted) {
       StreamingService.startDynamicCall(
         context: context,
         model: widget.model,
-        callId: widget.callId,
-        channelName: widget.channelName ?? 'incoming_call_${widget.callId ?? widget.model.id}',
+        callId: effectiveCallId ?? widget.callId,
+        channelName: widget.channelName ?? 'incoming_call_${effectiveCallId ?? widget.model.id}',
         isFreeTrial: widget.isFreeTrial,
         freeDurationSeconds: widget.freeDurationSeconds,
         ratePerMinute: widget.ratePerMinute,
         isIncoming: true,
-        initialSessionData: widget.initialSessionData,
+        initialSessionData: acceptData ?? widget.initialSessionData,
       );
     }
   }
@@ -222,7 +239,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     }
 
     if (mounted) {
-      Navigator.pop(context);
+      Navigator.of(context).popUntil((route) => route.isFirst);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Call from ${widget.model.name} declined'),
