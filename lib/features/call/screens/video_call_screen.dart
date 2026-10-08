@@ -4,11 +4,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:livekit_client/livekit_client.dart' hide VideoDimensions;
-import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../main.dart';
 import '../../../core/models/model_profile.dart';
-import '../../../core/services/remote_config_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../../../core/widgets/avatar_with_frame.dart';
@@ -261,12 +259,29 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _liveKitListener = _liveKitRoom!.createListener();
       _liveKitListener!
         ..on<TrackSubscribedEvent>((event) {
-          if (event.track is RemoteVideoTrack) {
+          if (event.track is RemoteVideoTrack || event.track is RemoteAudioTrack) {
             if (mounted) {
               setState(() {
-                _remoteLiveKitVideoTrack = event.track as RemoteVideoTrack;
+                if (event.track is RemoteVideoTrack) {
+                  _remoteLiveKitVideoTrack = event.track as RemoteVideoTrack;
+                }
                 _isConnectingCall = false;
+                _isCallAccepted = true;
               });
+            }
+            CallSoundManager.stopRingtone();
+            _ringTimeoutTimer?.cancel();
+            _ringTimeoutTimer = null;
+            if (!_hasStartedTimer) {
+              _hasStartedTimer = true;
+              final cId = _callId ?? widget.callId;
+              if (cId != null) {
+                CallApiService.notifyCallConnected(
+                  callId: cId,
+                  mediaStatus: 'connected',
+                );
+              }
+              _startTimer();
             }
           }
         })
@@ -303,7 +318,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(true);
       await _liveKitRoom!.localParticipant?.setCameraEnabled(true);
 
-      _localLiveKitVideoTrack = _liveKitRoom!.localParticipant?.videoTrackPublications.firstOrNull?.track as LocalVideoTrack?;
+      final firstPub = _liveKitRoom!.localParticipant?.videoTrackPublications.firstOrNull?.track;
+      if (firstPub is LocalVideoTrack) {
+        _localLiveKitVideoTrack = firstPub;
+      }
 
       try {
         await AudioManager.instance.setSpeakerOutputPreferred(true);
@@ -320,14 +338,27 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     if (_liveKitRoom == null) return;
     final remote = _liveKitRoom!.remoteParticipants.values.firstOrNull;
     final track = remote?.videoTrackPublications.firstOrNull?.track;
-    if (track != null && track is VideoTrack) {
-      if (mounted && _remoteLiveKitVideoTrack != track) {
+    if (track != null) {
+      if (mounted) {
         setState(() {
           _remoteLiveKitVideoTrack = track;
-          if (_isCallAccepted || widget.isIncoming) {
-            _isConnectingCall = false;
-          }
+          _isCallAccepted = true;
+          _isConnectingCall = false;
         });
+        CallSoundManager.stopRingtone();
+        _ringTimeoutTimer?.cancel();
+        _ringTimeoutTimer = null;
+        if (!_hasStartedTimer) {
+          _hasStartedTimer = true;
+          final cId = _callId ?? widget.callId;
+          if (cId != null) {
+            CallApiService.notifyCallConnected(
+              callId: cId,
+              mediaStatus: 'connected',
+            );
+          }
+          _startTimer();
+        }
       }
     }
   }
@@ -696,25 +727,26 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _webrtcService.toggleSpeakerphone(true);
     });
 
-    // 🛑 STRICT GUARD: Timer and connected state transition ONLY when server confirmation / acceptance has happened!
-    if (_isCallAccepted || widget.isIncoming) {
-      CallSoundManager.stopRingtone();
-      if (mounted) {
-        setState(() {
-          _isConnectingCall = false;
-        });
+    // 🛑 Media is flowing: stop ringing and activate in-call controls & timer
+    CallSoundManager.stopRingtone();
+    _ringTimeoutTimer?.cancel();
+    _ringTimeoutTimer = null;
+    if (mounted) {
+      setState(() {
+        _isCallAccepted = true;
+        _isConnectingCall = false;
+      });
+    }
+    if (!_hasStartedTimer) {
+      _hasStartedTimer = true;
+      final cId = _callId ?? widget.callId;
+      if (cId != null) {
+        CallApiService.notifyCallConnected(
+          callId: cId,
+          mediaStatus: 'connected',
+        );
       }
-      if (!_hasStartedTimer) {
-        _hasStartedTimer = true;
-        final cId = _callId ?? widget.callId;
-        if (cId != null) {
-          CallApiService.notifyCallConnected(
-            callId: cId,
-            mediaStatus: 'connected',
-          );
-        }
-        _startTimer();
-      }
+      _startTimer();
     }
   }
 
@@ -862,7 +894,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           timer.cancel();
           _pollingTimer = null;
           _terminateCallSession('Call ended');
-        } else if (status == 'connected' || status == 'active' || status == 'accepted') {
+        } else if (status == 'connected' || status == 'accepted') {
           timer.cancel();
           _pollingTimer = null;
           _handleCallAccepted(statusData);
@@ -1222,8 +1254,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 ),
               ),
 
-              // ৩. টপ হেডার বার: ব্যাক/ডাউন অ্যারো + হোস্ট প্রোফাইল ক্যাপসুল (টপ-লেফটে) এবং PiP উইন্ডো (টপ-রাইটে) - কেবল কল অ্যাকসেপ্ট হলে দৃশ্যমান
-              if (_isCallAccepted || widget.isIncoming)
+              // ৩. টপ হেডার বার: ব্যাক/ডাউন অ্যারো + হোস্ট প্রোফাইল ও টাইমার ক্যাপসুল (টপ-লেফটে) এবং PiP উইন্ডো (টপ-রাইটে) - কেবল কল কানেক্ট হলে দৃশ্যমান
+              if (_isCallAccepted || _remoteLiveKitVideoTrack != null || _webrtcService.hasRemoteStream || widget.isIncoming)
                 SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -1231,7 +1263,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Left: Down Arrow (⌄) [Minimizes to PiP without dropping call] + Host Profile Capsule
+                        // Left: Down Arrow (⌄) [Minimizes to PiP without dropping call] + Host Profile Capsule With Real-Time Timer
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -1272,21 +1304,37 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                       children: [
                                         Text(
                                           widget.model.name,
-                                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
-                                        Text(
-                                          'Lv.${widget.model.currentLevel > 0 ? widget.model.currentLevel : widget.model.level}',
-                                          style: TextStyle(
-                                            color: HexColor.fromHex(widget.model.badgeColor, defaultColor: AppColors.gemYellow),
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w800,
-                                          ),
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 6,
+                                              height: 6,
+                                              decoration: const BoxDecoration(
+                                                color: Color(0xFF00E676),
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              _formatDuration(_callSeconds),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(width: 4),
+                                    const SizedBox(width: 6),
                                     const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 16),
                                   ],
                                 ),
@@ -1323,7 +1371,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                     children: [
                                       _buildPipVideoView(),
                                       // Call Duration Timer Label (only visible when call is accepted/connected)
-                                      if (_isCallAccepted)
+                                      if (_isCallAccepted || _remoteLiveKitVideoTrack != null || _webrtcService.hasRemoteStream)
                                         Positioned(
                                           bottom: 6,
                                           right: 6,
@@ -1356,8 +1404,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                   ),
                 ),
 
-              // ৪. রাইট সাইডবারে ইন-কল কুইক অ্যাকশন বোতাম (ফিল্টার, লাইভ চ্যাট ও গিফট) - কেবল কল অ্যাকসেপ্ট হওয়ার পর
-              if (_isCallAccepted || widget.isIncoming)
+              // ৪. রাইট সাইডবারে ইন-কল কুইক অ্যাকশন বোতাম (ফিল্টার, লাইভ চ্যাট ও গিফট) - কেবল কল কানেক্ট হওয়ার পর
+              if (_isCallAccepted || _remoteLiveKitVideoTrack != null || _webrtcService.hasRemoteStream || widget.isIncoming)
                 Positioned(
                   right: 14,
                   bottom: 180,
@@ -1469,8 +1517,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 ),
               ),
 
-              // ৫. ইন-কল লাইভ চ্যাট, কুইক মেসেজ এবং বটম কন্ট্রোল (একক রেসপনসিভ কলাম) - কেবল কল অ্যাকসেপ্ট হওয়ার পর
-              if (_isCallAccepted || widget.isIncoming)
+              // ৫. ইন-কল লাইভ চ্যাট, কুইক মেসেজ এবং বটম কন্ট্রোল (একক রেসপনসিভ কলাম) - কেবল কল কানেক্ট হওয়ার পর
+              if (_isCallAccepted || _remoteLiveKitVideoTrack != null || _webrtcService.hasRemoteStream || widget.isIncoming)
                 Positioned(
                 left: 14,
                 right: 14,
@@ -1596,8 +1644,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 ),
               ),
 
-              // ৬. কলার রিংগিং / কলিং ফুলস্ক্রিন ওভারলে (সার্ভার থেকে CallAccepted কনফার্ম না হওয়া পর্যন্ত)
-              if (!_isCallAccepted && !widget.isIncoming)
+              // ৬. কলার রিংগিং / কলিং ফুলস্ক্রিন ওভারলে (কল কানেক্ট বা রিমোট ভিডিও পাওয়ার সাথে সাথে সম্পূর্ণ গায়েব)
+              if (!_isCallAccepted &&
+                  _remoteLiveKitVideoTrack == null &&
+                  !_webrtcService.hasRemoteStream &&
+                  _isConnectingCall &&
+                  !widget.isIncoming)
                 _buildCallingRingingOverlay(),
             ],
           ),

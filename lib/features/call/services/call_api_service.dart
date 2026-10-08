@@ -182,10 +182,9 @@ class CallApiService {
       };
 
       final callEndpoints = [
-        '${ApiConstants.baseUrl}/call/make-call',
         ApiConstants.callInitiate,
+        '${ApiConstants.baseUrl}/call/make-call',
         '${ApiConstants.baseUrl}/call/instant',
-        '${ApiConstants.baseUrl}/call/start',
       ];
 
       http.Response? response;

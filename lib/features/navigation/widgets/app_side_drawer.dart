@@ -11,6 +11,7 @@ import '../../wallet/screens/wallet_screen.dart';
 import '../../wallet/services/wallet_api_service.dart';
 import '../../kyc/screens/kyc_verification_screen.dart';
 import '../../bag/screens/my_bag_screen.dart';
+import '../../rewards/widgets/daily_checkin_dialog.dart';
 
 class AppSideDrawer extends StatefulWidget {
   const AppSideDrawer({super.key});
@@ -192,6 +193,16 @@ class _AppSideDrawerState extends State<AppSideDrawer> {
                         context,
                         MaterialPageRoute(builder: (context) => const WalletScreen()),
                       );
+                    },
+                  ),
+                  _buildDrawerTile(
+                    icon: Icons.calendar_month_rounded,
+                    iconColor: const Color(0xFFFF9100),
+                    title: 'Daily Rewards & Check-in (দৈনিক রিওয়ার্ড)',
+                    subtitle: 'Claim 7-day streak coins & gems',
+                    onTap: () {
+                      Navigator.pop(context);
+                      DailyCheckInDialog.show(context);
                     },
                   ),
                   _buildDrawerTile(

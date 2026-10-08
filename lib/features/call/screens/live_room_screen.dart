@@ -348,6 +348,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   @override
   void dispose() {
     try {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    } catch (_) {}
+    try {
       WakelockPlus.disable();
     } catch (_) {}
     _removeIncomingCallOverlay();
@@ -375,6 +378,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     _muteSub?.cancel();
     _likeSub?.cancel();
     _viewerSub?.cancel();
+    _incomingCallOverlayTimer?.cancel();
+    _pendingJoinRequests.clear();
+    _liveComments.clear();
+    _hearts.clear();
 
     if (PiPCallOverlay.isMinimized && _activeSession != null) {
       debugPrint('[LiveRoomScreen] Preserving RTC engines in background for PiP');
@@ -986,26 +993,42 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     }
   }
 
+  void _addJoinRequest(Map<String, dynamic> newReq) {
+    final userId = newReq['user_id'] ?? newReq['userId'] ?? newReq['guest_user_id'] ?? newReq['sender_id'];
+    if (userId == null) return;
+    final reqId = newReq['request_id'] ?? newReq['id'] ?? newReq['invitation_id'];
+
+    if (!_pendingJoinRequests.any((item) =>
+        (item['user_id'] ?? item['userId'] ?? item['guest_user_id'] ?? item['sender_id'])?.toString() == userId.toString() ||
+        (reqId != null && (item['request_id'] ?? item['id'] ?? item['invitation_id'])?.toString() == reqId.toString()))) {
+      setState(() {
+        _pendingJoinRequests.add(newReq);
+      });
+    }
+  }
+
   void _subscribeWebSocketEvents() {
     final signaling = SignalingService();
 
     // 0. Co-Host / Join Request Listener for Host (✋ Live Join System)
     _joinReqSub = signaling.onLiveJoinRequest.listen((data) {
       if (mounted && widget.isHost) {
-        final guestName = data['user_name'] ?? data['name'] ?? (data['user'] is Map ? data['user']['name'] : 'Viewer');
-        final reqId = data['request_id'] ?? data['id'] ?? data['invitation_id'];
-        final targetUid = data['user_id'] ?? data['guest_user_id'] ?? data['sender_id'];
+        final rawGuestName = data['user_name'] ?? data['name'] ?? (data['user'] is Map ? data['user']['name'] : null) ?? data['sender_name'] ?? data['guest_name'];
+        final guestName = (rawGuestName != null && rawGuestName.toString().trim().isNotEmpty && rawGuestName.toString() != 'null')
+            ? rawGuestName.toString().trim()
+            : 'Viewer';
 
-        setState(() {
-          if (!_pendingJoinRequests.any((p) => (p['id'] ?? p['request_id'] ?? p['user_id']) == (reqId ?? targetUid))) {
-            _pendingJoinRequests.add(data);
-          }
-        });
+        _addJoinRequest(data);
+
+        try {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        } catch (_) {}
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF1E1E2E),
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
             content: Text(
               "✋ $guestName requested to join the live broadcast!",
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
@@ -1022,21 +1045,23 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
     _seatRequestSub = signaling.onSeatRequest.listen((data) {
       if (mounted && widget.isHost) {
-        final guestName = data['user_name'] ?? data['name'] ?? 'Viewer';
+        final rawGuestName = data['user_name'] ?? data['name'] ?? (data['user'] is Map ? data['user']['name'] : null) ?? data['sender_name'] ?? data['guest_name'];
+        final guestName = (rawGuestName != null && rawGuestName.toString().trim().isNotEmpty && rawGuestName.toString() != 'null')
+            ? rawGuestName.toString().trim()
+            : 'Viewer';
         final seatIndex = data['seat_index'] ?? 1;
-        final reqId = data['invitation_id'] ?? data['id'] ?? data['request_id'];
-        final targetUid = data['user_id'];
 
-        setState(() {
-          if (!_pendingJoinRequests.any((p) => (p['id'] ?? p['request_id'] ?? p['user_id']) == (reqId ?? targetUid))) {
-            _pendingJoinRequests.add(data);
-          }
-        });
+        _addJoinRequest(data);
+
+        try {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        } catch (_) {}
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF1E1E2E),
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
             content: Text(
               "✋ $guestName requested to join Seat #$seatIndex",
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),

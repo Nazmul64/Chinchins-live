@@ -513,6 +513,9 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
   @override
   void dispose() {
     try {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    } catch (_) {}
+    try {
       WakelockPlus.disable();
     } catch (_) {}
     LiveGiftReverbService().unsubscribeFromLiveRoom(widget.room.id);
@@ -526,6 +529,8 @@ class _VoicePartyRoomScreenState extends State<VoicePartyRoomScreen>
 
     _liveKitListener?.dispose();
     _liveKitService.disconnect();
+    _room?.disconnect();
+    _room?.dispose();
 
     if (_isHost) {
       PartyRoomApiService.endRoom(widget.room.id);

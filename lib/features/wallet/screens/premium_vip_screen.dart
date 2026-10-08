@@ -357,21 +357,22 @@ class _PremiumVipScreenState extends State<PremiumVipScreen> {
 
   Widget _buildVipCardItem(Map<String, dynamic> card) {
     final String title = card['badge_title'] ?? card['name'] ?? 'VIP Privilege Card';
-    final int instantCoins = (card['instant_reward_coins'] is int)
-        ? card['instant_reward_coins'] as int
-        : (int.tryParse(card['instant_reward_coins']?.toString() ?? '0') ?? 0);
+    final int instantCoins = (card['diamondsReward'] != null)
+        ? (card['diamondsReward'] is int ? card['diamondsReward'] as int : int.tryParse('${card['diamondsReward']}') ?? 0)
+        : ((card['instant_reward_coins'] is int)
+            ? card['instant_reward_coins'] as int
+            : (int.tryParse(card['instant_reward_coins']?.toString() ?? '0') ?? 0));
     final int dailyCoins = (card['daily_checkin_total_coins'] is int)
         ? card['daily_checkin_total_coins'] as int
         : (int.tryParse(card['daily_checkin_total_coins']?.toString() ?? '0') ?? 0);
 
-    final int priceBdt = (card['price_bdt'] is int)
-        ? card['price_bdt'] as int
-        : (int.tryParse(card['price_bdt']?.toString() ?? '0') ?? 0);
-    final String formattedPrice = card['formatted_price'] ?? '৳ $priceBdt';
+    final rawPrice = card['price'] ?? card['price_bdt'];
+    final double? parsedPrice = rawPrice != null ? (rawPrice is num ? rawPrice.toDouble() : double.tryParse('$rawPrice')) : null;
+    final String formattedPrice = parsedPrice != null ? 'BDT ${parsedPrice.toStringAsFixed(2)}' : (card['formatted_price'] ?? card['formatted_price_bdt'] ?? 'BDT 300.00');
 
-    final dynamic origPrice = card['original_price_bdt'] ?? (priceBdt * 2.0);
+    final dynamic origPrice = card['original_price_bdt'] ?? (parsedPrice != null ? (parsedPrice * 2.0) : 600.00);
     final String formattedOriginalPrice = card['formatted_original_price'] ??
-        (origPrice is num ? '৳ ${origPrice.toStringAsFixed(2)}' : '৳ $origPrice');
+        (origPrice is num ? 'BDT ${origPrice.toStringAsFixed(2)}' : 'BDT $origPrice');
 
     final List extraRewards = (card['extra_rewards'] is List)
         ? card['extra_rewards'] as List

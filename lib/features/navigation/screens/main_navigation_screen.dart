@@ -15,6 +15,8 @@ import '../../call/services/call_api_service.dart';
 import '../../chat/services/chat_api_service.dart';
 import '../../call/screens/go_live_screen.dart';
 import '../../call/services/streaming_service.dart';
+import '../../rewards/services/daily_rewards_api_service.dart';
+import '../../rewards/widgets/daily_checkin_dialog.dart';
 import '../widgets/app_side_drawer.dart';
 import '../../../main.dart';
 
@@ -73,8 +75,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
       // 4. Start polling real-time notification alerts (profile views, gifts, calls)
       NotificationApiService.instance.startNotificationPolling();
+
+      // 5. Check 7-Day Daily Rewards & Claim popup trigger (< 5ms Redis cached / API)
+      try {
+        final dailyStatus = await DailyRewardsApiService.getDailyRewardsStatus();
+        if (mounted && dailyStatus != null && dailyStatus.shouldOpenPopup && dailyStatus.canClaim) {
+          Future.delayed(const Duration(milliseconds: 600), () {
+            if (mounted && !StreamingService.isCallActive) {
+              DailyCheckInDialog.show(context, status: dailyStatus);
+            }
+          });
+        }
+      } catch (_) {}
     });
   }
+
+  final Set<int> _recentlyEndedCallIds = {};
 
   void _initWebSocketSignaling() async {
     try {
@@ -95,16 +111,40 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           }
         });
         _wsEndedSub?.cancel();
-        _wsEndedSub = signaling.onCallEnded.listen((_) {
+        _wsEndedSub = signaling.onCallEnded.listen((data) {
           _activeIncomingCallId = null;
+          final dynamic rawCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
+          if (rawCallId != null) {
+            final id = int.tryParse(rawCallId.toString());
+            if (id != null) {
+              _recentlyEndedCallIds.add(id);
+              Future.delayed(const Duration(seconds: 15), () => _recentlyEndedCallIds.remove(id));
+            }
+          }
         });
         _wsCancelledSub?.cancel();
-        _wsCancelledSub = signaling.onCallCancelled.listen((_) {
+        _wsCancelledSub = signaling.onCallCancelled.listen((data) {
           _activeIncomingCallId = null;
+          final dynamic rawCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
+          if (rawCallId != null) {
+            final id = int.tryParse(rawCallId.toString());
+            if (id != null) {
+              _recentlyEndedCallIds.add(id);
+              Future.delayed(const Duration(seconds: 15), () => _recentlyEndedCallIds.remove(id));
+            }
+          }
         });
         _wsRejectedSub?.cancel();
-        _wsRejectedSub = signaling.onCallRejected.listen((_) {
+        _wsRejectedSub = signaling.onCallRejected.listen((data) {
           _activeIncomingCallId = null;
+          final dynamic rawCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
+          if (rawCallId != null) {
+            final id = int.tryParse(rawCallId.toString());
+            if (id != null) {
+              _recentlyEndedCallIds.add(id);
+              Future.delayed(const Duration(seconds: 15), () => _recentlyEndedCallIds.remove(id));
+            }
+          }
         });
       }
     } catch (_) {}
@@ -137,6 +177,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     if (callId == null || callId <= 0) {
       debugPrint('[MainNavigationScreen] Ignored incoming call event with invalid callId: $rawCallId');
+      return;
+    }
+
+    if (_recentlyEndedCallIds.contains(callId)) {
+      debugPrint('[MainNavigationScreen] Ignored ghost incoming call from recently ended callId: $callId');
       return;
     }
 

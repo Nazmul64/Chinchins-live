@@ -71,18 +71,20 @@ class ApiConstants {
   static String get walletTransactions => '$baseUrl/wallet/transactions';
   
   // Spend Less, Get More Gems & VIP Privilege Cards (Monthly & Weekly Cards)
-  static String get spendLessGetMore => '$baseUrl/spend-less-get-more';
+  static String get vipCards => '$baseUrl/vip-cards';
+  static String get vipCardsPurchase => '$baseUrl/vip-cards/purchase';
+  static String get spendLessGetMore => '$baseUrl/vip-cards';
+  static String get spendLessGetMoreAlt => '$baseUrl/spend-less-get-more';
   static String get spendLessGetMoreBanner => '$baseUrl/spend-less-get-more/banner';
   static String get spendLessGetMoreMy => '$baseUrl/spend-less-get-more/my';
-  static String get spendLessGetMorePurchase => '$baseUrl/spend-less-get-more/purchase';
+  static String get spendLessGetMorePurchase => '$baseUrl/vip-cards/purchase';
+  static String get spendLessGetMorePurchaseAlt => '$baseUrl/spend-less-get-more/purchase';
   static String get spendLessGetMoreClaim => '$baseUrl/spend-less-get-more/claim';
   
   // Endpoint aliases
-  static String get vipCards => spendLessGetMore;
-  static String get monthlyCards => spendLessGetMore;
+  static String get monthlyCards => '$baseUrl/vip-cards';
   static String get vipBanner => spendLessGetMoreBanner;
   static String get vipCardsMySubscriptions => spendLessGetMoreMy;
-  static String get vipCardsPurchase => spendLessGetMorePurchase;
   static String get vipCardsClaimDaily => spendLessGetMoreClaim;
   
   // Withdrawal / Cash Out endpoints (RESTful User & Seller Payout Engine)
@@ -373,7 +375,23 @@ class ApiConstants {
   static String get floatingBannerAlt => '$baseUrl/floating-action-icon';
   static String get floatingWidget => '$baseUrl/floating-widget';
   static String get vipCardsBanner => '$baseUrl/vip-cards/banner';
+
+  // 7-Day Daily Rewards & Claim Engine Endpoints
+  static String get dailyRewardsStatus => '$baseUrl/daily-rewards/status';
+  static String get dailyClaimStatus => '$baseUrl/daily-claim/status';
+  static String get dailyCheckinStatus => '$baseUrl/daily-checkin/status';
+  static String get dailyRewards => '$baseUrl/daily-rewards';
+  static String get dailyRewardsClaim => '$baseUrl/daily-rewards/claim';
+  static String get dailyClaimClaim => '$baseUrl/daily-claim/claim';
+  static String get dailyCheckinClaim => '$baseUrl/daily-checkin/claim';
+
+  // Dynamic Call Ringtone & Audio Tone Endpoints
+  static String get callSettings => '$baseUrl/call-settings';
+  static String get callSettingsAlt => '$baseUrl/call/settings';
+  static String get ringtones => '$baseUrl/ringtones';
+  static String get ringtoneSettings => '$baseUrl/ringtone-settings';
+
+  // Global Zero-Latency Bootstrap Config
+  static String get bootstrapConfig => '$baseUrl/bootstrap-config';
+  static String get appBootstrap => '$baseUrl/v1/bootstrap';
 }
-
-
-

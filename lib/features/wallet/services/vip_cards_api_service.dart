@@ -33,23 +33,43 @@ class VipCardsApiService {
   }
 
   static Future<Map<String, dynamic>?> _syncVipCardsInBackground() async {
+    final candidateEndpoints = [
+      ApiConstants.vipCards,
+      ApiConstants.spendLessGetMore,
+      ApiConstants.spendLessGetMoreAlt,
+      '${ApiConstants.baseUrl}/vip/cards',
+      '${ApiConstants.baseUrl}/vip-card/list',
+    ];
+
     try {
       final token = await AuthApiService.getToken();
-      final url = Uri.parse(ApiConstants.spendLessGetMore);
       final headers = <String, String>{
         'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
       };
 
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+      for (final endpoint in candidateEndpoints) {
+        try {
+          final url = Uri.parse(endpoint);
+          final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['status'] == true && decoded['data'] is Map) {
-          await FastApiClient.putCache(ApiConstants.spendLessGetMore, decoded);
-          _cachedVipData = Map<String, dynamic>.from(decoded['data']);
-          return _cachedVipData;
-        }
+          if (response.statusCode == 200) {
+            final decoded = jsonDecode(response.body);
+            if (decoded is Map && (decoded['status'] == true || decoded['success'] == true)) {
+              final rawData = decoded['data'] is Map
+                  ? decoded['data']
+                  : (decoded['cards'] is List ? {'cards': decoded['cards']} : (decoded['data'] is List ? {'cards': decoded['data']} : decoded));
+              final dataMap = Map<String, dynamic>.from(rawData as Map);
+              await FastApiClient.putCache(ApiConstants.vipCards, decoded);
+              _cachedVipData = dataMap;
+              return _cachedVipData;
+            } else if (decoded is List) {
+              final dataMap = {'cards': decoded};
+              _cachedVipData = dataMap;
+              return _cachedVipData;
+            }
+          }
+        } catch (_) {}
       }
     } catch (e, st) {
       AppLogger.error('GetVipCardsError', e, st);
@@ -189,14 +209,13 @@ class VipCardsApiService {
   }) async {
     try {
       final token = await AuthApiService.getToken();
-      if (token == null) {
+      if (token == null || token.isEmpty) {
         return {
           'success': false,
           'message': 'Please log in to purchase VIP privilege cards.',
         };
       }
 
-      final url = Uri.parse(ApiConstants.spendLessGetMorePurchase);
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -204,32 +223,44 @@ class VipCardsApiService {
       };
 
       final payload = <String, dynamic>{
-        'card_id': ?cardId,
-        'card_type': ?cardType,
+        'card_id': cardId,
+        if (cardType != null) 'card_type': cardType,
         'payment_method': paymentMethod,
       };
 
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 12));
+      final candidateEndpoints = [
+        ApiConstants.vipCardsPurchase,
+        ApiConstants.spendLessGetMorePurchaseAlt,
+        '${ApiConstants.baseUrl}/vip-cards/buy',
+        '${ApiConstants.baseUrl}/vip/purchase',
+      ];
 
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map) {
-        if (response.statusCode == 200 || decoded['status'] == true) {
-          return {
-            'success': true,
-            'message': decoded['message'] ?? 'VIP card activated successfully!',
-            'data': decoded['data'],
-          };
-        } else {
-          return {
-            'success': false,
-            'message': decoded['message'] ?? 'Failed to activate VIP card.',
-            'required_coins': decoded['required_coins'],
-            'current_coins': decoded['current_coins'],
-            'redirect_to_deposit': decoded['redirect_to_deposit'] == true,
-          };
-        }
+      for (final endpoint in candidateEndpoints) {
+        try {
+          final url = Uri.parse(endpoint);
+          final response = await http
+              .post(url, headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 12));
+
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map) {
+            if (response.statusCode == 200 || response.statusCode == 201 || decoded['status'] == true || decoded['success'] == true) {
+              return {
+                'success': true,
+                'message': decoded['message'] ?? 'VIP card activated successfully!',
+                'data': decoded['data'],
+              };
+            } else if (response.statusCode == 400 || response.statusCode == 422 || response.statusCode == 402) {
+              return {
+                'success': false,
+                'message': decoded['message'] ?? 'Failed to activate VIP card.',
+                'required_coins': decoded['required_coins'] ?? decoded['required_diamonds'],
+                'current_coins': decoded['current_coins'] ?? decoded['current_diamonds'],
+                'redirect_to_deposit': decoded['redirect_to_deposit'] == true || decoded['insufficient_balance'] == true,
+              };
+            }
+          }
+        } catch (_) {}
       }
     } catch (e, st) {
       AppLogger.error('PurchaseCardError', e, st);

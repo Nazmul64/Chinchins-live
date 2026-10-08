@@ -81,6 +81,17 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
     ];
   }
 
+  String _formatCardPrice(Map<String, dynamic> card) {
+    final price = card['price'] ?? card['price_bdt'];
+    if (price != null) {
+      if (price is num) return 'BDT ${price.toStringAsFixed(2)}';
+      final parsed = double.tryParse(price.toString());
+      if (parsed != null) return 'BDT ${parsed.toStringAsFixed(2)}';
+      return 'BDT $price';
+    }
+    return card['formatted_price_bdt']?.toString() ?? 'BDT 300.00';
+  }
+
   void _startTimerTicker() {
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
@@ -208,7 +219,7 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
               ),
               const SizedBox(height: 8),
               Text(
-                'Price: ${card['formatted_price_bdt'] ?? 'BDT 300.00'} ($priceCoins Gems)\nInstant $instantCoins Gems will be credited immediately!',
+                'Price: ${_formatCardPrice(card)} ($priceCoins Gems)\nInstant $instantCoins Gems will be credited immediately!',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
               ),
@@ -591,11 +602,11 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                                   const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 14),
                                   const SizedBox(width: 2),
                                   Text(
-                                    '${card['total_return_coins']}',
+                                    '${card['diamondsReward'] ?? card['diamonds_reward'] ?? card['total_return_coins'] ?? card['total_value_coins'] ?? 0}',
                                     style: const TextStyle(color: AppColors.gemYellow, fontSize: 14, fontWeight: FontWeight.w900),
                                   ),
                                   Text(
-                                    ' by paying 💎 ${card['price_coins']}',
+                                    ' by paying 💎 ${card['costDiamonds'] ?? card['cost_diamonds'] ?? card['price_coins'] ?? 0}',
                                     style: const TextStyle(color: Colors.white60, fontSize: 12),
                                   ),
                                 ],
@@ -979,7 +990,7 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                           child: _isActionInProgress
                               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                               : Text(
-                                  '${card['formatted_price_bdt'] ?? 'BDT 300.00'} (${card['price_coins']} 💎)',
+                                  '${_formatCardPrice(card)} (${card['costDiamonds'] ?? card['cost_diamonds'] ?? card['price_coins'] ?? 0} 💎)',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 16,

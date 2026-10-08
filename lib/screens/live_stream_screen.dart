@@ -129,6 +129,16 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
     }
   }
 
+  void addJoinRequest(Map<String, dynamic> newReq) {
+    final userId = newReq['target_user_id'] ?? newReq['user_id'] ?? newReq['userId'] ?? newReq['guest_user_id'];
+    if (userId == null) return;
+    if (!_cohostRequests.any((item) => (item['target_user_id'] ?? item['user_id'] ?? item['userId'] ?? item['guest_user_id'])?.toString() == userId.toString())) {
+      setState(() {
+        _cohostRequests.add(newReq);
+      });
+    }
+  }
+
   void _setupSignalingListeners() {
     // 1. Reverb WebSocket Listener for Co-Host Accept (.cohost.accepted)
     _coHostAcceptedSub = SignalingService().onCoHostAccepted.listen((data) async {
@@ -150,21 +160,24 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
     _cohostStatusSub = SignalingService().onCoHostStatusChanged.listen((data) {
       if (widget.isHost && mounted) {
         final reqId = data['request_id'] ?? data['id'] ?? DateTime.now().millisecondsSinceEpoch;
-        final guestName = data['guest_name'] ?? data['user_name'] ?? data['sender_name'] ?? 'Viewer';
+        final rawGuestName = data['guest_name'] ?? data['user_name'] ?? data['sender_name'] ?? (data['user'] is Map ? data['user']['name'] : null);
+        final guestName = (rawGuestName != null && rawGuestName.toString().trim().isNotEmpty && rawGuestName.toString() != 'null')
+            ? rawGuestName.toString().trim()
+            : 'Viewer';
         final guestAvatar = data['guest_avatar'] ?? data['avatar'] ?? '';
         final targetUserId = data['guest_user_id'] ?? data['user_id'] ?? data['target_user_id'];
 
-        setState(() {
-          final existing = _cohostRequests.indexWhere((r) => (r['target_user_id'] ?? r['user_id'])?.toString() == targetUserId?.toString());
-          if (existing == -1) {
-            _cohostRequests.add({
-              'request_id': reqId,
-              'user_name': guestName,
-              'avatar': guestAvatar,
-              'target_user_id': targetUserId,
-            });
-          }
+        addJoinRequest({
+          'request_id': reqId,
+          'user_name': guestName,
+          'avatar': guestAvatar,
+          'target_user_id': targetUserId,
+          'user_id': targetUserId,
         });
+
+        try {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        } catch (_) {}
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -209,9 +222,13 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
 
   @override
   void dispose() {
+    try {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    } catch (_) {}
     _coHostAcceptedSub?.cancel();
     _cohostStatusSub?.cancel();
     _msgSub?.cancel();
+    _cohostRequests.clear();
     _listener?.dispose();
     _liveKitService.disconnect();
     _chatController.dispose();
@@ -294,16 +311,25 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                                   minimumSize: Size.zero,
                                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 ),
-                                onPressed: () async {
-                                  await LiveStreamingApiService.respondJoinCoHost(
+                                onPressed: () {
+                                  // Immediate 0ms local state removal & snackbar cleanup
+                                  setState(() {
+                                    _cohostRequests.removeWhere((item) =>
+                                        (item['request_id'] ?? item['id'])?.toString() == reqId?.toString() ||
+                                        (item['target_user_id'] ?? item['user_id'])?.toString() == targetId?.toString());
+                                  });
+                                  setModalState(() {});
+                                  try {
+                                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                  } catch (_) {}
+                                  if (ctx.mounted) Navigator.pop(ctx);
+                                  // Fire API in background
+                                  LiveStreamingApiService.respondJoinCoHost(
                                     requestId: reqId,
                                     action: 'accept',
                                     roomId: widget.roomId,
                                     targetUserId: targetId,
                                   );
-                                  setState(() => _cohostRequests.removeAt(index));
-                                  setModalState(() {});
-                                  if (ctx.mounted) Navigator.pop(ctx);
                                 },
                                 child: const Text('Accept', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                               ),
@@ -315,15 +341,20 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                                   minimumSize: Size.zero,
                                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 ),
-                                onPressed: () async {
-                                  await LiveStreamingApiService.respondJoinCoHost(
+                                onPressed: () {
+                                  // Immediate 0ms local state removal
+                                  setState(() {
+                                    _cohostRequests.removeWhere((item) =>
+                                        (item['request_id'] ?? item['id'])?.toString() == reqId?.toString() ||
+                                        (item['target_user_id'] ?? item['user_id'])?.toString() == targetId?.toString());
+                                  });
+                                  setModalState(() {});
+                                  LiveStreamingApiService.respondJoinCoHost(
                                     requestId: reqId,
                                     action: 'reject',
                                     roomId: widget.roomId,
                                     targetUserId: targetId,
                                   );
-                                  setState(() => _cohostRequests.removeAt(index));
-                                  setModalState(() {});
                                 },
                                 child: const Text('Reject', style: TextStyle(color: Colors.white, fontSize: 11)),
                               ),
