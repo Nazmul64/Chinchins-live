@@ -427,6 +427,8 @@ class WebRTCCallService {
             state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
           _log('ICE_CONNECTED_SUCCESS');
           enforceLoudSpeakerphone();
+        } else if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
+          _log('ICE_DISCONNECTED: Waiting for peer reconnection without dropping call...');
         } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
           _log('ICE_CONNECTION_FAILED! Attempting ICE restart...');
           try {

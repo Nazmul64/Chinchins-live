@@ -12,6 +12,7 @@ import '../../messages/screens/messages_screen.dart';
 import '../../me/screens/me_screen.dart';
 import '../../call/screens/incoming_call_screen.dart';
 import '../../call/services/call_api_service.dart';
+import '../../call/services/call_sound_manager.dart';
 import '../../chat/services/chat_api_service.dart';
 import '../../call/screens/go_live_screen.dart';
 import '../../call/services/streaming_service.dart';
@@ -62,8 +63,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   void _initAppServices() {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // 1. Fetch live remote configurations & feature toggles
+      // 1. Fetch live remote configurations & feature toggles & call/ringtone settings
       await RemoteConfigService.instance.fetchRemoteConfig();
+      await CallApiService.getCallSettings();
 
       // 2. Check for In-App OTA Updates (display modal if new version/force update available)
       if (mounted) {
@@ -252,6 +254,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               incoming['incoming_ringtone_url'] ??
               incoming['ringtone_url'])
           ?.toString();
+
+      if (ringtoneUrl != null && ringtoneUrl.isNotEmpty) {
+        CallSoundManager.setDynamicRingtones(incomingUrl: ringtoneUrl);
+      }
 
       if (!mounted) return;
       final navState = ChinchinsLiveApp.navigatorKey.currentState ?? Navigator.of(context);

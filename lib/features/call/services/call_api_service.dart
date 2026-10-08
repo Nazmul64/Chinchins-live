@@ -7,28 +7,62 @@ import '../../../core/constants/api_constants.dart';
 import '../../../core/services/hive_cache_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../auth/services/auth_api_service.dart';
+import 'call_sound_manager.dart';
 
 class CallApiService {
+  static Future<Map<String, dynamic>?> getCallSettings() async {
+    return getCallConfig();
+  }
+
   static Future<Map<String, dynamic>?> getCallConfig() async {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse(ApiConstants.callConfig);
       final headers = <String, String>{
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
         if (userId != null) 'X-User-Id': userId,
       };
 
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
+      final endpoints = [
+        ApiConstants.callSettings,
+        ApiConstants.callConfig,
+        ApiConstants.callSettingsAlt,
+        ApiConstants.ringtoneSettings,
+        ApiConstants.ringtones,
+        ApiConstants.bootstrapConfig,
+      ];
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded['status'] == true && decoded['data'] is Map) {
-          return decoded['data'] as Map<String, dynamic>;
-        }
+      for (final ep in endpoints) {
+        try {
+          final url = Uri.parse(ep);
+          final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 6));
+          if (response.statusCode == 200) {
+            final decoded = jsonDecode(response.body);
+            if (decoded is Map) {
+              final data = decoded['data'] is Map
+                  ? Map<String, dynamic>.from(decoded['data'] as Map)
+                  : (decoded['data'] is List ? null : Map<String, dynamic>.from(decoded));
+
+              final config = data ?? Map<String, dynamic>.from(decoded);
+              final callConfig = (config['call_settings'] is Map ? Map<String, dynamic>.from(config['call_settings']) : null) ??
+                  (config['ringtone_settings'] is Map ? Map<String, dynamic>.from(config['ringtone_settings']) : null) ??
+                  config;
+
+              final inUrl = callConfig['incoming_ringtone_url'] ?? callConfig['incoming_ringtone'] ?? callConfig['ringtone_url'];
+              final outUrl = callConfig['outgoing_ringtone_url'] ?? callConfig['outgoing_ringtone'] ?? callConfig['dial_tone_url'];
+
+              CallSoundManager.setDynamicRingtones(
+                incomingUrl: inUrl?.toString(),
+                outgoingUrl: outUrl?.toString(),
+              );
+
+              return callConfig;
+            }
+          }
+        } catch (_) {}
       }
     } catch (e, st) {
       AppLogger.error('CallConfigError', e, st);
@@ -297,6 +331,11 @@ class CallApiService {
             ? rawCallId
             : int.tryParse(rawCallId?.toString() ?? '');
 
+        final dynamic outToneUrl = dataMap['outgoing_ringtone_url'] ?? dataMap['dial_tone_url'] ?? decoded['outgoing_ringtone_url'] ?? decoded['dial_tone_url'];
+        if (outToneUrl != null && outToneUrl.toString().isNotEmpty) {
+          CallSoundManager.setDynamicRingtones(outgoingUrl: outToneUrl.toString());
+        }
+
         return {
           'success': true,
           'is_free_trial': dataMap['is_free_trial'] == true || decoded['is_free_trial'] == true,
@@ -309,7 +348,8 @@ class CallApiService {
           'token': dataMap['token'] ?? dataMap['livekit_token'] ?? decoded['token'] ?? decoded['livekit_token'],
           'livekit_token': dataMap['livekit_token'] ?? dataMap['token'] ?? decoded['livekit_token'] ?? decoded['token'],
           'livekit_url': dataMap['livekit_url'] ?? decoded['livekit_url'] ?? 'wss://chinchins.live/livekit',
-          'dial_tone_url': dataMap['dial_tone_url'] ?? decoded['dial_tone_url'],
+          'dial_tone_url': outToneUrl,
+          'outgoing_ringtone_url': outToneUrl,
           'data': dataMap,
           'message': decoded['message'] ?? 'Call initiated successfully.',
         };

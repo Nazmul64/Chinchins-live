@@ -4,6 +4,22 @@ import '../../../core/utils/app_logger.dart';
 class CallSoundManager {
   static AudioPlayer? _player;
   static bool _isPlaying = false;
+  static String? _cachedIncomingRingtoneUrl;
+  static String? _cachedOutgoingRingtoneUrl;
+
+  static void setDynamicRingtones({String? incomingUrl, String? outgoingUrl}) {
+    if (incomingUrl != null && incomingUrl.trim().isNotEmpty && incomingUrl.startsWith('http')) {
+      _cachedIncomingRingtoneUrl = incomingUrl.trim();
+      AppLogger.info('CallSound', 'Dynamic incoming ringtone set: $_cachedIncomingRingtoneUrl');
+    }
+    if (outgoingUrl != null && outgoingUrl.trim().isNotEmpty && outgoingUrl.startsWith('http')) {
+      _cachedOutgoingRingtoneUrl = outgoingUrl.trim();
+      AppLogger.info('CallSound', 'Dynamic outgoing ringtone set: $_cachedOutgoingRingtoneUrl');
+    }
+  }
+
+  static String? get incomingRingtoneUrl => _cachedIncomingRingtoneUrl;
+  static String? get outgoingRingtoneUrl => _cachedOutgoingRingtoneUrl;
 
   static Future<void> playOutgoingRingtone([String? customUrl]) async {
     if (_isPlaying) return;
@@ -28,13 +44,21 @@ class CallSoundManager {
       );
       await _player!.setReleaseMode(ReleaseMode.loop);
       await _player!.setVolume(1.0);
-      if (customUrl != null && customUrl.startsWith('http')) {
-        await _player!.play(UrlSource(customUrl));
+
+      final targetUrl = (customUrl != null && customUrl.trim().isNotEmpty && customUrl.startsWith('http'))
+          ? customUrl.trim()
+          : (_cachedOutgoingRingtoneUrl != null && _cachedOutgoingRingtoneUrl!.startsWith('http')
+              ? _cachedOutgoingRingtoneUrl
+              : null);
+
+      if (targetUrl != null) {
+        AppLogger.info('CallSound', 'Playing dynamic outgoing calling ringtone sound ($targetUrl)...');
+        await _player!.play(UrlSource(targetUrl));
       } else {
+        AppLogger.info('CallSound', 'Playing asset outgoing calling ringtone sound...');
         await _player!.play(AssetSource('sounds/calling_ringtone.wav'));
       }
       _isPlaying = true;
-      AppLogger.info('CallSound', 'Playing outgoing calling ringtone sound...');
     } catch (e, st) {
       AppLogger.error('CallSoundError', e, st);
     }
@@ -63,13 +87,21 @@ class CallSoundManager {
       );
       await _player!.setReleaseMode(ReleaseMode.loop);
       await _player!.setVolume(1.0);
-      if (customUrl != null && customUrl.startsWith('http')) {
-        await _player!.play(UrlSource(customUrl));
+
+      final targetUrl = (customUrl != null && customUrl.trim().isNotEmpty && customUrl.startsWith('http'))
+          ? customUrl.trim()
+          : (_cachedIncomingRingtoneUrl != null && _cachedIncomingRingtoneUrl!.startsWith('http')
+              ? _cachedIncomingRingtoneUrl
+              : null);
+
+      if (targetUrl != null) {
+        AppLogger.info('CallSound', 'Playing dynamic incoming phone ringing sound ($targetUrl)...');
+        await _player!.play(UrlSource(targetUrl));
       } else {
+        AppLogger.info('CallSound', 'Playing asset incoming phone ringing sound...');
         await _player!.play(AssetSource('sounds/calling_ringtone.wav'));
       }
       _isPlaying = true;
-      AppLogger.info('CallSound', 'Playing incoming phone ringing sound (Loud Speakerphone)...');
     } catch (e, st) {
       AppLogger.error('IncomingCallSoundError', e, st);
     }

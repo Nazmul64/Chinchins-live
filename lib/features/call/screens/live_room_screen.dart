@@ -348,6 +348,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   @override
   void dispose() {
     try {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
     } catch (_) {}
     try {
@@ -389,6 +390,12 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       if (_activeLiveId != null) {
         SignalingService().leaveLiveRoom(_activeLiveId);
         LiveStreamingApiService.leaveLiveStream(roomId: _activeLiveId);
+      }
+      if (_activeChannelName.isNotEmpty) {
+        SignalingService().leaveLiveRoom(_activeChannelName);
+      }
+      if (widget.host.id.toString().isNotEmpty) {
+        SignalingService().leaveLiveRoom(widget.host.id);
       }
       _destroyEngines();
       _activeSession = null;
