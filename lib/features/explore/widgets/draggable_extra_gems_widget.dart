@@ -15,11 +15,8 @@ class DraggableExtraGemsWidget extends StatefulWidget {
   State<DraggableExtraGemsWidget> createState() => _DraggableExtraGemsWidgetState();
 }
 
-class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
-    with SingleTickerProviderStateMixin {
+class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget> {
   late Offset _position;
-  late AnimationController _shimmerController;
-  late Animation<double> _glowAnimation;
   bool _isDismissed = false;
   bool _isEnabled = true;
   String _imageUrl = '';
@@ -44,15 +41,6 @@ class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
         _imageUrl = CachedImageLoader.normalize(cachedImg.trim());
       }
     }
-
-    _shimmerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2200),
-    )..repeat(reverse: true);
-
-    _glowAnimation = Tween<double>(begin: 0.94, end: 1.06).animate(
-      CurvedAnimation(parent: _shimmerController, curve: Curves.easeInOut),
-    );
 
     _loadBannerConfig();
   }
@@ -80,12 +68,6 @@ class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
     } catch (_) {}
   }
 
-  @override
-  void dispose() {
-    _shimmerController.dispose();
-    super.dispose();
-  }
-
   void _onTap() {
     if (_targetAction == 'OPEN_PREMIUM_VIP' || _targetAction == 'OPEN_MONTHLY_CARD' || _targetAction.isNotEmpty) {
       Navigator.push(
@@ -102,8 +84,8 @@ class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
     if (_isDismissed || !_isEnabled) return const SizedBox.shrink();
 
     final screenSize = MediaQuery.of(context).size;
-    const widgetWidth = 92.0;
-    const widgetHeight = 92.0;
+    const widgetWidth = 108.0;
+    const widgetHeight = 108.0;
 
     return Positioned(
       left: _position.dx,
@@ -123,129 +105,119 @@ class _DraggableExtraGemsWidgetState extends State<DraggableExtraGemsWidget>
           });
         },
         onTap: _onTap,
-        child: AnimatedBuilder(
-          animation: _glowAnimation,
-          builder: (context, child) {
-            return Transform.scale(
-              scale: _glowAnimation.value,
-              child: SizedBox(
-                width: widgetWidth,
-                height: widgetHeight,
-                child: Stack(
-                  alignment: Alignment.center,
-                  clipBehavior: Clip.none,
-                  children: [
-                    // Golden Glow Aura
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFFD700).withValues(alpha: 0.50),
-                            blurRadius: 18,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Real Dynamic Image from Admin Panel API (GET /api/floating-banner)
-                    if (_imageUrl.isNotEmpty)
-                      CachedImageLoader(
-                        imageUrl: _imageUrl,
-                        width: 86,
-                        height: 86,
-                        fit: BoxFit.contain,
-                      )
-                    else
-                      // Sleek Fallback VIP Card Badge
-                      Container(
-                        width: 82,
-                        height: 82,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xFFFFD54F), Color(0xFFFF8F00), Color(0xFFE65100)],
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFFFF9C4), width: 1.5),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.5),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 28),
-                            const SizedBox(height: 2),
-                            Text(
-                              _title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.3,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              _subtitle,
-                              style: const TextStyle(
-                                color: Color(0xFFFFF9C4),
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-
-
-
-                    // Dismiss (X) Close button on top-left
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() => _isDismissed = true);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(3.5),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.75),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white70, width: 1.0),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.4),
-                                blurRadius: 4,
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.close_rounded,
-                            color: Colors.white,
-                            size: 11,
-                          ),
-                        ),
-                      ),
+        child: SizedBox(
+          width: widgetWidth,
+          height: widgetHeight,
+          child: Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              // Golden Glow Aura
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFFD700).withValues(alpha: 0.40),
+                      blurRadius: 16,
+                      spreadRadius: 2,
                     ),
                   ],
                 ),
               ),
-            );
-          },
+
+              // Real Dynamic Image from Admin Panel API (GET /api/floating-banner)
+              if (_imageUrl.isNotEmpty)
+                CachedImageLoader(
+                  imageUrl: _imageUrl,
+                  width: 104,
+                  height: 104,
+                  fit: BoxFit.contain,
+                )
+              else
+                // Sleek Fallback VIP Card Badge
+                Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFFFD54F), Color(0xFFFF8F00), Color(0xFFE65100)],
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFFFF9C4), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 32),
+                      const SizedBox(height: 2),
+                      Text(
+                        _title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        _subtitle,
+                        style: const TextStyle(
+                          color: Color(0xFFFFF9C4),
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Dismiss (X) Close button on top-left
+              Positioned(
+                top: 0,
+                left: 0,
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() => _isDismissed = true);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(4.0),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.8),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white70, width: 1.0),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

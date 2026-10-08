@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../navigation/screens/main_navigation_screen.dart';
 import '../../wallet/services/vip_cards_api_service.dart';
 import '../../wallet/services/wallet_api_service.dart';
+import '../../../core/services/device_registration_service.dart';
 import '../services/auth_api_service.dart';
 import 'login_screen.dart';
 
@@ -97,6 +98,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     // If authenticated, kick off background session & essential preloading in parallel immediately
     if (token != null && token.isNotEmpty) {
       unawaited(AuthApiService.syncSessionInBackground());
+      unawaited(DeviceRegistrationService.registerDevice());
       PreloaderService.preloadAppEssentials();
     }
 
