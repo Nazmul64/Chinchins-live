@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../../../core/services/signaling_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/permission_helper.dart';
@@ -690,6 +689,7 @@ class WebRTCCallService {
 
     _wsAcceptedSub = signaling.onCallAccepted.listen((data) {
       _log('WS_EVENT_CALL_ACCEPTED');
+      onCallAccepted?.call(data);
       if (isCaller) {
         enforceLoudSpeakerphone();
       }

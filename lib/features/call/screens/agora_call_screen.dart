@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../main.dart';
 import '../../../core/models/model_profile.dart';
@@ -115,6 +114,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   int _callSeconds = 0;
   Timer? _timer;
   Timer? _pollingTimer;
+  StreamSubscription? _wsAcceptedSub;
   StreamSubscription? _wsEndedSub;
   StreamSubscription? _wsRejectedSub;
   StreamSubscription? _wsCancelledSub;
@@ -250,6 +250,17 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     if (widget.channelName.isNotEmpty && widget.channelName != widget.callId?.toString()) {
       signaling.subscribeToCallRoom(widget.channelName);
     }
+
+    _wsAcceptedSub = signaling.onCallAccepted.listen((data) {
+      debugPrint('[AgoraCallScreen] Received onCallAccepted via WebSocket: $data');
+      CallSoundManager.stopRingtone();
+      if (mounted) {
+        setState(() {
+          _isConnecting = false;
+        });
+        _startCallTimer();
+      }
+    });
 
     _wsEndedSub = signaling.onCallEnded.listen((data) {
       debugPrint('[AgoraCallScreen] Received onCallEnded via WebSocket: $data');
@@ -585,6 +596,15 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
           status == 'declined' ||
           status == 'missed' ||
           status == 'timeout';
+      if (status == 'connected' || status == 'accepted') {
+        CallSoundManager.stopRingtone();
+        if (mounted) {
+          setState(() {
+            _isConnecting = false;
+          });
+          _startCallTimer();
+        }
+      }
       if (isTerminated) {
         CallSoundManager.stopRingtone();
         _endCall();
@@ -739,6 +759,8 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     _timer = null;
     _pollingTimer?.cancel();
     _pollingTimer = null;
+    _wsAcceptedSub?.cancel();
+    _wsAcceptedSub = null;
     _wsEndedSub?.cancel();
     _wsEndedSub = null;
     _wsRejectedSub?.cancel();

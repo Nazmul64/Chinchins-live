@@ -2,15 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:permission_handler/permission_handler.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/models/model_profile.dart';
-import '../../../core/services/signaling_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../auth/services/auth_api_service.dart';
 import '../screens/agora_call_screen.dart';
 import '../screens/video_call_screen.dart';
-import 'call_api_service.dart';
 
 class StreamingService {
   /// Global lock to prevent overlapping or duplicate incoming calls during active session

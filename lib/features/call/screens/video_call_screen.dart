@@ -328,7 +328,6 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       } catch (_) {}
 
       _updateLiveKitRemoteTrack();
-      _onMediaConnected();
     } catch (e) {
       debugPrint('[VideoCallScreen] LiveKit connect error: $e');
     }
@@ -727,7 +726,11 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _webrtcService.toggleSpeakerphone(true);
     });
 
-    // 🛑 Media is flowing: stop ringing and activate in-call controls & timer
+    // 🛑 Media is flowing: stop ringing and activate in-call controls & timer only if accepted or incoming
+    if (!_isCallAccepted && !widget.isIncoming) {
+      return;
+    }
+
     CallSoundManager.stopRingtone();
     _ringTimeoutTimer?.cancel();
     _ringTimeoutTimer = null;
