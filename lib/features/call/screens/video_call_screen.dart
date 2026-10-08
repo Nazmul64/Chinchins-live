@@ -445,7 +445,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           _onMediaConnected(stream);
         },
         onCallEnded: () {
-          if (mounted && !_isEndingCall) {
+          if (_isCallAccepted && mounted && !_isEndingCall) {
             _terminateCallSession('Call ended');
           }
         },
@@ -837,6 +837,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               ? Map<String, dynamic>.from(rawPayload)
               : Map<String, dynamic>.from(signal);
 
+          final senderRole = (payload['sender_role'] ?? signal['sender_role'])?.toString().toLowerCase();
+          if (senderRole == 'caller') continue; // Ignore caller's own signals
+
           final sigType = (signal['type'] ?? payload['type'] ?? '').toString().toLowerCase();
           final action = (payload['action'] ?? payload['event'] ?? '').toString().toLowerCase();
           final status = (payload['status'] ?? payload['call_status'] ?? '').toString().toLowerCase();
@@ -859,14 +862,14 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
             _pollingTimer = null;
             _terminateCallSession('Call declined by host');
             return;
-          } else if (sigType == 'cancelled' ||
+          } else if (_isCallAccepted && (sigType == 'cancelled' ||
               sigType == 'ended' ||
               sigType == 'hangup' ||
               sigType == 'bye' ||
               action == 'call_cancelled' ||
               action == 'call_ended' ||
               status == 'cancelled' ||
-              status == 'ended') {
+              status == 'ended')) {
             timer.cancel();
             _pollingTimer = null;
             _terminateCallSession('Call was ended');
@@ -883,17 +886,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         if (!mounted || statusData == null || _isEndingCall) return;
 
         final status = (statusData['status'] ?? statusData['data']?['status'])?.toString().toLowerCase();
-        final isTerminated = statusData['is_terminated'] == true || statusData['data']?['is_terminated'] == true;
 
-        if (status == 'rejected') {
+        if (status == 'rejected' || status == 'declined') {
           timer.cancel();
           _pollingTimer = null;
           _terminateCallSession('Host declined the call');
-        } else if (status == 'cancelled') {
-          timer.cancel();
-          _pollingTimer = null;
-          _terminateCallSession('Call was cancelled');
-        } else if (status == 'ended' || isTerminated) {
+        } else if (_isCallAccepted && (status == 'cancelled' || status == 'ended')) {
           timer.cancel();
           _pollingTimer = null;
           _terminateCallSession('Call ended');

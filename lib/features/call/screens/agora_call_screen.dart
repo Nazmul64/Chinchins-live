@@ -114,6 +114,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   int _callSeconds = 0;
   Timer? _timer;
   Timer? _pollingTimer;
+  Timer? _ringTimeoutTimer;
   StreamSubscription? _wsAcceptedSub;
   StreamSubscription? _wsEndedSub;
   StreamSubscription? _wsRejectedSub;
@@ -173,6 +174,16 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       if (!widget.isIncoming) {
         _isConnecting = true;
         CallSoundManager.playOutgoingRingtone(widget.dialToneUrl);
+
+        // 🛑 ৪৫ সেকেন্ড রিংগিং টাইমআউট
+        _ringTimeoutTimer?.cancel();
+        _ringTimeoutTimer = Timer(const Duration(seconds: 45), () {
+          if (_isConnecting && !_isEndingCall) {
+            CallSoundManager.stopRingtone();
+            _endCall();
+          }
+        });
+
         if (_callId == null && !_hasInitiatedCall) {
           _initiateOutgoingCall();
         }
@@ -253,6 +264,8 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
 
     _wsAcceptedSub = signaling.onCallAccepted.listen((data) {
       debugPrint('[AgoraCallScreen] Received onCallAccepted via WebSocket: $data');
+      _ringTimeoutTimer?.cancel();
+      _ringTimeoutTimer = null;
       CallSoundManager.stopRingtone();
       if (mounted) {
         setState(() {
@@ -416,6 +429,8 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
           },
           onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
             if (mounted) {
+              _ringTimeoutTimer?.cancel();
+              _ringTimeoutTimer = null;
               CallSoundManager.stopRingtone();
               setState(() {
                 _remoteUid = remoteUid;
@@ -597,6 +612,8 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
           status == 'missed' ||
           status == 'timeout';
       if (status == 'connected' || status == 'accepted') {
+        _ringTimeoutTimer?.cancel();
+        _ringTimeoutTimer = null;
         CallSoundManager.stopRingtone();
         if (mounted) {
           setState(() {
@@ -605,7 +622,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
           _startCallTimer();
         }
       }
-      if (isTerminated) {
+      if (status == 'rejected' || status == 'declined' || (!_isConnecting && isTerminated)) {
         CallSoundManager.stopRingtone();
         _endCall();
       }
@@ -759,6 +776,8 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     _timer = null;
     _pollingTimer?.cancel();
     _pollingTimer = null;
+    _ringTimeoutTimer?.cancel();
+    _ringTimeoutTimer = null;
     _wsAcceptedSub?.cancel();
     _wsAcceptedSub = null;
     _wsEndedSub?.cancel();
