@@ -826,8 +826,8 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     disposeCallSession();
 
     // ⚡ 2. Instantly close screen (0.00ms delay) (Mandate 3)
-    if (mounted && Navigator.canPop(context)) {
-      Navigator.of(context).pop();
+    if (mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
 
     // ⚡ 3. Fire POST /api/call/end (or cancel) to server (Mandate 3)

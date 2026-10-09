@@ -479,6 +479,25 @@ class AuthApiService {
     return token;
   }
 
+  /// Instantaneous Synchronous lookup for current logged-in user (0.00ms latency)
+  static Map<String, dynamic>? getSavedUserSync() {
+    if (_inMemoryUser != null) {
+      return _inMemoryUser;
+    }
+    final hiveUser = HiveCacheService.getCachedUserProfile();
+    if (hiveUser != null) {
+      _inMemoryUser = hiveUser;
+      return hiveUser;
+    }
+    return null;
+  }
+
+  /// Instantaneous current User ID
+  static String? getCachedUserId() {
+    final user = getSavedUserSync();
+    return user?['id']?.toString() ?? user?['user_id']?.toString() ?? user?['account_id']?.toString();
+  }
+
   /// Retrieve stored user data (0.00ms Hive instant lookup first)
   static Future<Map<String, dynamic>?> getSavedUser() async {
     if (_inMemoryUser != null) {

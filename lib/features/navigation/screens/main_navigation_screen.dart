@@ -188,12 +188,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _handleIncomingCallData(Map<String, dynamic> incoming) async {
-    // 🛑 Block all incoming call screens if user is already inside an active call or in incoming call screen
-    if (StreamingService.isCallActive) {
-      debugPrint('[MainNavigationScreen] Blocked incoming call: User is already active in a call session.');
-      return;
-    }
-
     final payload = incoming['data'] is Map ? Map<String, dynamic>.from(incoming['data']) : incoming;
     final dynamic rawCallId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? payload['call_session_id'] ?? incoming['call_id'] ?? incoming['id'];
     
@@ -209,41 +203,53 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       return;
     }
 
+    final rawCaller = (payload['caller'] is Map ? payload['caller'] : null) ??
+        (payload['sender'] is Map ? payload['sender'] : null) ??
+        (payload['user'] is Map ? payload['user'] : null) ??
+        (payload['from_user'] is Map ? payload['from_user'] : null) ??
+        (incoming['caller'] is Map ? incoming['caller'] : null) ??
+        (incoming['sender'] is Map ? incoming['sender'] : null) ??
+        (incoming['user'] is Map ? incoming['user'] : null) ??
+        {};
+    final caller = Map<String, dynamic>.from(rawCaller);
+    
+    final callerId = caller['id']?.toString() ??
+        caller['user_id']?.toString() ??
+        caller['account_id']?.toString() ??
+        payload['caller_id']?.toString() ??
+        payload['from_user_id']?.toString() ??
+        incoming['caller_id']?.toString() ??
+        '';
+    final callerAccountId = caller['account_id']?.toString() ?? callerId;
+
+    // 🛑 1. CRITICAL: PREVENT SELF-CALL LOOP (Synchronous 0ms check first!)
+    final savedUser = AuthApiService.getSavedUserSync() ?? await AuthApiService.getSavedUser();
+    final myId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString();
+    final myAccountId = savedUser?['account_id']?.toString() ?? savedUser?['display_id']?.toString();
+
+    if (callerId.isNotEmpty) {
+      if ((myId != null && myId.isNotEmpty && (myId == callerId || myId == callerAccountId)) ||
+          (myAccountId != null && myAccountId.isNotEmpty && (myAccountId == callerId || myAccountId == callerAccountId)) ||
+          (myId != null && callerAccountId.isNotEmpty && myId == callerAccountId)) {
+        debugPrint('[MainNavigationScreen] 🛑 SELF-CALL BLOCKED: Caller ID ($callerId) matches current User ID ($myId). Ghost call ignored.');
+        return;
+      }
+    }
+
+    // 🛑 2. Block if recently ended or already on active call screen
     if (_recentlyEndedCallIds.contains(callId)) {
       debugPrint('[MainNavigationScreen] Ignored ghost incoming call from recently ended callId: $callId');
+      return;
+    }
+
+    if (StreamingService.isCallActive) {
+      debugPrint('[MainNavigationScreen] Blocked incoming call: User is already active in a call session.');
       return;
     }
 
     if (callId != _activeIncomingCallId) {
       _activeIncomingCallId = callId;
       StreamingService.isCallActive = true;
-      final rawCaller = (payload['caller'] is Map ? payload['caller'] : null) ??
-          (payload['sender'] is Map ? payload['sender'] : null) ??
-          (payload['user'] is Map ? payload['user'] : null) ??
-          (payload['from_user'] is Map ? payload['from_user'] : null) ??
-          (incoming['caller'] is Map ? incoming['caller'] : null) ??
-          (incoming['sender'] is Map ? incoming['sender'] : null) ??
-          (incoming['user'] is Map ? incoming['user'] : null) ??
-          {};
-      final caller = Map<String, dynamic>.from(rawCaller);
-      
-      final callerId = caller['id']?.toString() ??
-          caller['user_id']?.toString() ??
-          caller['account_id']?.toString() ??
-          payload['caller_id']?.toString() ??
-          payload['from_user_id']?.toString() ??
-          '1';
-      final callerAccountId = caller['account_id']?.toString() ?? callerId;
-
-      // Prevent Self-Calling Loop
-      final savedUser = await AuthApiService.getSavedUser();
-      final myId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString();
-      final myAccountId = savedUser?['account_id']?.toString();
-      if ((myId != null && myId.isNotEmpty && (myId == callerId || myId == callerAccountId)) ||
-          (myAccountId != null && myAccountId.isNotEmpty && (myAccountId == callerId || myAccountId == callerAccountId))) {
-        debugPrint('[MainNavigationScreen] Ignored self-call event: myId=$myId, callerId=$callerId');
-        return;
-      }
 
       final callerName = caller['name'] ??
           caller['display_name'] ??
