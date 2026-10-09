@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -465,14 +465,17 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     }
 
     _wsAcceptedSub = signaling.onCallAccepted.listen((data) {
-      final dynamic evCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
-      final dynamic evChannel = data['channel_name'] ?? data['room_name'] ?? data['channel'];
+      final payload = (data['data'] is Map) ? data['data'] as Map<String, dynamic> : data;
+      final dynamic evCallId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? data['call_id'] ?? data['id'];
+      final dynamic evChannel = payload['channel_name'] ?? payload['room_name'] ?? payload['channel'] ?? data['channel_name'] ?? data['room_name'];
       final myCallId = _callId ?? widget.callId;
       final myChannel = _channelName ?? widget.channelName;
       if (evCallId != null && myCallId != null && evCallId.toString() != myCallId.toString()) return;
       if (evChannel != null && myChannel != null && evChannel.toString() != myChannel.toString() && evCallId == null) return;
-      debugPrint('[VideoCallScreen] WebSocket Call Accepted event received: ' + data.toString());
-      _handleCallAccepted(data);
+      debugPrint('[VideoCallScreen] WebSocket Call Accepted event received: $data');
+      _ringTimeoutTimer?.cancel();
+      _ringTimeoutTimer = null;
+      _handleCallAccepted(payload.isNotEmpty ? payload : data);
     });
 
     _wsEndedSub = signaling.onCallEnded.listen((data) {
