@@ -1,4 +1,4 @@
-import 'package:audioplayers/audioplayers.dart';
+﻿import 'package:audioplayers/audioplayers.dart';
 import '../../../core/utils/app_logger.dart';
 
 class CallSoundManager {
@@ -21,6 +21,7 @@ class CallSoundManager {
   static String? get incomingRingtoneUrl => _cachedIncomingRingtoneUrl;
   static String? get outgoingRingtoneUrl => _cachedOutgoingRingtoneUrl;
 
+  /// Caller phone: Play only local gentle dial tone ("Tring Tring")
   static Future<void> playOutgoingRingtone([String? customUrl]) async {
     if (_isPlaying) return;
     try {
@@ -45,25 +46,16 @@ class CallSoundManager {
       await _player!.setReleaseMode(ReleaseMode.loop);
       await _player!.setVolume(1.0);
 
-      final targetUrl = (customUrl != null && customUrl.trim().isNotEmpty && customUrl.startsWith('http'))
-          ? customUrl.trim()
-          : (_cachedOutgoingRingtoneUrl != null && _cachedOutgoingRingtoneUrl!.startsWith('http')
-              ? _cachedOutgoingRingtoneUrl
-              : null);
-
-      if (targetUrl != null) {
-        AppLogger.info('CallSound', 'Playing dynamic outgoing calling ringtone sound ($targetUrl)...');
-        await _player!.play(UrlSource(targetUrl));
-      } else {
-        AppLogger.info('CallSound', 'Playing asset outgoing calling ringtone sound...');
-        await _player!.play(AssetSource('sounds/calling_ringtone.wav'));
-      }
+      // Caller strictly plays local gentle dial tone (never admin song)
+      AppLogger.info('CallSound', 'Playing gentle local dial tone (AssetSource: sounds/calling_ringtone.wav)...');
+      await _player!.play(AssetSource('sounds/calling_ringtone.wav'));
       _isPlaying = true;
     } catch (e, st) {
       AppLogger.error('CallSoundError', e, st);
     }
   }
 
+  /// Receiver phone: Wake screen on IncomingCallEvent / FCM, and loop the custom admin ringtone
   static Future<void> playIncomingRingtone([String? customUrl]) async {
     if (_isPlaying) return;
     try {
@@ -95,7 +87,7 @@ class CallSoundManager {
               : null);
 
       if (targetUrl != null) {
-        AppLogger.info('CallSound', 'Playing dynamic incoming phone ringing sound ($targetUrl)...');
+        AppLogger.info('CallSound', 'Playing dynamic incoming admin ringtone sound ($targetUrl)...');
         await _player!.play(UrlSource(targetUrl));
       } else {
         AppLogger.info('CallSound', 'Playing asset incoming phone ringing sound...');
