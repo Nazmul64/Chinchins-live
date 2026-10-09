@@ -28,36 +28,37 @@ class CallkitService {
     _isListenerInitialized = true;
 
     try {
-      FlutterCallkitIncoming.onEvent.listen((CallEvent? event) {
+      FlutterCallkitIncoming.onEvent.listen((dynamic event) {
         if (event == null) return;
-        AppLogger.info('CallkitService', 'Callkit Event: ${event.event} | Body: ${event.body}');
+        AppLogger.info('CallkitService', 'Callkit Event received: $event');
 
-        final extra = (event.body is Map && event.body['extra'] is Map)
-            ? Map<String, dynamic>.from(event.body['extra'] as Map)
-            : <String, dynamic>{};
+        Map<String, dynamic> extra = {};
+        String eventName = '';
 
-        switch (event.event) {
-          case Event.actionCallAccept:
-            AppLogger.info('CallkitService', 'User accepted call from CallKit');
-            onCallAccepted?.call(extra);
-            break;
+        try {
+          // Dynamic reflection over CallEvent fields
+          final dyn = event as dynamic;
+          eventName = (dyn.event ?? dyn.name ?? dyn.type ?? '').toString();
+          final rawBody = dyn.body ?? dyn.data;
+          if (rawBody is Map && rawBody['extra'] is Map) {
+            extra = Map<String, dynamic>.from(rawBody['extra'] as Map);
+          } else if (rawBody is Map) {
+            extra = Map<String, dynamic>.from(rawBody);
+          }
+        } catch (_) {}
 
-          case Event.actionCallDecline:
-            AppLogger.info('CallkitService', 'User declined call from CallKit');
-            onCallDeclined?.call(extra);
-            break;
-
-          case Event.actionCallTimeout:
-            AppLogger.info('CallkitService', 'CallKit ringing timeout');
-            onCallTimedOut?.call(extra);
-            break;
-
-          case Event.actionCallEnded:
-            AppLogger.info('CallkitService', 'CallKit call ended');
-            break;
-
-          default:
-            break;
+        final lower = eventName.toLowerCase();
+        if (lower.contains('accept')) {
+          AppLogger.info('CallkitService', 'User accepted call from CallKit');
+          onCallAccepted?.call(extra);
+        } else if (lower.contains('decline')) {
+          AppLogger.info('CallkitService', 'User declined call from CallKit');
+          onCallDeclined?.call(extra);
+        } else if (lower.contains('timeout')) {
+          AppLogger.info('CallkitService', 'CallKit ringing timeout');
+          onCallTimedOut?.call(extra);
+        } else if (lower.contains('ended')) {
+          AppLogger.info('CallkitService', 'CallKit call ended');
         }
       });
     } catch (e, st) {
@@ -82,8 +83,6 @@ class CallkitService {
         avatar: callerAvatar,
         handle: callType == 'video' ? 'Video Call' : 'Audio Call',
         type: callType == 'video' ? 1 : 0,
-        textAccept: 'Accept',
-        textDecline: 'Decline',
         missedCallNotification: const NotificationParams(
           showNotification: true,
           isShowCallback: false,

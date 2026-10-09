@@ -20,7 +20,7 @@ class VPSConnectionTaskHandler extends TaskHandler {
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp) async {
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     AppLogger.info('ForegroundTask', 'VPS Connection background task destroyed.');
   }
 }
@@ -40,11 +40,6 @@ class ForegroundTaskService {
           channelDescription: 'Maintains live incoming call connection with VPS server',
           channelImportance: NotificationChannelImportance.LOW,
           priority: NotificationPriority.LOW,
-          iconData: const NotificationIconData(
-            resType: ResourceType.mipmap,
-            resPrefix: ResourcePrefix.ic,
-            name: 'launcher',
-          ),
         ),
         iosNotificationOptions: const IOSNotificationOptions(
           showNotification: false,
