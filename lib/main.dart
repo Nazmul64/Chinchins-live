@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core/services/app_cache_service.dart';
 import 'core/services/customer_profile_icon_service.dart';
+import 'core/services/foreground_task_service.dart';
 import 'core/services/fast_api_client.dart';
 import 'core/services/hive_cache_service.dart';
 import 'core/services/local_vault.dart';
@@ -13,6 +14,9 @@ import 'features/auth/screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ⚡ Initialize Foreground Task & CallKit for background VPS calling
+  ForegroundTaskService.init();
 
   // ⚡ Initialize L1/L2 Local Fast Storage, Hive & Disk Caches
   await HiveCacheService.init();

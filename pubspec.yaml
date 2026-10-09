@@ -53,6 +53,8 @@ dependencies:
   permission_handler: 11.3.1
   livekit_client: ^2.2.0
   wakelock_plus: ^1.2.8
+  flutter_callkit_incoming: ^3.1.6
+  flutter_foreground_task: ^11.0.3
 
 dev_dependencies:
   flutter_test:

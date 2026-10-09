@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/models/model_profile.dart';
+import '../../../core/services/callkit_service.dart';
 import '../../../core/services/signaling_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_logger.dart';
@@ -127,6 +128,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _wsEndedSub?.cancel();
     _wsEndedSub = null;
     CallSoundManager.stopRingtone();
+    CallkitService.endAllCalls();
     if (mounted) {
       Navigator.of(context).popUntil((route) => route.isFirst);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -176,6 +178,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
     // রিংটোন সাথে সাথে বন্ধ
     CallSoundManager.stopRingtone();
+    CallkitService.endAllCalls();
 
     final dynamic rawCallId = widget.callId ??
         widget.initialSessionData?['call_id'] ??
@@ -230,6 +233,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _wsEndedSub = null;
 
     await CallSoundManager.stopRingtone();
+    CallkitService.endAllCalls();
 
     if (widget.callId != null) {
       await CallApiService.rejectCall(

@@ -334,6 +334,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.4.2"
+  flutter_callkit_incoming:
+    dependency: "direct main"
+    description:
+      name: flutter_callkit_incoming
+      sha256: "2d47db2e8d32d333e0352d37b0a4e643f606a54f8a541db17af7c42f18c58318"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.6"
+  flutter_foreground_task:
+    dependency: "direct main"
+    description:
+      name: flutter_foreground_task
+      sha256: fe0e8c88fbdeb703161e20c54ffd10593fb112ccfa068c989ad2a93d28e4b976
+      url: "https://pub.dev"
+    source: hosted
+    version: "11.0.3"
   flutter_lints:
     dependency: "direct overridden"
     description:

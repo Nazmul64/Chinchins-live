@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/signaling_service.dart';
+import '../../../core/services/foreground_task_service.dart';
+import '../../../core/services/callkit_service.dart';
 import '../../../core/services/remote_config_service.dart';
 import '../../../core/services/app_update_service.dart';
 import '../../../core/services/device_registration_service.dart';
@@ -96,6 +98,28 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   void _initWebSocketSignaling() async {
     try {
+      // 🚀 Start Foreground Task so WebSocket stays permanently alive on VPS even on lock screen
+      ForegroundTaskService.startService();
+
+      // 📞 Initialize CallKit actions
+      CallkitService.init(
+        onAccept: (data) {
+          final dynamic rawCallId = data['call_id'] ?? data['id'];
+          final int? cId = rawCallId is int ? rawCallId : int.tryParse(rawCallId?.toString() ?? '');
+          if (cId != null && cId > 0) {
+            CallApiService.acceptCall(callId: cId, channelName: data['channel_name']?.toString());
+          }
+        },
+        onDecline: (data) {
+          final dynamic rawCallId = data['call_id'] ?? data['id'];
+          final int? cId = rawCallId is int ? rawCallId : int.tryParse(rawCallId?.toString() ?? '');
+          if (cId != null && cId > 0) {
+            CallApiService.rejectCall(callId: cId, reason: 'declined');
+          }
+          CallkitService.endAllCalls();
+        },
+      );
+
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString();
@@ -115,6 +139,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         _wsEndedSub?.cancel();
         _wsEndedSub = signaling.onCallEnded.listen((data) {
           _activeIncomingCallId = null;
+          CallkitService.endAllCalls();
           final dynamic rawCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
           if (rawCallId != null) {
             final id = int.tryParse(rawCallId.toString());
@@ -127,6 +152,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         _wsCancelledSub?.cancel();
         _wsCancelledSub = signaling.onCallCancelled.listen((data) {
           _activeIncomingCallId = null;
+          CallkitService.endAllCalls();
           final dynamic rawCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
           if (rawCallId != null) {
             final id = int.tryParse(rawCallId.toString());
@@ -139,6 +165,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         _wsRejectedSub?.cancel();
         _wsRejectedSub = signaling.onCallRejected.listen((data) {
           _activeIncomingCallId = null;
+          CallkitService.endAllCalls();
           final dynamic rawCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
           if (rawCallId != null) {
             final id = int.tryParse(rawCallId.toString());
@@ -259,6 +286,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         CallSoundManager.setDynamicRingtones(incomingUrl: ringtoneUrl);
       }
 
+      // 📞 Trigger CallKit Full-Screen Notification / Call UI
+      CallkitService.showIncomingCall(
+        callId: callId.toString(),
+        callerName: callerName,
+        callerAvatar: callerAvatar,
+        channelName: channelName,
+        callType: (payload['call_type'] ?? incoming['call_type'] ?? 'video').toString(),
+        extraData: payload,
+      );
+
       if (!mounted) return;
       final navState = ChinchinsLiveApp.navigatorKey.currentState ?? Navigator.of(context);
       navState.push(
@@ -276,6 +313,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         ),
       ).then((_) {
         _activeIncomingCallId = null;
+        CallkitService.endAllCalls();
       });
     }
   }
