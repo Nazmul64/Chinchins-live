@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/models/model_profile.dart';
@@ -68,20 +68,20 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // ১. তাৎক্ষণিক ইনফিনিট লুপে ইনকামিং রিংটোন বাজানো
+    // ?. ????????? ??????? ???? ??????? ?????? ??????
     CallSoundManager.playIncomingRingtone(widget.ringtoneUrl);
 
-    // ২. সার্ভারকে রিংগিং কনফার্ম করা
+    // ?. ????????? ?????? ??????? ???
     if (widget.callId != null) {
       CallApiService.confirmRinging(callId: widget.callId!);
     }
 
-    // ৩. রিয়েলটাইম ওয়েব-সকেট ও স্ট্যাটাস পোলিং
+    // ?. ????????? ????-???? ? ????????? ?????
     _subscribeSignalingEvents();
     _startStatusPolling();
 
-    // ৪. ৪৫ সেকেন্ড উত্তর না দিলে অটো মিসড কল
-    _timeoutTimer = Timer(const Duration(seconds: 45), () {
+    // ?. ?? ??????? ????? ?? ???? ??? ???? ??
+    _timeoutTimer = Timer(const Duration(seconds: 50), () {
       _stopRingtoneAndDismiss('Missed call');
     });
   }
@@ -176,7 +176,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _wsEndedSub?.cancel();
     _wsEndedSub = null;
 
-    // রিংটোন সাথে সাথে বন্ধ
+    // ?????? ???? ???? ????
     CallSoundManager.stopRingtone();
     CallkitService.endAllCalls();
 
@@ -189,19 +189,19 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         ? rawCallId
         : int.tryParse(rawCallId?.toString() ?? '');
 
-    debugPrint('[IncomingCallScreen] 🟢 Green Accept Button Tapped! CallId: $effectiveCallId');
+    debugPrint('[IncomingCallScreen] ?? Green Accept Button Tapped! CallId: $effectiveCallId');
 
     Map<String, dynamic>? acceptData;
     if (effectiveCallId != null && effectiveCallId > 0) {
-      // 🛑 Explicitly await POST /api/call/accept to guarantee server marks call as accepted
+      // ?? Explicitly await POST /api/call/accept to guarantee server marks call as accepted
       try {
         acceptData = await CallApiService.acceptCall(
           callId: effectiveCallId,
           channelName: widget.channelName,
         );
-        debugPrint('[IncomingCallScreen] ✅ acceptCall response: $acceptData');
+        debugPrint('[IncomingCallScreen] ? acceptCall response: $acceptData');
       } catch (e) {
-        debugPrint('[IncomingCallScreen] ❌ acceptCall error: $e');
+        debugPrint('[IncomingCallScreen] ? acceptCall error: $e');
       }
     }
 
@@ -264,7 +264,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // কলারের ব্যাকগ্রাউন্ড ছবি
+          // ?????? ????????????? ???
           CachedImageLoader(
             imageUrl: avatarUrl,
             fit: BoxFit.cover,
@@ -285,7 +285,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
             ),
           ),
 
-          // কলার ইনফো কার্ড
+          // ???? ???? ?????
           // Caller Information Card
           Positioned(
             left: 24,
@@ -388,8 +388,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                                     Text(
                                       (widget.model.country.toLowerCase().contains('india') ||
                                               (widget.initialSessionData?['caller_country'] ?? '').toString().toLowerCase().contains('india'))
-                                          ? '🇮🇳 '
-                                          : '🇧🇩 ',
+                                          ? '???? '
+                                          : '???? ',
                                       style: const TextStyle(fontSize: 10),
                                     ),
                                     Text(

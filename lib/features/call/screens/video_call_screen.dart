@@ -181,7 +181,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
         // 🛑 ৪৫ সেকেন্ড রিংগিং টাইমআউট (অটোমেটিক কল কেটে যাওয়া)
         _ringTimeoutTimer?.cancel();
-        _ringTimeoutTimer = Timer(const Duration(seconds: 45), () {
+        _ringTimeoutTimer = Timer(const Duration(seconds: 50), () {
           if (!_isCallAccepted && !_isEndingCall) {
             _cancelCallOnTimeout();
           }

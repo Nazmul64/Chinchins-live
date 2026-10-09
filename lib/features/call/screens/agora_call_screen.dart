@@ -177,7 +177,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
 
         // 🛑 ৪৫ সেকেন্ড রিংগিং টাইমআউট
         _ringTimeoutTimer?.cancel();
-        _ringTimeoutTimer = Timer(const Duration(seconds: 45), () {
+        _ringTimeoutTimer = Timer(const Duration(seconds: 50), () {
           if (_isConnecting && !_isEndingCall) {
             CallSoundManager.stopRingtone();
             _endCall();
