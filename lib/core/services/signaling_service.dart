@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'package:dart_pusher_channels/dart_pusher_channels.dart';
 import '../../config/app_config.dart';
@@ -652,29 +652,30 @@ class SignalingService {
       return;
     }
 
-    // 9. Incoming Call
-    if (cleanName == 'call.incoming' ||
+    // 9. Incoming Call (Strict matching on user channels and designated incoming call event names)
+    final isUserCallTarget = chName.contains('user.') ||
+        chName.contains('private-user.') ||
+        chName.contains('call.user.') ||
+        chName.contains('calls.') ||
+        chName.contains('call.');
+
+    final isIncomingCallEvent = cleanName == 'incoming-call' ||
+        cleanName == 'incoming_call' ||
+        cleanName == 'call.incoming' ||
         cleanName == 'CallIncoming' ||
         cleanName == 'incoming.call' ||
-        cleanName == 'incoming_call' ||
-        cleanName == 'call.initiated' ||
-        cleanName == 'CallInitiated' ||
-        cleanName == 'call_invitation' ||
-        cleanName == 'CallInvitation' ||
         cleanName == 'private_call.incoming' ||
-        cleanName == 'private_call.initiated' ||
+        cleanName == 'IncomingCallEvent' ||
+        cleanName == 'IncomingPrivateCallEvent' ||
         cleanName.endsWith('IncomingCallEvent') ||
+        cleanName.endsWith('IncomingPrivateCallEvent') ||
         cleanName.endsWith('CallIncomingEvent') ||
-        cleanName.endsWith('CallInitiatedEvent') ||
-        cleanName.endsWith('CallInvitationEvent') ||
-        cleanName.endsWith('PrivateCallIncomingEvent') ||
-        lowerName.contains('incoming') ||
-        lowerName.contains('call_initiated') ||
-        lowerName.contains('callinitiated') ||
-        lowerName.contains('call_invite') ||
-        lowerName.contains('callinvite') ||
-        ((data.containsKey('caller') || data.containsKey('sender') || data.containsKey('caller_id') || data.containsKey('caller_name')) &&
-            (data.containsKey('call_id') || data.containsKey('channel_name') || data.containsKey('call_session_id')))) {
+        cleanName.endsWith('CallIncoming') ||
+        lowerName == 'incoming-call' ||
+        lowerName == 'incoming_call' ||
+        lowerName == 'call.incoming';
+
+    if (isIncomingCallEvent && (isUserCallTarget || !isLiveRoomChannel)) {
       _incomingCallController.add(data);
       return;
     }

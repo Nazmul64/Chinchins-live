@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/models/model_profile.dart';
@@ -286,6 +286,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
           ),
 
           // কলার ইনফো কার্ড
+          // Caller Information Card
           Positioned(
             left: 24,
             bottom: 180,
@@ -341,18 +342,30 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                           Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: AppColors.badgePink,
+                                  color: ((widget.model.gender?.toLowerCase() ?? '') == 'male' ||
+                                          (widget.initialSessionData?['caller_gender'] ?? '') == 'male' ||
+                                          (widget.initialSessionData?['caller']?['gender'] ?? '') == 'male')
+                                      ? const Color(0xFF2979FF)
+                                      : AppColors.badgePink,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.female_rounded, color: Colors.white, size: 10),
+                                    Icon(
+                                      ((widget.model.gender?.toLowerCase() ?? '') == 'male' ||
+                                              (widget.initialSessionData?['caller_gender'] ?? '') == 'male' ||
+                                              (widget.initialSessionData?['caller']?['gender'] ?? '') == 'male')
+                                          ? Icons.male_rounded
+                                          : Icons.female_rounded,
+                                      color: Colors.white,
+                                      size: 11,
+                                    ),
                                     const SizedBox(width: 2),
                                     Text(
-                                      '${widget.model.age}',
+                                      '',
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 10,
@@ -364,21 +377,29 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                               ),
                               const SizedBox(width: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF00796B).withValues(alpha: 0.7),
+                                  color: const Color(0xFF00897B),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.location_on, color: Colors.white, size: 10),
-                                    const SizedBox(width: 2),
                                     Text(
-                                      '${widget.model.location} Division',
+                                      (widget.model.country.toLowerCase().contains('india') ||
+                                              (widget.initialSessionData?['caller_country'] ?? '').toString().toLowerCase().contains('india'))
+                                          ? '🇮🇳 '
+                                          : '🇧🇩 ',
+                                      style: const TextStyle(fontSize: 10),
+                                    ),
+                                    Text(
+                                      (widget.model.country.isNotEmpty && widget.model.country != 'null')
+                                          ? widget.model.country
+                                          : (widget.initialSessionData?['caller_country'] ?? widget.model.location).toString(),
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 10,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ],
@@ -413,8 +434,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
               ),
             ),
           ),
-
-          // কল রিসিভ ও ডিক্লাইন বাটন
           Positioned(
             bottom: 50,
             left: 40,

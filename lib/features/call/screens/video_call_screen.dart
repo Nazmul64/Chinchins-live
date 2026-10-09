@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -465,17 +465,41 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     }
 
     _wsAcceptedSub = signaling.onCallAccepted.listen((data) {
-      debugPrint('[VideoCallScreen] 🚀 WebSocket Call Accepted event received: $data');
+      final dynamic evCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
+      final dynamic evChannel = data['channel_name'] ?? data['room_name'] ?? data['channel'];
+      final myCallId = _callId ?? widget.callId;
+      final myChannel = _channelName ?? widget.channelName;
+      if (evCallId != null && myCallId != null && evCallId.toString() != myCallId.toString()) return;
+      if (evChannel != null && myChannel != null && evChannel.toString() != myChannel.toString() && evCallId == null) return;
+      debugPrint('[VideoCallScreen] WebSocket Call Accepted event received: ' + data.toString());
       _handleCallAccepted(data);
     });
 
     _wsEndedSub = signaling.onCallEnded.listen((data) {
+      final dynamic evCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
+      final dynamic evChannel = data['channel_name'] ?? data['room_name'] ?? data['channel'];
+      final myCallId = _callId ?? widget.callId;
+      final myChannel = _channelName ?? widget.channelName;
+      if (evCallId != null && myCallId != null && evCallId.toString() != myCallId.toString()) return;
+      if (evChannel != null && myChannel != null && evChannel.toString() != myChannel.toString() && evCallId == null) return;
       _terminateCallSession('Call ended by partner');
     });
     _wsRejectedSub = signaling.onCallRejected.listen((data) {
+      final dynamic evCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
+      final dynamic evChannel = data['channel_name'] ?? data['room_name'] ?? data['channel'];
+      final myCallId = _callId ?? widget.callId;
+      final myChannel = _channelName ?? widget.channelName;
+      if (evCallId != null && myCallId != null && evCallId.toString() != myCallId.toString()) return;
+      if (evChannel != null && myChannel != null && evChannel.toString() != myChannel.toString() && evCallId == null) return;
       _terminateCallSession('Call declined by host');
     });
     _wsCancelledSub = signaling.onCallCancelled.listen((data) {
+      final dynamic evCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
+      final dynamic evChannel = data['channel_name'] ?? data['room_name'] ?? data['channel'];
+      final myCallId = _callId ?? widget.callId;
+      final myChannel = _channelName ?? widget.channelName;
+      if (evCallId != null && myCallId != null && evCallId.toString() != myCallId.toString()) return;
+      if (evChannel != null && myChannel != null && evChannel.toString() != myChannel.toString() && evCallId == null) return;
       _terminateCallSession('Call was cancelled');
     });
     _wsInCallMsgSub = signaling.onInCallMessage.listen((data) {
@@ -1969,4 +1993,4 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     );
   }
 }
-
+

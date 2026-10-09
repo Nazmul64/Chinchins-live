@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/signaling_service.dart';
@@ -263,13 +263,40 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           payload['caller_avatar'] ??
           'https://chinchins.live/uploads/app/logo.png';
 
+      final callerCountry = caller['country'] ??
+          caller['country_name'] ??
+          payload['caller_country'] ??
+          payload['country'] ??
+          incoming['caller_country'] ??
+          incoming['country'] ??
+          'Bangladesh';
+
+      final callerCity = caller['city'] ??
+          caller['location'] ??
+          payload['caller_city'] ??
+          incoming['caller_city'] ??
+          'Dhaka';
+
+      final callerGender = caller['gender'] ??
+          payload['caller_gender'] ??
+          incoming['caller_gender'] ??
+          'female';
+
+      final callerAge = caller['age'] ??
+          payload['caller_age'] ??
+          incoming['caller_age'] ??
+          22;
+
       final model = ModelProfile.fromJson({
         'id': callerId,
         'account_id': callerAccountId,
         'name': callerName,
         'avatar': callerAvatar,
-        'age': caller['age'] ?? 22,
-        'country': caller['country'] ?? 'Bangladesh',
+        'profile_image': callerAvatar,
+        'age': callerAge,
+        'gender': callerGender,
+        'country': callerCountry,
+        'location': callerCity,
         'video_call_rate': payload['rate_per_minute'] ?? incoming['rate_per_minute'] ?? 100,
       });
 

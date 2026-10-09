@@ -1,4 +1,4 @@
-import '../widgets/cached_image_loader.dart';
+﻿import '../widgets/cached_image_loader.dart';
 
 class ModelProfile {
   final String id;
@@ -10,6 +10,7 @@ class ModelProfile {
   final String? email;
   final String? gender;
   final String? city;
+  final String country;
   final int age;
   final String location;
   final String intro;
@@ -53,6 +54,8 @@ class ModelProfile {
     this.email,
     this.gender,
     this.city,
+    this.country = 'Bangladesh',
+    
     required this.age,
     required this.location,
     required this.intro,
@@ -97,6 +100,7 @@ class ModelProfile {
     String? email,
     String? gender,
     String? city,
+    String? country,
     int? age,
     String? location,
     String? intro,
@@ -139,6 +143,8 @@ class ModelProfile {
       email: email ?? this.email,
       gender: gender ?? this.gender,
       city: city ?? this.city,
+      country: country ?? this.country,
+    
       age: age ?? this.age,
       location: location ?? this.location,
       intro: intro ?? this.intro,
@@ -412,6 +418,7 @@ class ModelProfile {
       email: email,
       gender: gender,
       city: city,
+      country: json['country']?.toString() ?? json['country_name']?.toString() ?? json['location']?.toString() ?? 'Bangladesh',
       age: json['age'] is int ? json['age'] : (int.tryParse('${json['age']}') ?? 25),
       location: json['country'] ?? json['location'] ?? 'Pakistan',
       intro: json['introduction'] ?? json['intro'] ?? 'Welcome to Chinchins Live! ✨',

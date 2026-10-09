@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:ui';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
@@ -276,21 +276,39 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     });
 
     _wsEndedSub = signaling.onCallEnded.listen((data) {
-      debugPrint('[AgoraCallScreen] Received onCallEnded via WebSocket: $data');
+      final dynamic evCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
+      final dynamic evChannel = data['channel_name'] ?? data['room_name'] ?? data['channel'];
+      final myCallId = _callId ?? widget.callId;
+      final myChannel = widget.channelName;
+      if (evCallId != null && myCallId != null && evCallId.toString() != myCallId.toString()) return;
+      if (evChannel != null && myChannel.isNotEmpty && evChannel.toString() != myChannel && evCallId == null) return;
+      debugPrint('[AgoraCallScreen] Received onCallEnded via WebSocket: ' + data.toString());
       CallSoundManager.stopRingtone();
       if (mounted && !_isEndingCall) {
         _endCall();
       }
     });
     _wsRejectedSub = signaling.onCallRejected.listen((data) {
-      debugPrint('[AgoraCallScreen] Received onCallRejected via WebSocket: $data');
+      final dynamic evCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
+      final dynamic evChannel = data['channel_name'] ?? data['room_name'] ?? data['channel'];
+      final myCallId = _callId ?? widget.callId;
+      final myChannel = widget.channelName;
+      if (evCallId != null && myCallId != null && evCallId.toString() != myCallId.toString()) return;
+      if (evChannel != null && myChannel.isNotEmpty && evChannel.toString() != myChannel && evCallId == null) return;
+      debugPrint('[AgoraCallScreen] Received onCallRejected via WebSocket: ' + data.toString());
       CallSoundManager.stopRingtone();
       if (mounted && !_isEndingCall) {
         _endCall();
       }
     });
     _wsCancelledSub = signaling.onCallCancelled.listen((data) {
-      debugPrint('[AgoraCallScreen] Received onCallCancelled via WebSocket: $data');
+      final dynamic evCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
+      final dynamic evChannel = data['channel_name'] ?? data['room_name'] ?? data['channel'];
+      final myCallId = _callId ?? widget.callId;
+      final myChannel = widget.channelName;
+      if (evCallId != null && myCallId != null && evCallId.toString() != myCallId.toString()) return;
+      if (evChannel != null && myChannel.isNotEmpty && evChannel.toString() != myChannel && evCallId == null) return;
+      debugPrint('[AgoraCallScreen] Received onCallCancelled via WebSocket: ' + data.toString());
       CallSoundManager.stopRingtone();
       if (mounted && !_isEndingCall) {
         _endCall();

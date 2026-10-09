@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
@@ -1043,7 +1043,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
             action: SnackBarAction(
               label: 'VIEW',
               textColor: const Color(0xFF00E5FF),
-              onPressed: _showHostJoinRequestsSheet,
+              onPressed: () { try { ScaffoldMessenger.of(context).hideCurrentSnackBar(); } catch (_) {} _showHostJoinRequestsSheet(); },
             ),
           ),
         );
@@ -1076,7 +1076,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
             action: SnackBarAction(
               label: 'VIEW',
               textColor: const Color(0xFF00E5FF),
-              onPressed: _showHostJoinRequestsSheet,
+              onPressed: () { try { ScaffoldMessenger.of(context).hideCurrentSnackBar(); } catch (_) {} _showHostJoinRequestsSheet(); },
             ),
           ),
         );
@@ -1949,6 +1949,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   }
 
   void _showHostJoinRequestsSheet() async {
+    try {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    } catch (_) {}
     // Fetch latest requests from server
     final serverRequests = await LiveStreamingApiService.getJoinRequests(_activeLiveId ?? widget.host.id);
     if (mounted && serverRequests.isNotEmpty) {
