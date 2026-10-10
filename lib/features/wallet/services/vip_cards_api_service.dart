@@ -244,19 +244,29 @@ class VipCardsApiService {
 
           final decoded = jsonDecode(response.body);
           if (decoded is Map) {
-            if (response.statusCode == 200 || response.statusCode == 201 || decoded['status'] == true || decoded['success'] == true) {
+            final isSuccess = decoded['status'] == true || decoded['success'] == true;
+            final isRedirectToDeposit = decoded['redirect_to_deposit'] == true ||
+                decoded['insufficient_balance'] == true ||
+                decoded['code'] == 'INSUFFICIENT_BALANCE' ||
+                (decoded['message'] != null && (
+                  decoded['message'].toString().toLowerCase().contains('insufficient') ||
+                  decoded['message'].toString().toLowerCase().contains('balance') ||
+                  decoded['message'].toString().toLowerCase().contains('recharge')
+                ));
+
+            if (isSuccess && !isRedirectToDeposit) {
               return {
                 'success': true,
                 'message': decoded['message'] ?? 'VIP card activated successfully!',
                 'data': decoded['data'],
               };
-            } else if (response.statusCode == 400 || response.statusCode == 422 || response.statusCode == 402) {
+            } else {
               return {
                 'success': false,
-                'message': decoded['message'] ?? 'Failed to activate VIP card.',
-                'required_coins': decoded['required_coins'] ?? decoded['required_diamonds'],
-                'current_coins': decoded['current_coins'] ?? decoded['current_diamonds'],
-                'redirect_to_deposit': decoded['redirect_to_deposit'] == true || decoded['insufficient_balance'] == true,
+                'message': decoded['message'] ?? 'Insufficient balance to activate VIP card.',
+                'required_coins': decoded['required_coins'] ?? decoded['required_diamonds'] ?? decoded['data']?['required_coins'],
+                'current_coins': decoded['current_coins'] ?? decoded['current_diamonds'] ?? decoded['data']?['current_balance'],
+                'redirect_to_deposit': true,
               };
             }
           }

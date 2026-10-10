@@ -87,10 +87,20 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   }
 
   void _subscribeSignalingEvents() {
-    _wsCancelledSub = SignalingService().onCallCancelled.listen((_) {
+    _wsCancelledSub = SignalingService().onCallCancelled.listen((data) {
+      final payload = (data['data'] is Map) ? data['data'] as Map<String, dynamic> : data;
+      final dynamic evCallId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? data['call_id'] ?? data['id'];
+      final dynamic evChannel = payload['channel_name'] ?? payload['room_name'] ?? payload['channel'] ?? data['channel_name'] ?? data['room_name'];
+      if (evCallId != null && widget.callId != null && evCallId.toString() != widget.callId.toString()) return;
+      if (evChannel != null && widget.channelName != null && evChannel.toString() != widget.channelName.toString() && evCallId == null) return;
       _stopRingtoneAndDismiss('Call cancelled by caller');
     });
-    _wsEndedSub = SignalingService().onCallEnded.listen((_) {
+    _wsEndedSub = SignalingService().onCallEnded.listen((data) {
+      final payload = (data['data'] is Map) ? data['data'] as Map<String, dynamic> : data;
+      final dynamic evCallId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? data['call_id'] ?? data['id'];
+      final dynamic evChannel = payload['channel_name'] ?? payload['room_name'] ?? payload['channel'] ?? data['channel_name'] ?? data['room_name'];
+      if (evCallId != null && widget.callId != null && evCallId.toString() != widget.callId.toString()) return;
+      if (evChannel != null && widget.channelName != null && evChannel.toString() != widget.channelName.toString() && evCallId == null) return;
       _stopRingtoneAndDismiss('Call ended by caller');
     });
   }

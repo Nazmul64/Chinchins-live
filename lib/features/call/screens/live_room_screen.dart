@@ -1003,6 +1003,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   void _addJoinRequest(Map<String, dynamic> newReq) {
     final userId = newReq['user_id'] ?? newReq['userId'] ?? newReq['guest_user_id'] ?? newReq['sender_id'];
     if (userId == null) return;
+    if (_isGuestConnected && _guestUid != null && _guestUid.toString() == userId.toString()) return;
+    final status = (newReq['status'] ?? newReq['action'] ?? '').toString().toLowerCase();
+    if (status == 'accepted' || status == 'rejected') return;
     final reqId = newReq['request_id'] ?? newReq['id'] ?? newReq['invitation_id'];
 
     if (!_pendingJoinRequests.any((item) =>
@@ -1682,7 +1685,16 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () {
+              try {
+                ScaffoldMessenger.of(context).clearSnackBars();
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              } catch (_) {}
               Navigator.pop(ctx);
+              setState(() {
+                _pendingJoinRequests.removeWhere((item) => (item['request_id'] ?? item['id'] ?? item['invitation_id']) == requestId || (item['user_id'] ?? item['guest_user_id']) == targetUserId);
+                _guestUid = targetUserId is int ? targetUserId : int.tryParse('$targetUserId');
+                _isGuestConnected = true;
+              });
               LiveStreamingApiService.respondJoinCoHost(
                 requestId: requestId,
                 action: 'accept',

@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/cached_image_loader.dart';
 import '../services/vip_cards_api_service.dart';
 import '../services/wallet_api_service.dart';
+import 'deposit_screen.dart';
 
 class MonthlyCardScreen extends StatefulWidget {
   final int initialCardIndex;
@@ -308,13 +309,49 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
       );
       _loadCardsAndSession();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(res['message'] ?? 'Failed to activate VIP card.'),
-          backgroundColor: const Color(0xFFB71C1C),
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      if (res['redirect_to_deposit'] == true) {
+        final double rawPrice = (card['price_bdt'] is num)
+            ? (card['price_bdt'] as num).toDouble()
+            : (card['price'] is num ? (card['price'] as num).toDouble() : (double.tryParse(card['price_bdt']?.toString() ?? card['price']?.toString() ?? '300') ?? 300.0));
+
+        final int instantCoins = (card['instant_reward_coins'] is int)
+            ? card['instant_reward_coins']
+            : (int.tryParse(card['instant_reward_coins']?.toString() ?? '8100') ?? 8100);
+
+        final int totalCoins = (card['total_return_coins'] is int)
+            ? card['total_return_coins']
+            : (int.tryParse(card['total_return_coins']?.toString() ?? '14580') ?? 14580);
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DepositScreen(
+              selectedPackage: {
+                'id': card['id'],
+                'package_id': card['id'],
+                'name': card['name'] ?? 'VIP Privilege Card',
+                'price': rawPrice,
+                'price_bdt': rawPrice,
+                'rate_bdt': rawPrice,
+                'coins': instantCoins,
+                'total_coins': totalCoins,
+                'card_type': card['card_type'],
+              },
+              onDepositSuccess: () {
+                _loadCardsAndSession();
+              },
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message'] ?? 'Failed to activate VIP card.'),
+            backgroundColor: const Color(0xFFB71C1C),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
