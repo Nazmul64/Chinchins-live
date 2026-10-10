@@ -165,6 +165,9 @@ class StreamingService {
     String? dialToneUrl,
     Map<String, dynamic>? initialSessionData,
   }) {
+    // Set global call active lock immediately
+    isCallActive = true;
+
     // 1. Extract driver and configuration according to Dual-Engine Specification
     final sessionData = initialSessionData;
     final bool isAgoraExplicit = sessionData != null &&

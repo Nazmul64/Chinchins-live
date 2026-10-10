@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/models/model_profile.dart';
 import '../../../core/services/signaling_service.dart';
@@ -218,20 +218,54 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         caller['account_id']?.toString() ??
         payload['caller_id']?.toString() ??
         payload['from_user_id']?.toString() ??
+        payload['sender_id']?.toString() ??
+        payload['user_id']?.toString() ??
         incoming['caller_id']?.toString() ??
         '';
     final callerAccountId = caller['account_id']?.toString() ?? callerId;
+
+    final rawReceiver = (payload['receiver'] is Map ? payload['receiver'] : null) ??
+        (payload['target'] is Map ? payload['target'] : null) ??
+        (incoming['receiver'] is Map ? incoming['receiver'] : null) ??
+        (incoming['target'] is Map ? incoming['target'] : null) ??
+        {};
+    final receiver = Map<String, dynamic>.from(rawReceiver);
+
+    final receiverId = receiver['id']?.toString() ??
+        receiver['user_id']?.toString() ??
+        receiver['account_id']?.toString() ??
+        payload['receiver_id']?.toString() ??
+        payload['target_id']?.toString() ??
+        payload['to_user_id']?.toString() ??
+        incoming['receiver_id']?.toString() ??
+        '';
+    final receiverAccountId = receiver['account_id']?.toString() ?? receiverId;
 
     // 🛑 1. CRITICAL: PREVENT SELF-CALL LOOP (Synchronous 0ms check first!)
     final savedUser = AuthApiService.getSavedUserSync() ?? await AuthApiService.getSavedUser();
     final myId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString();
     final myAccountId = savedUser?['account_id']?.toString() ?? savedUser?['display_id']?.toString();
 
-    if (callerId.isNotEmpty) {
-      if ((myId != null && myId.isNotEmpty && (myId == callerId || myId == callerAccountId)) ||
-          (myAccountId != null && myAccountId.isNotEmpty && (myAccountId == callerId || myAccountId == callerAccountId)) ||
-          (myId != null && callerAccountId.isNotEmpty && myId == callerAccountId)) {
+    // A) If I am the caller -> BLOCK IMMEDIATELY (Caller never receives own call)
+    if (myId != null && myId.isNotEmpty) {
+      if (callerId == myId || callerAccountId == myId) {
         debugPrint('[MainNavigationScreen] 🛑 SELF-CALL BLOCKED: Caller ID ($callerId) matches current User ID ($myId). Ghost call ignored.');
+        return;
+      }
+    }
+    if (myAccountId != null && myAccountId.isNotEmpty) {
+      if (callerId == myAccountId || callerAccountId == myAccountId) {
+        debugPrint('[MainNavigationScreen] 🛑 SELF-CALL BLOCKED: Caller Account ID ($callerAccountId) matches current User Account ID ($myAccountId). Ghost call ignored.');
+        return;
+      }
+    }
+
+    // B) If I am NOT the intended receiver -> BLOCK IMMEDIATELY
+    if (receiverId.isNotEmpty && myId != null && myId.isNotEmpty) {
+      final bool matchesMyId = receiverId == myId || receiverAccountId == myId;
+      final bool matchesMyAccount = myAccountId != null && (receiverId == myAccountId || receiverAccountId == myAccountId);
+      if (!matchesMyId && !matchesMyAccount) {
+        debugPrint('[MainNavigationScreen] 🛑 MISMATCH RECEIVER: Call intended for receiver ($receiverId), not current user ($myId). Dropped.');
         return;
       }
     }

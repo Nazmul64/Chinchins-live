@@ -698,7 +698,7 @@ class WebRTCCallService {
       if (evChannel != null && channelName != null && channelName.isNotEmpty) {
         return evChannel.toString() == channelName.toString();
       }
-      return true;
+      return false;
     }
 
     _wsAcceptedSub = signaling.onCallAccepted.listen((data) {

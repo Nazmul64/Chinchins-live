@@ -1,4 +1,4 @@
-﻿import '../widgets/cached_image_loader.dart';
+import '../widgets/cached_image_loader.dart';
 
 class ModelProfile {
   final String id;

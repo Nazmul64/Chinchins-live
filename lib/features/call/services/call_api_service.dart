@@ -596,13 +596,18 @@ class CallApiService {
     }
   }
 
-  static Future<Map<String, dynamic>?> getCallStatus(dynamic callId) async {
+  static Future<Map<String, dynamic>?> getCallStatus(dynamic callId, {String? channelName}) async {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse(ApiConstants.callStatus(callId));
+      final baseUri = Uri.parse(ApiConstants.callStatus(callId));
+      final queryParams = <String, String>{};
+      if (channelName != null && channelName.isNotEmpty) {
+        queryParams['channel_name'] = channelName;
+      }
+      final url = queryParams.isNotEmpty ? baseUri.replace(queryParameters: queryParams) : baseUri;
       final headers = <String, String>{
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',

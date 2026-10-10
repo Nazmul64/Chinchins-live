@@ -1,4 +1,4 @@
-﻿import '../constants/api_constants.dart';
+import '../constants/api_constants.dart';
 
 class AppConfig {
   static const String appName = 'Chinchins Live';

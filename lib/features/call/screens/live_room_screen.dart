@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
@@ -269,6 +269,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
   // Join Requests Queue for Host
   final List<Map<String, dynamic>> _pendingJoinRequests = [];
+  final Set<String> _acceptedCoHostUserIds = {};
 
   // Real-time Stream Subscriptions
   StreamSubscription? _msgSub;
@@ -1001,15 +1002,16 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
   }
 
   void _addJoinRequest(Map<String, dynamic> newReq) {
-    final userId = newReq['user_id'] ?? newReq['userId'] ?? newReq['guest_user_id'] ?? newReq['sender_id'];
-    if (userId == null) return;
-    if (_isGuestConnected && _guestUid != null && _guestUid.toString() == userId.toString()) return;
+    final userId = (newReq['user_id'] ?? newReq['userId'] ?? newReq['guest_user_id'] ?? newReq['sender_id'])?.toString();
+    if (userId == null || userId.isEmpty) return;
+    if (_acceptedCoHostUserIds.contains(userId)) return;
+    if (_isGuestConnected && _guestUid != null && _guestUid.toString() == userId) return;
     final status = (newReq['status'] ?? newReq['action'] ?? '').toString().toLowerCase();
     if (status == 'accepted' || status == 'rejected') return;
     final reqId = newReq['request_id'] ?? newReq['id'] ?? newReq['invitation_id'];
 
     if (!_pendingJoinRequests.any((item) =>
-        (item['user_id'] ?? item['userId'] ?? item['guest_user_id'] ?? item['sender_id'])?.toString() == userId.toString() ||
+        (item['user_id'] ?? item['userId'] ?? item['guest_user_id'] ?? item['sender_id'])?.toString() == userId ||
         (reqId != null && (item['request_id'] ?? item['id'] ?? item['invitation_id'])?.toString() == reqId.toString()))) {
       setState(() {
         _pendingJoinRequests.add(newReq);
@@ -1023,6 +1025,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
     // 0. Co-Host / Join Request Listener for Host (✋ Live Join System)
     _joinReqSub = signaling.onLiveJoinRequest.listen((data) {
       if (mounted && widget.isHost) {
+        final targetUid = (data['user_id'] ?? data['userId'] ?? data['guest_user_id'] ?? data['sender_id'] ?? (data['user'] is Map ? data['user']['id'] : null))?.toString();
+        if (targetUid != null && (_acceptedCoHostUserIds.contains(targetUid) || (_isGuestConnected && _guestUid?.toString() == targetUid))) {
+          return;
+        }
+
         final rawGuestName = data['user_name'] ?? data['name'] ?? (data['user'] is Map ? data['user']['name'] : null) ?? data['sender_name'] ?? data['guest_name'];
         final guestName = (rawGuestName != null && rawGuestName.toString().trim().isNotEmpty && rawGuestName.toString() != 'null')
             ? rawGuestName.toString().trim()
@@ -1055,6 +1062,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
 
     _seatRequestSub = signaling.onSeatRequest.listen((data) {
       if (mounted && widget.isHost) {
+        final targetUid = (data['user_id'] ?? data['userId'] ?? data['guest_user_id'] ?? data['sender_id'] ?? (data['user'] is Map ? data['user']['id'] : null))?.toString();
+        if (targetUid != null && (_acceptedCoHostUserIds.contains(targetUid) || (_isGuestConnected && _guestUid?.toString() == targetUid))) {
+          return;
+        }
+
         final rawGuestName = data['user_name'] ?? data['name'] ?? (data['user'] is Map ? data['user']['name'] : null) ?? data['sender_name'] ?? data['guest_name'];
         final guestName = (rawGuestName != null && rawGuestName.toString().trim().isNotEmpty && rawGuestName.toString() != 'null')
             ? rawGuestName.toString().trim()
@@ -1193,6 +1205,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
       } else if (widget.isHost) {
         if (mounted) {
           setState(() {
+            _pendingJoinRequests.removeWhere((item) =>
+                (item['user_id'] ?? item['userId'] ?? item['guest_user_id'] ?? item['sender_id'] ?? item['target_user_id'])?.toString() == guestUserId?.toString() ||
+                (item['request_id'] ?? item['id'] ?? item['invitation_id'])?.toString() == guestUserId?.toString());
             _guestUid = guestUserId is int ? guestUserId : int.tryParse('$guestUserId');
             _isGuestConnected = true;
           });
@@ -1230,6 +1245,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
         } else if (widget.isHost) {
           if (mounted) {
             setState(() {
+              _pendingJoinRequests.removeWhere((item) =>
+                  (item['user_id'] ?? item['userId'] ?? item['guest_user_id'] ?? item['sender_id'] ?? item['target_user_id'])?.toString() == targetUserId?.toString() ||
+                  (item['request_id'] ?? item['id'] ?? item['invitation_id'])?.toString() == targetUserId?.toString());
               _guestUid = targetUserId is int ? targetUserId : int.tryParse('$targetUserId');
               _isGuestConnected = true;
             });
@@ -2132,13 +2150,23 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> with TickerProviderStat
                                 onPressed: () async {
                                   // ১. তাৎক্ষণিক UI থেকে রিকোয়েস্ট সরানো
                                   setModalState(() {
-                                    _pendingJoinRequests.removeWhere((item) => (item['request_id'] ?? item['id'] ?? item['invitation_id']) == reqId);
+                                    _pendingJoinRequests.removeWhere((item) =>
+                                        (item['request_id'] ?? item['id'] ?? item['invitation_id'])?.toString() == reqId?.toString() ||
+                                        (item['user_id'] ?? item['userId'] ?? item['guest_user_id'] ?? item['sender_id'] ?? item['target_user_id'])?.toString() == targetUid?.toString());
                                   });
                                   setState(() {
-                                    _pendingJoinRequests.removeWhere((item) => (item['request_id'] ?? item['id'] ?? item['invitation_id']) == reqId);
+                                    _pendingJoinRequests.removeWhere((item) =>
+                                        (item['request_id'] ?? item['id'] ?? item['invitation_id'])?.toString() == reqId?.toString() ||
+                                        (item['user_id'] ?? item['userId'] ?? item['guest_user_id'] ?? item['sender_id'] ?? item['target_user_id'])?.toString() == targetUid?.toString());
+                                    if (targetUid != null) {
+                                      _acceptedCoHostUserIds.add(targetUid.toString());
+                                    }
                                     _guestUid = targetUid is int ? targetUid : int.tryParse('$targetUid');
                                     _isGuestConnected = true;
                                   });
+                                  try {
+                                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                  } catch (_) {}
                                   Navigator.pop(ctx);
                                   // ২. সার্ভারে স্ট্যাটাস 'accepted' পাঠানো
                                   await LiveStreamingApiService.respondJoinCoHost(

@@ -1,4 +1,4 @@
-﻿import 'package:audioplayers/audioplayers.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../../../core/utils/app_logger.dart';
 
 class CallSoundManager {
@@ -21,7 +21,7 @@ class CallSoundManager {
   static String? get incomingRingtoneUrl => _cachedIncomingRingtoneUrl;
   static String? get outgoingRingtoneUrl => _cachedOutgoingRingtoneUrl;
 
-  /// Caller phone: Play only local gentle dial tone ("Tring Tring")
+  /// Caller phone: Play dynamic outgoing dial tone ("Tring Tring" / custom audio from Admin)
   static Future<void> playOutgoingRingtone([String? customUrl]) async {
     if (_isPlaying) return;
     try {
@@ -46,9 +46,24 @@ class CallSoundManager {
       await _player!.setReleaseMode(ReleaseMode.loop);
       await _player!.setVolume(1.0);
 
-      // Caller strictly plays local gentle dial tone (never admin song)
-      AppLogger.info('CallSound', 'Playing gentle local dial tone (AssetSource: sounds/calling_ringtone.wav)...');
-      await _player!.play(AssetSource('sounds/calling_ringtone.wav'));
+      final targetUrl = (customUrl != null && customUrl.trim().isNotEmpty && customUrl.startsWith('http'))
+          ? customUrl.trim()
+          : (_cachedOutgoingRingtoneUrl != null && _cachedOutgoingRingtoneUrl!.startsWith('http')
+              ? _cachedOutgoingRingtoneUrl
+              : null);
+
+      if (targetUrl != null) {
+        AppLogger.info('CallSound', 'Playing dynamic outgoing dial tone ($targetUrl)...');
+        try {
+          await _player!.play(UrlSource(targetUrl));
+        } catch (e) {
+          AppLogger.info('CallSound', 'Failed to play remote dial tone, falling back to asset: $e');
+          await _player!.play(AssetSource('sounds/calling_ringtone.wav'));
+        }
+      } else {
+        AppLogger.info('CallSound', 'Playing local calling ringtone asset...');
+        await _player!.play(AssetSource('sounds/calling_ringtone.wav'));
+      }
       _isPlaying = true;
     } catch (e, st) {
       AppLogger.error('CallSoundError', e, st);
@@ -88,7 +103,12 @@ class CallSoundManager {
 
       if (targetUrl != null) {
         AppLogger.info('CallSound', 'Playing dynamic incoming admin ringtone sound ($targetUrl)...');
-        await _player!.play(UrlSource(targetUrl));
+        try {
+          await _player!.play(UrlSource(targetUrl));
+        } catch (e) {
+          AppLogger.info('CallSound', 'Failed to play remote incoming ringtone, falling back to asset: $e');
+          await _player!.play(AssetSource('sounds/calling_ringtone.wav'));
+        }
       } else {
         AppLogger.info('CallSound', 'Playing asset incoming phone ringing sound...');
         await _player!.play(AssetSource('sounds/calling_ringtone.wav'));

@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:dart_pusher_channels/dart_pusher_channels.dart';
 import '../../config/app_config.dart';

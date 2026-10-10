@@ -91,16 +91,18 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       final payload = (data['data'] is Map) ? data['data'] as Map<String, dynamic> : data;
       final dynamic evCallId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? data['call_id'] ?? data['id'];
       final dynamic evChannel = payload['channel_name'] ?? payload['room_name'] ?? payload['channel'] ?? data['channel_name'] ?? data['room_name'];
-      if (evCallId != null && widget.callId != null && evCallId.toString() != widget.callId.toString()) return;
-      if (evChannel != null && widget.channelName != null && evChannel.toString() != widget.channelName.toString() && evCallId == null) return;
+      final bool matchesCallId = evCallId != null && widget.callId != null && evCallId.toString() == widget.callId.toString();
+      final bool matchesChannel = evChannel != null && widget.channelName != null && widget.channelName!.isNotEmpty && evChannel.toString() == widget.channelName.toString();
+      if (!matchesCallId && !matchesChannel) return;
       _stopRingtoneAndDismiss('Call cancelled by caller');
     });
     _wsEndedSub = SignalingService().onCallEnded.listen((data) {
       final payload = (data['data'] is Map) ? data['data'] as Map<String, dynamic> : data;
       final dynamic evCallId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? data['call_id'] ?? data['id'];
       final dynamic evChannel = payload['channel_name'] ?? payload['room_name'] ?? payload['channel'] ?? data['channel_name'] ?? data['room_name'];
-      if (evCallId != null && widget.callId != null && evCallId.toString() != widget.callId.toString()) return;
-      if (evChannel != null && widget.channelName != null && evChannel.toString() != widget.channelName.toString() && evCallId == null) return;
+      final bool matchesCallId = evCallId != null && widget.callId != null && evCallId.toString() == widget.callId.toString();
+      final bool matchesChannel = evChannel != null && widget.channelName != null && widget.channelName!.isNotEmpty && evChannel.toString() == widget.channelName.toString();
+      if (!matchesCallId && !matchesChannel) return;
       _stopRingtoneAndDismiss('Call ended by caller');
     });
   }
@@ -108,18 +110,26 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   void _startStatusPolling() {
     if (widget.callId == null) return;
     _statusPollTimer?.cancel();
-    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 3000), (timer) async {
+    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 6000), (timer) async {
       if (!mounted || _isProcessingAction) {
         timer.cancel();
         return;
       }
-      final statusData = await CallApiService.getCallStatus(widget.callId!);
+      final statusData = await CallApiService.getCallStatus(
+        widget.callId!,
+        channelName: widget.channelName,
+      );
       if (!mounted || _isProcessingAction) return;
       if (statusData != null) {
         final status = (statusData['status'] ?? statusData['data']?['status'])?.toString().toLowerCase();
-        final isTerminated = statusData['is_terminated'] == true || statusData['data']?['is_terminated'] == true;
-        
-        if (status == 'cancelled' || status == 'ended' || status == 'rejected' || isTerminated) {
+        final isRinging = statusData['is_ringing'] == true || statusData['data']?['is_ringing'] == true;
+        final isActive = statusData['is_active'] == true || statusData['data']?['is_active'] == true;
+
+        // Never dismiss if server still reports call is ringing or active
+        if (isRinging || isActive) return;
+
+        // Only dismiss if the caller explicitly cancelled the call
+        if (status == 'cancelled' || status == 'caller_cancelled') {
           timer.cancel();
           _stopRingtoneAndDismiss('Call cancelled by caller');
         }

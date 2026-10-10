@@ -207,10 +207,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
         if (rawToken != null && rawToken.toString().isNotEmpty) {
           _connectLiveKitRoom(token: rawToken.toString(), url: lkUrl?.toString());
+        } else {
+          _initWebRTCMediaAndFlow();
         }
       }
-
-      _initWebRTCMediaAndFlow();
     }
 
     _loadUserBalance();
@@ -470,8 +470,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       final dynamic evChannel = payload['channel_name'] ?? payload['room_name'] ?? payload['channel'] ?? data['channel_name'] ?? data['room_name'];
       final myCallId = _callId ?? widget.callId;
       final myChannel = _channelName ?? widget.channelName;
-      if (evCallId != null && myCallId != null && evCallId.toString() != myCallId.toString()) return;
-      if (evChannel != null && myChannel != null && evChannel.toString() != myChannel.toString() && evCallId == null) return;
+      final bool matchesCallId = evCallId != null && myCallId != null && evCallId.toString() == myCallId.toString();
+      final bool matchesChannel = evChannel != null && myChannel != null && myChannel.isNotEmpty && evChannel.toString() == myChannel.toString();
+      if (!matchesCallId && !matchesChannel) return;
       debugPrint('[VideoCallScreen] WebSocket Call Accepted event received: $data');
       _ringTimeoutTimer?.cancel();
       _ringTimeoutTimer = null;
@@ -479,30 +480,36 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     });
 
     _wsEndedSub = signaling.onCallEnded.listen((data) {
-      final dynamic evCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
-      final dynamic evChannel = data['channel_name'] ?? data['room_name'] ?? data['channel'];
+      final payload = (data['data'] is Map) ? data['data'] as Map<String, dynamic> : data;
+      final dynamic evCallId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? data['call_id'] ?? data['id'];
+      final dynamic evChannel = payload['channel_name'] ?? payload['room_name'] ?? payload['channel'] ?? data['channel_name'] ?? data['room_name'];
       final myCallId = _callId ?? widget.callId;
       final myChannel = _channelName ?? widget.channelName;
-      if (evCallId != null && myCallId != null && evCallId.toString() != myCallId.toString()) return;
-      if (evChannel != null && myChannel != null && evChannel.toString() != myChannel.toString() && evCallId == null) return;
+      final bool matchesCallId = evCallId != null && myCallId != null && evCallId.toString() == myCallId.toString();
+      final bool matchesChannel = evChannel != null && myChannel != null && myChannel.isNotEmpty && evChannel.toString() == myChannel.toString();
+      if (!matchesCallId && !matchesChannel) return;
       _terminateCallSession('Call ended by partner');
     });
     _wsRejectedSub = signaling.onCallRejected.listen((data) {
-      final dynamic evCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
-      final dynamic evChannel = data['channel_name'] ?? data['room_name'] ?? data['channel'];
+      final payload = (data['data'] is Map) ? data['data'] as Map<String, dynamic> : data;
+      final dynamic evCallId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? data['call_id'] ?? data['id'];
+      final dynamic evChannel = payload['channel_name'] ?? payload['room_name'] ?? payload['channel'] ?? data['channel_name'] ?? data['room_name'];
       final myCallId = _callId ?? widget.callId;
       final myChannel = _channelName ?? widget.channelName;
-      if (evCallId != null && myCallId != null && evCallId.toString() != myCallId.toString()) return;
-      if (evChannel != null && myChannel != null && evChannel.toString() != myChannel.toString() && evCallId == null) return;
+      final bool matchesCallId = evCallId != null && myCallId != null && evCallId.toString() == myCallId.toString();
+      final bool matchesChannel = evChannel != null && myChannel != null && myChannel.isNotEmpty && evChannel.toString() == myChannel.toString();
+      if (!matchesCallId && !matchesChannel) return;
       _terminateCallSession('Call declined by host');
     });
     _wsCancelledSub = signaling.onCallCancelled.listen((data) {
-      final dynamic evCallId = data['call_id'] ?? data['id'] ?? data['session_id'];
-      final dynamic evChannel = data['channel_name'] ?? data['room_name'] ?? data['channel'];
+      final payload = (data['data'] is Map) ? data['data'] as Map<String, dynamic> : data;
+      final dynamic evCallId = payload['call_id'] ?? payload['id'] ?? payload['session_id'] ?? data['call_id'] ?? data['id'];
+      final dynamic evChannel = payload['channel_name'] ?? payload['room_name'] ?? payload['channel'] ?? data['channel_name'] ?? data['room_name'];
       final myCallId = _callId ?? widget.callId;
       final myChannel = _channelName ?? widget.channelName;
-      if (evCallId != null && myCallId != null && evCallId.toString() != myCallId.toString()) return;
-      if (evChannel != null && myChannel != null && evChannel.toString() != myChannel.toString() && evCallId == null) return;
+      final bool matchesCallId = evCallId != null && myCallId != null && evCallId.toString() == myCallId.toString();
+      final bool matchesChannel = evChannel != null && myChannel != null && myChannel.isNotEmpty && evChannel.toString() == myChannel.toString();
+      if (!matchesCallId && !matchesChannel) return;
       _terminateCallSession('Call was cancelled');
     });
     _wsInCallMsgSub = signaling.onInCallMessage.listen((data) {
@@ -909,7 +916,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
       // 2. Fallback: Check via /api/calls/{id}/status
       try {
-        final statusData = await CallApiService.getCallStatus(pollCallId);
+        final statusData = await CallApiService.getCallStatus(
+          pollCallId,
+          channelName: _channelName ?? widget.channelName,
+        );
         if (!mounted || statusData == null || _isEndingCall) return;
 
         final status = (statusData['status'] ?? statusData['data']?['status'])?.toString().toLowerCase();

@@ -77,51 +77,92 @@ class DailyRewardsApiService {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
+      final accountId = savedUser?['account_id']?.toString() ?? userId;
 
       final headers = <String, String>{
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
         if (userId != null && userId.isNotEmpty) 'X-User-Id': userId,
+        if (accountId != null && accountId.isNotEmpty) 'X-Account-Id': accountId,
       };
 
-      // 1. Primary Endpoint: POST /api/daily-rewards/claim
-      http.Response response;
-      try {
-        response = await http.post(
-          Uri.parse(ApiConstants.dailyRewardsClaim),
-          headers: headers,
-        ).timeout(const Duration(seconds: 8));
-      } catch (_) {
-        // Fallback: POST /api/daily-claim/claim
-        response = await http.post(
-          Uri.parse(ApiConstants.dailyClaimClaim),
-          headers: headers,
-        ).timeout(const Duration(seconds: 8));
+      final body = jsonEncode({
+        if (userId != null) 'user_id': userId,
+        if (accountId != null) 'account_id': accountId,
+        'day': _cachedStatus?.nextDayNumber ?? 1,
+      });
+
+      final candidateEndpoints = [
+        ApiConstants.dailyRewardsClaim,
+        ApiConstants.dailyClaimClaim,
+        ApiConstants.dailyCheckinClaim,
+        '${ApiConstants.baseUrl}/daily-rewards/claim-reward',
+        '${ApiConstants.baseUrl}/daily-claim',
+        '${ApiConstants.baseUrl}/daily-rewards',
+      ];
+
+      String? lastErrorMessage;
+
+      for (final endpoint in candidateEndpoints) {
+        try {
+          final response = await http.post(
+            Uri.parse(endpoint),
+            headers: headers,
+            body: body,
+          ).timeout(const Duration(seconds: 8));
+
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final decoded = jsonDecode(response.body);
+            if (decoded is Map<String, dynamic>) {
+              final coinsAwarded = decoded['coins_awarded'] ?? decoded['coins'] ?? 50;
+              final totalBalance = decoded['total_balance'] ?? decoded['user_current_coins'] ?? decoded['current_coins'];
+
+              // Refresh status in background
+              getDailyRewardsStatus(forceRefresh: true);
+              return {
+                'status': true,
+                'success': true,
+                'message': decoded['message'] ?? 'Claimed successfully! +$coinsAwarded coins added.',
+                'claimed_day': decoded['claimed_day'] ?? decoded['day'] ?? _cachedStatus?.nextDayNumber,
+                'coins_awarded': coinsAwarded,
+                'total_balance': totalBalance,
+                'next_claim_at': decoded['next_claim_at'] ?? decoded['next_available_at'],
+              };
+            }
+          } else if (response.statusCode == 422 || response.statusCode == 400) {
+            final decoded = jsonDecode(response.body);
+            return {
+              'status': false,
+              'success': false,
+              'message': decoded['message'] ?? 'Please wait 12 hours before claiming next reward.',
+              'next_available_at': decoded['next_available_at'] ?? decoded['next_claim_at'],
+            };
+          } else if (response.statusCode == 401) {
+            return {
+              'status': false,
+              'success': false,
+              'message': 'Please login to claim daily reward.',
+            };
+          } else {
+            try {
+              final decoded = jsonDecode(response.body);
+              if (decoded is Map && decoded['message'] != null) {
+                lastErrorMessage = decoded['message'].toString();
+              }
+            } catch (_) {}
+            continue;
+          }
+        } catch (_) {
+          continue;
+        }
       }
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map<String, dynamic>) {
-          // Refresh status in background
-          getDailyRewardsStatus(forceRefresh: true);
-          return {
-            'status': true,
-            'success': true,
-            'message': decoded['message'] ?? 'Claimed successfully!',
-            'claimed_day': decoded['claimed_day'] ?? decoded['day'] ?? _cachedStatus?.nextDayNumber,
-            'coins_awarded': decoded['coins_awarded'] ?? decoded['coins'] ?? 50,
-            'total_balance': decoded['total_balance'] ?? decoded['user_current_coins'] ?? decoded['current_coins'],
-            'next_claim_at': decoded['next_claim_at'] ?? decoded['next_available_at'],
-          };
-        }
-      } else if (response.statusCode == 422 || response.statusCode == 400) {
-        final decoded = jsonDecode(response.body);
+      if (lastErrorMessage != null && lastErrorMessage.isNotEmpty) {
         return {
           'status': false,
           'success': false,
-          'message': decoded['message'] ?? 'Please wait 12 hours before claiming next reward.',
-          'next_available_at': decoded['next_available_at'] ?? decoded['next_claim_at'],
+          'message': lastErrorMessage,
         };
       }
     } catch (e, st) {

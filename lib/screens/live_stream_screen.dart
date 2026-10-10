@@ -53,6 +53,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _chatScrollController = ScrollController();
   final List<Map<String, dynamic>> _cohostRequests = [];
+  final Set<String> _acceptedCoHostUserIds = {};
   StreamSubscription? _cohostStatusSub;
   StreamSubscription? _coHostAcceptedSub;
   StreamSubscription? _msgSub;
@@ -159,13 +160,17 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
     // 2. Co-Host Request / Status Changed (.cohost.status.changed, .request.received)
     _cohostStatusSub = SignalingService().onCoHostStatusChanged.listen((data) {
       if (widget.isHost && mounted) {
+        final targetUserId = data['guest_user_id'] ?? data['user_id'] ?? data['target_user_id'];
+        if (targetUserId != null && _acceptedCoHostUserIds.contains(targetUserId.toString())) {
+          return;
+        }
+
         final reqId = data['request_id'] ?? data['id'] ?? DateTime.now().millisecondsSinceEpoch;
         final rawGuestName = data['guest_name'] ?? data['user_name'] ?? data['sender_name'] ?? (data['user'] is Map ? data['user']['name'] : null);
         final guestName = (rawGuestName != null && rawGuestName.toString().trim().isNotEmpty && rawGuestName.toString() != 'null')
             ? rawGuestName.toString().trim()
             : 'Viewer';
         final guestAvatar = data['guest_avatar'] ?? data['avatar'] ?? '';
-        final targetUserId = data['guest_user_id'] ?? data['user_id'] ?? data['target_user_id'];
 
         addJoinRequest({
           'request_id': reqId,
@@ -317,6 +322,9 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                                     _cohostRequests.removeWhere((item) =>
                                         (item['request_id'] ?? item['id'])?.toString() == reqId?.toString() ||
                                         (item['target_user_id'] ?? item['user_id'])?.toString() == targetId?.toString());
+                                    if (targetId != null) {
+                                      _acceptedCoHostUserIds.add(targetId.toString());
+                                    }
                                   });
                                   setModalState(() {});
                                   try {

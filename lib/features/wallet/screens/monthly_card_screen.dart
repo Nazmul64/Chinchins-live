@@ -174,15 +174,61 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
     });
   }
 
+  void _openDepositForCard(Map<String, dynamic> card) {
+    final double rawPrice = (card['price_bdt'] is num)
+        ? (card['price_bdt'] as num).toDouble()
+        : (card['price'] is num
+            ? (card['price'] as num).toDouble()
+            : (double.tryParse(card['price_bdt']?.toString() ?? card['price']?.toString() ?? '300') ?? 300.0));
+
+    final int instantCoins = (card['instant_reward_coins'] is int)
+        ? card['instant_reward_coins']
+        : (int.tryParse(card['instant_reward_coins']?.toString() ?? '8100') ?? 8100);
+
+    final int bonusCoins = (card['daily_checkin_total_coins'] is int)
+        ? card['daily_checkin_total_coins']
+        : (int.tryParse(card['daily_checkin_total_coins']?.toString() ?? '6480') ?? 6480);
+
+    final int totalCoins = (card['total_return_coins'] is int)
+        ? card['total_return_coins']
+        : (int.tryParse(card['total_return_coins']?.toString() ?? '14580') ?? 14580);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DepositScreen(
+          selectedPackage: {
+            'id': card['id'],
+            'package_id': card['id'],
+            'name': card['name'] ?? 'VIP Privilege Card',
+            'price': rawPrice,
+            'price_bdt': rawPrice,
+            'rate_bdt': rawPrice,
+            'formatted_price': _formatCardPrice(card),
+            'coins': instantCoins,
+            'bonus_coins': bonusCoins,
+            'total_coins': totalCoins,
+            'card_type': card['card_type'],
+            'badge': card['badge_text'] ?? 'VIP CARD',
+          },
+          onDepositSuccess: () {
+            _loadCardsAndSession();
+          },
+        ),
+      ),
+    );
+  }
+
   Future<void> _purchaseCard(Map<String, dynamic> card) async {
     if (_isActionInProgress) return;
     final int cardId = card['id'] ?? 1;
-    final int priceCoins = card['price_coins'] ?? 0;
+    final int priceCoins = card['price_coins'] ?? (card['costDiamonds'] ?? card['cost_diamonds'] ?? 0);
     final String cardName = card['name'] ?? 'VIP Privilege Card';
     final int instantCoins = card['instant_reward_coins'] ?? 0;
+    final String bdtPrice = _formatCardPrice(card);
 
-    // Show Confirmation Sheet / Dialog
-    final bool? confirm = await showModalBottomSheet<bool>(
+    // Show Selection Sheet: Pay with bKash/Nagad (Deposit) or Pay with Gems
+    final String? selectedPayment = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
@@ -220,11 +266,11 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
               ),
               const SizedBox(height: 8),
               Text(
-                'Price: ${_formatCardPrice(card)} ($priceCoins Gems)\nInstant $instantCoins Gems will be credited immediately!',
+                'Price: $bdtPrice (${priceCoins > 0 ? "$priceCoins Gems" : "Special Offer"})\nInstant $instantCoins Gems will be credited immediately!',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
@@ -241,34 +287,48 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
                   ],
                 ),
               ),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.white24),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Cancel', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                    ),
+              const SizedBox(height: 20),
+
+              // Option 1: Buy with bKash / Nagad / Deposit (Direct)
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE2136E), // bKash Pink
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 4,
+                ),
+                icon: const Icon(Icons.account_balance_wallet_rounded, size: 20),
+                label: Text(
+                  'Buy with bKash / Nagad ($bdtPrice)',
+                  style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold),
+                ),
+                onPressed: () => Navigator.pop(ctx, 'deposit'),
+              ),
+              const SizedBox(height: 10),
+
+              // Option 2: Pay with Gems (if available)
+              if (priceCoins > 0) ...[
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.neonPink, width: 1.2),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.neonPink,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        elevation: 4,
-                      ),
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Confirm & Buy', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                    ),
+                  icon: const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 18),
+                  label: Text(
+                    'Pay with Gems Balance ($priceCoins 💎)',
+                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold),
                   ),
-                ],
+                  onPressed: () => Navigator.pop(ctx, 'gems'),
+                ),
+                const SizedBox(height: 8),
+              ],
+
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, null),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white60, fontSize: 13)),
               ),
             ],
           ),
@@ -276,7 +336,25 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
       ),
     );
 
-    if (confirm != true) return;
+    if (selectedPayment == null) return;
+
+    if (selectedPayment == 'deposit') {
+      _openDepositForCard(card);
+      return;
+    }
+
+    // Pay with Gems
+    if (_userGems < priceCoins) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Insufficient gems. Opening bKash / Nagad deposit page...'),
+          backgroundColor: Color(0xFFB71C1C),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      _openDepositForCard(card);
+      return;
+    }
 
     setState(() => _isActionInProgress = true);
 
@@ -310,39 +388,7 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
       _loadCardsAndSession();
     } else {
       if (res['redirect_to_deposit'] == true) {
-        final double rawPrice = (card['price_bdt'] is num)
-            ? (card['price_bdt'] as num).toDouble()
-            : (card['price'] is num ? (card['price'] as num).toDouble() : (double.tryParse(card['price_bdt']?.toString() ?? card['price']?.toString() ?? '300') ?? 300.0));
-
-        final int instantCoins = (card['instant_reward_coins'] is int)
-            ? card['instant_reward_coins']
-            : (int.tryParse(card['instant_reward_coins']?.toString() ?? '8100') ?? 8100);
-
-        final int totalCoins = (card['total_return_coins'] is int)
-            ? card['total_return_coins']
-            : (int.tryParse(card['total_return_coins']?.toString() ?? '14580') ?? 14580);
-
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => DepositScreen(
-              selectedPackage: {
-                'id': card['id'],
-                'package_id': card['id'],
-                'name': card['name'] ?? 'VIP Privilege Card',
-                'price': rawPrice,
-                'price_bdt': rawPrice,
-                'rate_bdt': rawPrice,
-                'coins': instantCoins,
-                'total_coins': totalCoins,
-                'card_type': card['card_type'],
-              },
-              onDepositSuccess: () {
-                _loadCardsAndSession();
-              },
-            ),
-          ),
-        );
+        _openDepositForCard(card);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -578,138 +624,141 @@ class _MonthlyCardScreenState extends State<MonthlyCardScreen> with TickerProvid
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // 1. HERO CARD BANNER
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: heroGradient,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: accentColor.withValues(alpha: 0.6), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: accentColor.withValues(alpha: 0.3),
-                      blurRadius: 18,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      card['name'] ?? 'VIP Privilege Card',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  if (card['badge_text'] != null) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: accentColor,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        card['badge_text'],
-                                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                  ]
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Wrap(
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  const Text('Get ', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                                  const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 14),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    '${card['diamondsReward'] ?? card['diamonds_reward'] ?? card['total_return_coins'] ?? card['total_value_coins'] ?? 0}',
-                                    style: const TextStyle(color: AppColors.gemYellow, fontSize: 14, fontWeight: FontWeight.w900),
-                                  ),
-                                  Text(
-                                    ' by paying 💎 ${card['costDiamonds'] ?? card['cost_diamonds'] ?? card['price_coins'] ?? 0}',
-                                    style: const TextStyle(color: Colors.white60, fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              // Live Countdown Timer Box
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: Colors.white12),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
+              GestureDetector(
+                onTap: isSubscribed ? null : () => _purchaseCard(card),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: heroGradient,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: accentColor.withValues(alpha: 0.6), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accentColor.withValues(alpha: 0.3),
+                        blurRadius: 18,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
                                   children: [
-                                    const Icon(Icons.timer_outlined, color: AppColors.gemYellow, size: 13),
-                                    const SizedBox(width: 5),
-                                    Text(
-                                      _formatCountdown(_remainingSeconds),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontFamily: 'monospace',
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 1.2,
+                                    Flexible(
+                                      child: Text(
+                                        card['name'] ?? 'VIP Privilege Card',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
+                                    ),
+                                    if (card['badge_text'] != null) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: accentColor,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          card['badge_text'],
+                                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ]
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    const Text('Get ', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                                    const Icon(Icons.diamond_rounded, color: AppColors.gemYellow, size: 14),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      '${card['diamondsReward'] ?? card['diamonds_reward'] ?? card['total_return_coins'] ?? card['total_value_coins'] ?? 0}',
+                                      style: const TextStyle(color: AppColors.gemYellow, fontSize: 14, fontWeight: FontWeight.w900),
+                                    ),
+                                    Text(
+                                      ' by paying 💎 ${card['costDiamonds'] ?? card['cost_diamonds'] ?? card['price_coins'] ?? 0}',
+                                      style: const TextStyle(color: Colors.white60, fontSize: 12),
                                     ),
                                   ],
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 10),
+                                // Live Countdown Timer Box
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black54,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: Colors.white12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.timer_outlined, color: AppColors.gemYellow, size: 13),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        _formatCountdown(_remainingSeconds),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontFamily: 'monospace',
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        // VIP Graphic Icon
-                        Container(
-                          width: 68,
-                          height: 68,
-                          decoration: BoxDecoration(
-                            gradient: AppColors.primaryGradient,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(color: accentColor.withValues(alpha: 0.6), blurRadius: 16),
-                            ],
+                          // VIP Graphic Icon
+                          Container(
+                            width: 68,
+                            height: 68,
+                            decoration: BoxDecoration(
+                              gradient: AppColors.primaryGradient,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(color: accentColor.withValues(alpha: 0.6), blurRadius: 16),
+                              ],
+                            ),
+                            child: const Center(
+                              child: Icon(Icons.card_membership_rounded, color: Colors.white, size: 36),
+                            ),
                           ),
-                          child: const Center(
-                            child: Icon(Icons.card_membership_rounded, color: Colors.white, size: 36),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    // Comparison Banner Tag
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(12),
+                        ],
                       ),
-                      child: Text(
-                        card['banner_tag'] ?? 'Normal Recharge = ${card['instant_reward_coins']} | Card = ${card['total_return_coins']}+outfits',
-                        style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w500),
+                      const SizedBox(height: 12),
+                      // Comparison Banner Tag
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          card['banner_tag'] ?? 'Normal Recharge = ${card['instant_reward_coins']} | Card = ${card['total_return_coins']}+outfits',
+                          style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w500),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 14),

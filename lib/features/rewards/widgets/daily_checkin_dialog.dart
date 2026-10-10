@@ -80,14 +80,16 @@ class _DailyCheckInDialogState extends State<DailyCheckInDialog>
     setState(() => _isClaiming = false);
 
     if (result['status'] == true) {
-      // Instantly update wallet balance globally
+      // Instantly update wallet balance globally in main balance
       final totalBalance = result['total_balance'];
-      if (totalBalance != null) {
-        final parsed = totalBalance is int ? totalBalance : int.tryParse('$totalBalance');
-        if (parsed != null) {
-          WalletApiService.updateCachedCoins(parsed);
-        }
-      }
+      final coinsAwarded = result['coins_awarded'] ?? 50;
+      final int awardInt = coinsAwarded is int ? coinsAwarded : int.tryParse('$coinsAwarded') ?? 50;
+      final currentCoins = WalletApiService.getCachedCoins();
+      final int newTotal = (totalBalance != null)
+          ? (totalBalance is int ? totalBalance : int.tryParse('$totalBalance') ?? (currentCoins + awardInt))
+          : (currentCoins + awardInt);
+
+      WalletApiService.updateCachedCoins(newTotal);
       WalletApiService.getWalletBalance(forceRefresh: true);
 
       ScaffoldMessenger.of(context).showSnackBar(
