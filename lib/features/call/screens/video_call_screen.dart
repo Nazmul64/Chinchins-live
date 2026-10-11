@@ -510,6 +510,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       final bool matchesCallId = evCallId != null && myCallId != null && evCallId.toString() == myCallId.toString();
       final bool matchesChannel = evChannel != null && myChannel != null && myChannel.isNotEmpty && evChannel.toString() == myChannel.toString();
       if (!matchesCallId && !matchesChannel) return;
+      if (_isCallAccepted) {
+        debugPrint('[VideoCallScreen] Guard: Ignoring call.cancelled event because call is already accepted and active.');
+        return;
+      }
       _terminateCallSession('Call was cancelled');
     });
     _wsInCallMsgSub = signaling.onInCallMessage.listen((data) {
@@ -896,13 +900,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
             _pollingTimer = null;
             _terminateCallSession('Call declined by host');
             return;
-          } else if (_isCallAccepted && (sigType == 'cancelled' ||
-              sigType == 'ended' ||
+          } else if (_isCallAccepted && (sigType == 'ended' ||
               sigType == 'hangup' ||
               sigType == 'bye' ||
-              action == 'call_cancelled' ||
               action == 'call_ended' ||
-              status == 'cancelled' ||
               status == 'ended')) {
             timer.cancel();
             _pollingTimer = null;
@@ -928,10 +929,14 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           timer.cancel();
           _pollingTimer = null;
           _terminateCallSession('Host declined the call');
-        } else if (_isCallAccepted && (status == 'cancelled' || status == 'ended')) {
+        } else if (_isCallAccepted && status == 'ended') {
           timer.cancel();
           _pollingTimer = null;
           _terminateCallSession('Call ended');
+        } else if (!_isCallAccepted && (status == 'cancelled' || status == 'caller_cancelled')) {
+          timer.cancel();
+          _pollingTimer = null;
+          _terminateCallSession('Call was cancelled');
         } else if (status == 'connected' || status == 'accepted') {
           timer.cancel();
           _pollingTimer = null;
