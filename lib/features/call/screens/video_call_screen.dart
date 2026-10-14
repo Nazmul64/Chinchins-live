@@ -277,8 +277,6 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           ),
           defaultAudioPublishOptions: AudioPublishOptions(
             name: 'microphone',
-            audioBitrate: 48000,
-            dtx: true,
           ),
         ),
       );
