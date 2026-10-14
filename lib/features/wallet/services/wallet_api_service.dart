@@ -86,19 +86,34 @@ class WalletApiService {
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse(ApiConstants.walletBalance);
-      final headers = <String, String>{'Accept': 'application/json'};
-      if (token != null) headers['Authorization'] = 'Bearer $token';
-      if (userId != null) headers['X-User-Id'] = userId;
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (userId != null) 'X-User-Id': userId,
+      };
 
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+      final endpoints = [
+        ApiConstants.walletBalance,
+        '${ApiConstants.baseUrl}/user/balance',
+      ];
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['status'] == true && data['data'] != null) {
-          await FastApiClient.putCache(ApiConstants.walletBalance, data);
-          _cachedBalance = Map<String, dynamic>.from(data['data']);
-          return _cachedBalance;
+      for (final ep in endpoints) {
+        try {
+          final response = await http.get(Uri.parse(ep), headers: headers).timeout(const Duration(seconds: 8));
+
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            if (data is Map && (data['status'] == true || data['success'] == true)) {
+              final balanceMap = (data['data'] is Map)
+                  ? Map<String, dynamic>.from(data['data'])
+                  : Map<String, dynamic>.from(data);
+              await FastApiClient.putCache(ApiConstants.walletBalance, data);
+              _cachedBalance = balanceMap;
+              return _cachedBalance;
+            }
+          }
+        } catch (_) {
+          continue;
         }
       }
     } catch (e, st) {

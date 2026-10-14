@@ -240,6 +240,7 @@ class PartyRoomApiService {
         request.fields['topic_tag'] = topicTag.trim();
         request.fields['tag'] = topicTag.trim();
         request.fields['max_seats'] = maxSeats.toString();
+        request.fields['seat_count'] = maxSeats.toString();
         request.fields['coin_rate_per_minute'] = coinRatePerMinute.toString();
         if (announcement != null && announcement.trim().isNotEmpty) {
           request.fields['announcement'] = announcement.trim();
@@ -284,6 +285,7 @@ class PartyRoomApiService {
           'topic_tag': topicTag.trim(),
           'tag': topicTag.trim(),
           'max_seats': maxSeats,
+          'seat_count': maxSeats,
           'coin_rate_per_minute': coinRatePerMinute,
           if (announcement != null && announcement.trim().isNotEmpty) 'announcement': announcement.trim(),
         };
@@ -344,16 +346,28 @@ class PartyRoomApiService {
   }
 
   /// 5. Join Room as Audience (`POST /api/party-rooms/{id}/join`)
-  static Future<bool> joinRoom(dynamic roomId) async {
+  static Future<Map<String, dynamic>?> joinRoomDetails(dynamic roomId) async {
     try {
       final headers = await _getHeaders('application/json');
       final response = await http
           .post(Uri.parse(ApiConstants.partyRoomJoin(roomId)), headers: headers)
           .timeout(const Duration(seconds: 8));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final json = jsonDecode(response.body);
+        if (json is Map) {
+          return json['data'] is Map ? Map<String, dynamic>.from(json['data']) : Map<String, dynamic>.from(json);
+        }
+      }
+    } catch (e) {
+      AppLogger.error('PartyRoomJoinDetails', e);
     }
+    return null;
+  }
+
+  static Future<bool> joinRoom(dynamic roomId) async {
+    final details = await joinRoomDetails(roomId);
+    return details != null;
   }
 
   /// 6. Leave Room (`POST /api/party-rooms/{id}/leave`)

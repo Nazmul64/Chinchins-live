@@ -62,6 +62,7 @@ class GiftsApiService {
       final headers = {
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
+        'X-User-Id': key,
       };
 
       final targetUrls = [
@@ -466,29 +467,40 @@ class GiftsApiService {
       };
 
       final List<String> targetEndpoints = [];
-      if (context == 'live' || (streamId != null && streamId.isNotEmpty)) {
+      if (context == 'party' || context == 'party_room') {
         targetEndpoints.addAll([
+          if (roomIdStr != null && roomIdStr.isNotEmpty) '${ApiConstants.baseUrl}/party-rooms/$roomIdStr/send-gift',
+          ApiConstants.sendGift,
+          '${ApiConstants.baseUrl}/gift/send',
+          '${ApiConstants.baseUrl}/live/send-gift',
+        ]);
+      } else if (context == 'live' || (streamId != null && streamId.isNotEmpty)) {
+        targetEndpoints.addAll([
+          ApiConstants.sendGift,
+          '${ApiConstants.baseUrl}/gift/send',
           '${ApiConstants.baseUrl}/live/send-gift',
           '${ApiConstants.baseUrl}/live/gift',
           '${ApiConstants.baseUrl}/v1/stream/send-gift',
           ApiConstants.liveSendGift,
           ApiConstants.liveStreamSendGift,
           ApiConstants.liveGift,
-          ApiConstants.sendGift,
         ]);
       } else if (context == 'call' || callSessionId != null) {
         targetEndpoints.addAll([
+          ApiConstants.sendGift,
+          '${ApiConstants.baseUrl}/gift/send',
           '${ApiConstants.baseUrl}/call/send-gift',
           '${ApiConstants.baseUrl}/call/gift/send',
           '${ApiConstants.baseUrl}/call/gift',
           '${ApiConstants.baseUrl}/v1/call/gift/send',
           ApiConstants.callGiftSend,
           ApiConstants.callGiftSendAlt,
-          ApiConstants.sendGift,
         ]);
       } else {
         targetEndpoints.addAll([
           ApiConstants.sendGift,
+          '${ApiConstants.baseUrl}/gift/send',
+          '${ApiConstants.baseUrl}/live/send-gift',
           '${ApiConstants.baseUrl}/call/send-gift',
           ApiConstants.callGiftSend,
         ]);

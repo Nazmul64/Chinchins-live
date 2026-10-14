@@ -175,6 +175,8 @@ class CallApiService {
     dynamic receiverAccountId,
     String callType = 'video',
     String? channelName,
+    int? ratePerMinute,
+    bool? isFreeTrial,
   }) async {
     try {
       final token = await AuthApiService.getToken();
@@ -207,6 +209,8 @@ class CallApiService {
         'caller_id': callerId,
         'receiver_id': parsedReceiverId,
         'call_type': callType,
+        'is_free_trial': isFreeTrial ?? false,
+        'rate_per_minute': ratePerMinute ?? 100,
         'room_name': autoRoomName,
         'channel_name': autoRoomName,
         'user_id': callerId,
@@ -217,6 +221,7 @@ class CallApiService {
 
       final callEndpoints = [
         ApiConstants.callInitiate,
+        '${ApiConstants.baseUrl}/calls/initiate',
         '${ApiConstants.baseUrl}/call/make-call',
         '${ApiConstants.baseUrl}/call/instant',
       ];
@@ -614,16 +619,25 @@ class CallApiService {
         if (userId != null) 'X-User-Id': userId,
       };
 
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 6));
+      final endpoints = [
+        url.toString(),
+        '${ApiConstants.baseUrl}/calls/$callId/status',
+        '${ApiConstants.baseUrl}/call/status?call_id=$callId',
+      ];
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map) {
-          if (decoded['data'] is Map) {
-            return Map<String, dynamic>.from(decoded['data']);
+      for (final ep in endpoints) {
+        try {
+          final response = await http.get(Uri.parse(ep), headers: headers).timeout(const Duration(seconds: 6));
+          if (response.statusCode == 200) {
+            final decoded = jsonDecode(response.body);
+            if (decoded is Map) {
+              if (decoded['data'] is Map) {
+                return Map<String, dynamic>.from(decoded['data']);
+              }
+              return Map<String, dynamic>.from(decoded);
+            }
           }
-          return Map<String, dynamic>.from(decoded);
-        }
+        } catch (_) {}
       }
     } catch (e, st) {
       AppLogger.error('GetCallStatusError', e, st);
@@ -631,13 +645,15 @@ class CallApiService {
     return null;
   }
 
-  static Future<bool> confirmRinging({required dynamic callId}) async {
+  static Future<bool> confirmRinging({
+    required dynamic callId,
+    String? channelName,
+  }) async {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse(ApiConstants.callRinging);
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -645,13 +661,25 @@ class CallApiService {
         if (userId != null) 'X-User-Id': userId,
       };
 
-      final payload = {'call_id': callId};
+      final payload = {
+        'call_id': callId,
+        if (channelName != null && channelName.isNotEmpty) 'channel_name': channelName,
+      };
 
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 8));
+      final endpoints = [
+        ApiConstants.callRinging,
+        '${ApiConstants.baseUrl}/calls/ringing',
+      ];
 
-      return response.statusCode == 200;
+      for (final ep in endpoints) {
+        try {
+          final response = await http
+              .post(Uri.parse(ep), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 8));
+          if (response.statusCode == 200) return true;
+        } catch (_) {}
+      }
+      return false;
     } catch (e, st) {
       AppLogger.error('ConfirmRingingError', e, st);
       return false;
@@ -726,14 +754,13 @@ class CallApiService {
 
   static Future<bool> rejectCall({
     required dynamic callId,
-    String reason = 'declined',
+    String reason = 'busy',
   }) async {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['account_id']?.toString();
 
-      final url = Uri.parse(ApiConstants.callReject);
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -746,25 +773,37 @@ class CallApiService {
         'reason': reason,
       };
 
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 8));
+      final endpoints = [
+        ApiConstants.callReject,
+        '${ApiConstants.baseUrl}/calls/reject',
+        '${ApiConstants.baseUrl}/calls/$callId/reject',
+      ];
 
-      return response.statusCode == 200;
+      for (final ep in endpoints) {
+        try {
+          final response = await http
+              .post(Uri.parse(ep), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 8));
+          if (response.statusCode == 200) return true;
+        } catch (_) {}
+      }
+      return false;
     } catch (e, st) {
       AppLogger.error('RejectCallError', e, st);
       return false;
     }
   }
 
-  static Future<bool> cancelCall({required dynamic callId}) async {
+  static Future<bool> cancelCall({
+    required dynamic callId,
+    String reason = 'timeout_missed',
+  }) async {
     try {
       final token = await AuthApiService.getToken();
       final savedUser = await AuthApiService.getSavedUser();
       final userId = savedUser?['id']?.toString() ?? savedUser?['user_id']?.toString() ?? savedUser?['account_id']?.toString();
       final accountId = savedUser?['account_id']?.toString() ?? userId;
 
-      final url = Uri.parse(ApiConstants.callCancel);
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -775,24 +814,27 @@ class CallApiService {
 
       final payload = {
         'call_id': callId,
+        'reason': reason,
         'user_id': userId,
         'account_id': accountId,
       };
 
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 8));
+      final endpoints = [
+        ApiConstants.callCancel,
+        '${ApiConstants.baseUrl}/calls/cancel',
+        '${ApiConstants.baseUrl}/calls/$callId/cancel',
+        if (callId != null) ApiConstants.callCancelById(callId),
+      ];
 
-      // Dual-notify RESTful route /api/calls/$callId/cancel
-      if (callId != null) {
-        http.post(
-          Uri.parse(ApiConstants.callCancelById(callId)),
-          headers: headers,
-          body: jsonEncode(payload),
-        ).catchError((_) => http.Response('', 404));
+      for (final ep in endpoints) {
+        try {
+          final response = await http
+              .post(Uri.parse(ep), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 8));
+          if (response.statusCode == 200) return true;
+        } catch (_) {}
       }
-
-      return response.statusCode == 200;
+      return false;
     } catch (e, st) {
       AppLogger.error('CancelCallError', e, st);
       return false;
@@ -831,24 +873,25 @@ class CallApiService {
         if (channelName != null && channelName.isNotEmpty) 'channel_name': channelName,
       };
 
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 8));
+      final endpoints = [
+        ApiConstants.callEnd,
+        '${ApiConstants.baseUrl}/calls/end',
+        if (callId != null) ApiConstants.callEndById(callId),
+      ];
 
-      // Dual-notify RESTful route /api/calls/$callId/end
-      if (callId != null) {
-        http.post(
-          Uri.parse(ApiConstants.callEndById(callId)),
-          headers: headers,
-          body: jsonEncode(payload),
-        ).catchError((_) => http.Response('', 404));
-      }
+      for (final endpoint in endpoints) {
+        try {
+          final response = await http
+              .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 8));
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map<String, dynamic>) {
-          return decoded;
-        }
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final decoded = jsonDecode(response.body);
+            if (decoded is Map<String, dynamic>) {
+              return decoded;
+            }
+          }
+        } catch (_) {}
       }
     } catch (e, st) {
       AppLogger.error('EndCallError', e, st);

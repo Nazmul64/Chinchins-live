@@ -134,6 +134,8 @@ class SignalingService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _seatRequestController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _seatUpdatedController =
+      StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _viewerCountUpdatedController =
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _hostPrivateCallStatusController =
@@ -163,6 +165,7 @@ class SignalingService {
   Stream<Map<String, dynamic>> get onAudioMuteToggled => _audioMuteController.stream;
   Stream<Map<String, dynamic>> get onLiveLike => _liveLikeController.stream;
   Stream<Map<String, dynamic>> get onSeatRequest => _seatRequestController.stream;
+  Stream<Map<String, dynamic>> get onSeatUpdated => _seatUpdatedController.stream;
   Stream<Map<String, dynamic>> get onViewerCountUpdated => _viewerCountUpdatedController.stream;
   Stream<Map<String, dynamic>> get onHostPrivateCallStatus => _hostPrivateCallStatusController.stream;
 
@@ -554,6 +557,17 @@ class SignalingService {
       _seatRequestController.add(data);
       _liveJoinRequestController.add(data);
       _cohostStatusController.add(data);
+      return;
+    }
+
+    // 6. Seat Updated Event (SeatUpdatedEvent -> seat.updated)
+    if (cleanName == 'seat.updated' ||
+        cleanName == 'SeatUpdatedEvent' ||
+        cleanName.endsWith('SeatUpdatedEvent') ||
+        cleanName == 'SeatUpdated' ||
+        lowerName == 'seat.updated' ||
+        lowerName == 'seatupdatedevent') {
+      _seatUpdatedController.add(data);
       return;
     }
 

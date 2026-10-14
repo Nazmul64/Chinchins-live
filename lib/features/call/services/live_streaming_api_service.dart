@@ -56,10 +56,13 @@ class LiveStreamingApiService {
   }
 
   /// 2. Host starts a live stream
-  /// Calls POST /api/live/start, POST /api/v1/stream/start, POST /api/v1/live/start
+  /// Calls POST /api/v1/stream/start, POST /api/live/start
   static Future<Map<String, dynamic>?> startLiveStream({
     required String title,
+    String? category,
     String? coverImageUrl,
+    String resolution = '1080p',
+    int fps = 30,
   }) async {
     try {
       final token = await AuthApiService.getToken();
@@ -75,13 +78,17 @@ class LiveStreamingApiService {
 
       final payload = {
         'title': title,
+        if (category != null && category.isNotEmpty) 'category': category,
         if (coverImageUrl != null && coverImageUrl.isNotEmpty) 'cover_image': coverImageUrl,
         if (coverImageUrl != null && coverImageUrl.isNotEmpty) 'cover_image_url': coverImageUrl,
+        'resolution': resolution,
+        'fps': fps,
       };
 
       final endpoints = [
-        ApiConstants.liveStart,
+        '${ApiConstants.baseUrl}/v1/stream/start',
         ApiConstants.liveStartV1,
+        ApiConstants.liveStart,
         ApiConstants.liveStartV1Alt,
         ApiConstants.liveCreate,
       ];
@@ -111,7 +118,7 @@ class LiveStreamingApiService {
   }
 
   /// 3. Host ends a live stream
-  /// Calls POST /api/live/end
+  /// Calls POST /api/v1/stream/end, POST /api/live/end
   static Future<Map<String, dynamic>?> endLiveStream({
     dynamic roomId,
     dynamic liveStreamId,
@@ -119,8 +126,8 @@ class LiveStreamingApiService {
     try {
       final id = (roomId ?? liveStreamId)?.toString();
       if (id == null) return null;
+      final parsedId = int.tryParse(id) ?? id;
       final token = await AuthApiService.getToken();
-      final url = Uri.parse(ApiConstants.liveEnd);
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -128,21 +135,34 @@ class LiveStreamingApiService {
       };
 
       final payload = {
+        'stream_id': parsedId,
         'room_id': id,
-        'live_stream_id': id,
+        'live_stream_id': parsedId,
         'live_id': id,
         'id': id,
       };
 
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 8));
+      final endpoints = [
+        '${ApiConstants.baseUrl}/v1/stream/end',
+        ApiConstants.liveEnd,
+        '${ApiConstants.baseUrl}/live/end',
+      ];
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        return decoded['data'] is Map
-            ? Map<String, dynamic>.from(decoded['data'] as Map)
-            : Map<String, dynamic>.from(decoded as Map);
+      for (final endpoint in endpoints) {
+        try {
+          final response = await http
+              .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
+              .timeout(const Duration(seconds: 8));
+
+          if (response.statusCode == 200) {
+            final decoded = jsonDecode(response.body);
+            return decoded['data'] is Map
+                ? Map<String, dynamic>.from(decoded['data'] as Map)
+                : Map<String, dynamic>.from(decoded as Map);
+          }
+        } catch (_) {
+          continue;
+        }
       }
     } catch (e, st) {
       AppLogger.error('EndLiveStreamError', e, st);
@@ -578,9 +598,10 @@ class LiveStreamingApiService {
       };
 
       final endpoints = [
-        if (action == 'accept') '${ApiConstants.baseUrl}/live/accept-join',
+        '${ApiConstants.baseUrl}/v1/stream/respond-request',
         ApiConstants.liveRespondRequest,
         '${ApiConstants.baseUrl}/live/respond-request',
+        if (action == 'accept') '${ApiConstants.baseUrl}/live/accept-join',
         if (action == 'accept') ApiConstants.liveAcceptRequest,
         if (action != 'accept') '${ApiConstants.baseUrl}/live/reject-request',
         if (id != null) ApiConstants.liveStreamRespondJoin(id),
@@ -693,12 +714,47 @@ class LiveStreamingApiService {
     return kickGuest(roomId: id, guestUserId: guestUserId);
   }
 
-  /// 7f. Host kicks guest from video grid (POST /api/live/kick-guest)
+  /// 7f. Host kicks guest from video grid (POST /api/v1/stream/kick-guest, POST /api/live/kick-guest)
   static Future<bool> kickGuest({
     dynamic roomId,
     dynamic liveStreamId,
     required dynamic guestUserId,
   }) async {
+    final id = (roomId ?? liveStreamId)?.toString();
+    final parsedStreamId = id != null ? (int.tryParse(id) ?? id) : null;
+    final parsedGuestId = int.tryParse(guestUserId.toString()) ?? guestUserId;
+
+    try {
+      final token = await AuthApiService.getToken();
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      final payload = {
+        if (parsedStreamId != null) 'stream_id': parsedStreamId,
+        if (parsedStreamId != null) 'live_stream_id': parsedStreamId,
+        if (id != null) 'room_id': id,
+        'guest_id': parsedGuestId,
+        'target_user_id': parsedGuestId,
+        'user_id': parsedGuestId,
+      };
+
+      final endpoints = [
+        '${ApiConstants.baseUrl}/v1/stream/kick-guest',
+        ApiConstants.liveKickGuest,
+        '${ApiConstants.baseUrl}/live/kick-guest',
+      ];
+
+      for (final ep in endpoints) {
+        try {
+          final res = await http.post(Uri.parse(ep), headers: headers, body: jsonEncode(payload)).timeout(const Duration(seconds: 8));
+          if (res.statusCode == 200 || res.statusCode == 201) return true;
+        } catch (_) {}
+      }
+    } catch (_) {}
+
     final res = await cohostAction(
       roomId: roomId ?? liveStreamId,
       targetUserId: guestUserId,

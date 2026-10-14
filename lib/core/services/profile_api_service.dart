@@ -424,17 +424,35 @@ class ProfileApiService {
   static Future<ModelProfile?> getProfile(String id) async {
     try {
       final token = await AuthApiService.getToken();
-      final url = Uri.parse(ApiConstants.profileById(id));
+      final headers = {
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        'X-User-Id': id,
+      };
 
-      final response = await http.get(
-        url,
-        headers: {
-          'Accept': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 10));
+      final targetUrls = [
+        ApiConstants.profileById(id),
+        '${ApiConstants.baseUrl}/profile?user_id=$id',
+      ];
 
-      if (response.statusCode == 200) {
+      http.Response? response;
+      for (final endpoint in targetUrls) {
+        try {
+          final res = await http.get(
+            Uri.parse(endpoint),
+            headers: headers,
+          ).timeout(const Duration(seconds: 8));
+
+          if (res.statusCode == 200) {
+            response = res;
+            break;
+          }
+        } catch (_) {
+          continue;
+        }
+      }
+
+      if (response != null && response.statusCode == 200) {
         final data = _safeJsonDecode(response.body);
         if (data != null) {
           final root = (data['data'] is Map)

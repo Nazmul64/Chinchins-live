@@ -142,8 +142,13 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     } catch (_) {}
     _callId = widget.callId;
     _channelName = widget.channelName;
-    _isFreeTrialActive = true;
-    _freeTrialRemaining = widget.freeDurationSeconds > 0 ? widget.freeDurationSeconds : 16;
+    if (widget.isIncoming) {
+      _isFreeTrialActive = false;
+      _freeTrialRemaining = 0;
+    } else {
+      _isFreeTrialActive = true;
+      _freeTrialRemaining = widget.freeDurationSeconds > 0 ? widget.freeDurationSeconds : 16;
+    }
     _ratePerMinute = widget.ratePerMinute > 0
         ? widget.ratePerMinute
         : (widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100);
@@ -207,6 +212,26 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
         if (rawToken != null && rawToken.toString().isNotEmpty) {
           _connectLiveKitRoom(token: rawToken.toString(), url: lkUrl?.toString());
+        } else if (_callId != null) {
+          // Fallback: Fetch receiver credentials from accept endpoint
+          CallApiService.acceptCall(callId: _callId!, channelName: _channelName).then((acceptData) {
+            if (acceptData != null) {
+              final fetchedToken = acceptData['receiver_token'] ??
+                  acceptData['token'] ??
+                  acceptData['livekit_token'] ??
+                  acceptData['data']?['receiver_token'] ??
+                  acceptData['data']?['token'] ??
+                  acceptData['data']?['livekit_token'];
+              final fetchedUrl = acceptData['livekit_url'] ?? acceptData['data']?['livekit_url'];
+              if (fetchedToken != null && fetchedToken.toString().isNotEmpty) {
+                _connectLiveKitRoom(token: fetchedToken.toString(), url: fetchedUrl?.toString());
+                return;
+              }
+            }
+            _initWebRTCMediaAndFlow();
+          }).catchError((_) {
+            _initWebRTCMediaAndFlow();
+          });
         } else {
           _initWebRTCMediaAndFlow();
         }
@@ -231,33 +256,37 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _liveKitRoom = Room(
         roomOptions: const RoomOptions(
           adaptiveStream: true,
-          dynacast: true,
+          dynacast: false,
           defaultCameraCaptureOptions: CameraCaptureOptions(
             cameraPosition: CameraPosition.front,
             params: VideoParameters(
               dimensions: VideoDimensionsPresets.h720_169,
               encoding: VideoEncoding(
-                maxBitrate: 2500 * 1000,
+                maxBitrate: 2000 * 1000,
                 maxFramerate: 30,
               ),
             ),
           ),
           defaultVideoPublishOptions: VideoPublishOptions(
             simulcast: false,
-            videoCodec: 'H264',
+            videoCodec: 'VP8',
             videoEncoding: VideoEncoding(
-              maxBitrate: 2500 * 1000,
+              maxBitrate: 2000 * 1000,
               maxFramerate: 30,
             ),
           ),
           defaultAudioPublishOptions: AudioPublishOptions(
             name: 'microphone',
+            audioBitrate: 48000,
+            dtx: true,
           ),
         ),
       );
 
       _liveKitListener = _liveKitRoom!.createListener();
       _liveKitListener!
+        ..on<LocalTrackPublishedEvent>((event) => _updateLocalLiveKitVideoTrack())
+        ..on<LocalTrackUnpublishedEvent>((event) => _updateLocalLiveKitVideoTrack())
         ..on<TrackSubscribedEvent>((event) {
           if (event.track is RemoteVideoTrack || event.track is RemoteAudioTrack) {
             if (mounted) {
@@ -272,6 +301,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
             CallSoundManager.stopRingtone();
             _ringTimeoutTimer?.cancel();
             _ringTimeoutTimer = null;
+            _pollingTimer?.cancel();
+            _pollingTimer = null;
             if (!_hasStartedTimer) {
               _hasStartedTimer = true;
               final cId = _callId ?? widget.callId;
@@ -297,9 +328,20 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           }
         })
         ..on<ParticipantConnectedEvent>((event) => _updateLiveKitRemoteTrack())
-        ..on<ParticipantDisconnectedEvent>((event) => _updateLiveKitRemoteTrack());
+        ..on<ParticipantDisconnectedEvent>((event) {
+          _updateLiveKitRemoteTrack();
+          if (_isCallAccepted && mounted && !_isEndingCall) {
+            _terminateCallSession('Call ended by partner');
+          }
+        })
+        ..on<RoomDisconnectedEvent>((event) {
+          if (_isCallAccepted && mounted && !_isEndingCall) {
+            _terminateCallSession('Call ended');
+          }
+        });
 
       _liveKitRoom!.addListener(() {
+        _updateLocalLiveKitVideoTrack();
         _updateLiveKitRemoteTrack();
       });
 
@@ -318,10 +360,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       await _liveKitRoom!.localParticipant?.setMicrophoneEnabled(true);
       await _liveKitRoom!.localParticipant?.setCameraEnabled(true);
 
-      final firstPub = _liveKitRoom!.localParticipant?.videoTrackPublications.firstOrNull?.track;
-      if (firstPub is LocalVideoTrack) {
-        _localLiveKitVideoTrack = firstPub;
-      }
+      _updateLocalLiveKitVideoTrack();
 
       try {
         await AudioManager.instance.setSpeakerOutputPreferred(true);
@@ -333,20 +372,46 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     }
   }
 
+  void _updateLocalLiveKitVideoTrack() {
+    if (_liveKitRoom == null) return;
+    for (final pub in _liveKitRoom!.localParticipant?.videoTrackPublications ?? []) {
+      if (pub.track is LocalVideoTrack) {
+        if (_localLiveKitVideoTrack != pub.track) {
+          if (mounted) {
+            setState(() {
+              _localLiveKitVideoTrack = pub.track as LocalVideoTrack;
+            });
+          }
+        }
+        break;
+      }
+    }
+  }
+
   void _updateLiveKitRemoteTrack() {
     if (_liveKitRoom == null) return;
     final remote = _liveKitRoom!.remoteParticipants.values.firstOrNull;
-    final track = remote?.videoTrackPublications.firstOrNull?.track;
-    if (track != null) {
+    if (remote != null) {
+      VideoTrack? foundTrack;
+      for (final pub in remote.videoTrackPublications) {
+        if (pub.track != null) {
+          foundTrack = pub.track;
+          break;
+        }
+      }
       if (mounted) {
         setState(() {
-          _remoteLiveKitVideoTrack = track;
+          if (foundTrack != null) {
+            _remoteLiveKitVideoTrack = foundTrack;
+          }
           _isCallAccepted = true;
           _isConnectingCall = false;
         });
         CallSoundManager.stopRingtone();
         _ringTimeoutTimer?.cancel();
         _ringTimeoutTimer = null;
+        _pollingTimer?.cancel();
+        _pollingTimer = null;
         if (!_hasStartedTimer) {
           _hasStartedTimer = true;
           final cId = _callId ?? widget.callId;
@@ -371,6 +436,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       receiverAccountId: widget.model.accountId,
       callType: 'video',
       channelName: _channelName,
+      ratePerMinute: _ratePerMinute,
+      isFreeTrial: widget.isFreeTrial,
     );
 
     if (!mounted || _isEndingCall) return;
@@ -416,12 +483,19 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
     if (_callId != null) {
       SignalingService().subscribeToCallRoom(_callId.toString());
+      // ⚡ Start polling immediately so the caller reliably discovers when the receiver answers
+      _startCallStatusPolling();
     }
     if (_channelName != null && _channelName!.isNotEmpty) {
       SignalingService().subscribeToCallRoom(_channelName!);
     }
 
-    final lkToken = res['livekit_token'] ?? res['token'] ?? res['data']?['livekit_token'] ?? res['data']?['token'];
+    final lkToken = res['caller_token'] ??
+        res['livekit_token'] ??
+        res['token'] ??
+        res['data']?['caller_token'] ??
+        res['data']?['livekit_token'] ??
+        res['data']?['token'];
     if (lkToken != null && lkToken.toString().isNotEmpty) {
       final lkUrl = res['livekit_url'] ?? res['data']?['livekit_url'];
       await _connectLiveKitRoom(token: lkToken.toString(), url: lkUrl?.toString());
@@ -510,7 +584,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       final bool matchesCallId = evCallId != null && myCallId != null && evCallId.toString() == myCallId.toString();
       final bool matchesChannel = evChannel != null && myChannel != null && myChannel.isNotEmpty && evChannel.toString() == myChannel.toString();
       if (!matchesCallId && !matchesChannel) return;
-      if (_isCallAccepted) {
+      if (_isCallAccepted || _remoteLiveKitVideoTrack != null || (_liveKitRoom != null && _liveKitRoom!.remoteParticipants.isNotEmpty)) {
         debugPrint('[VideoCallScreen] Guard: Ignoring call.cancelled event because call is already accepted and active.');
         return;
       }
@@ -593,7 +667,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   /// 🛑 ৪৫ সেকেন্ড রিংগিং টাইমআউট হলে স্বয়ংক্রিয়ভাবে কল ক্যানসেল ও স্ক্রিন বন্ধ করা
   Future<void> _cancelCallOnTimeout() async {
-    if (_isEndingCall || _isCallAccepted) return;
+    if (_isEndingCall || _isCallAccepted || _remoteLiveKitVideoTrack != null || (_liveKitRoom != null && _liveKitRoom!.remoteParticipants.isNotEmpty)) {
+      debugPrint('[VideoCallScreen] Guard: Ignoring timeout cancellation because call is active.');
+      return;
+    }
     _isEndingCall = true;
 
     final effectiveCallId = _callId ?? widget.callId;
@@ -933,7 +1010,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           timer.cancel();
           _pollingTimer = null;
           _terminateCallSession('Call ended');
-        } else if (!_isCallAccepted && (status == 'cancelled' || status == 'caller_cancelled')) {
+        } else if (!_isCallAccepted && _remoteLiveKitVideoTrack == null && (_liveKitRoom == null || _liveKitRoom!.remoteParticipants.isEmpty) && (status == 'cancelled' || status == 'caller_cancelled')) {
           timer.cancel();
           _pollingTimer = null;
           _terminateCallSession('Call was cancelled');
@@ -1040,7 +1117,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       bool trialJustEnded = false;
       setState(() {
         _callSeconds++;
-        if (_isFreeTrialActive && _freeTrialRemaining > 0) {
+        if (!widget.isIncoming && _isFreeTrialActive && _freeTrialRemaining > 0) {
           _freeTrialRemaining--;
           if (_freeTrialRemaining <= 0) {
             _isFreeTrialActive = false;
@@ -1050,19 +1127,21 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       });
 
       final effectiveCallId = _callId ?? widget.callId;
-      if (trialJustEnded) {
-        // 16s Free preview expired
-        if (_userGems < _ratePerMinute) {
-          setState(() {
-            _isVideoBlurred = true;
-          });
-          _webrtcService.setCallMuted(true);
-          _showInCallRechargeSheet();
-        } else if (effectiveCallId != null) {
+      if (!widget.isIncoming) {
+        if (trialJustEnded) {
+          // 16s Free preview expired (Caller only)
+          if (_userGems < _ratePerMinute) {
+            setState(() {
+              _isVideoBlurred = true;
+            });
+            _webrtcService.setCallMuted(true);
+            _showInCallRechargeSheet();
+          } else if (effectiveCallId != null) {
+            _sendInCallPulse();
+          }
+        } else if (effectiveCallId != null && _callSeconds % 60 == 0 && !_isFreeTrialActive) {
           _sendInCallPulse();
         }
-      } else if (effectiveCallId != null && _callSeconds % 60 == 0 && !_isFreeTrialActive) {
-        _sendInCallPulse();
       }
     });
   }
