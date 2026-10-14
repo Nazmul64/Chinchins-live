@@ -110,6 +110,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   int _ratePerMinute = 100;
   bool _isPulseInProgress = false;
   bool _hasStartedTimer = false;
+  int _lastPolledSignalId = 0;
 
   StreamSubscription? _wsAcceptedSub;
   StreamSubscription? _wsEndedSub;
@@ -153,7 +154,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         ? widget.ratePerMinute
         : (widget.model.pricePerMin > 0 ? widget.model.pricePerMin : 100);
 
-    if (_activeSession != null && _activeSession!.channelName == widget.channelName) {
+    if (_activeSession != null &&
+        widget.channelName != null &&
+        widget.channelName!.isNotEmpty &&
+        _activeSession!.channelName == widget.channelName) {
       _webrtcService = _activeSession!.webrtcService;
       _callSeconds = _activeSession!.callSeconds;
       _isConnectingCall = _activeSession!.isConnectingCall;
@@ -165,6 +169,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       _activeSession = null;
       _startTimer();
     } else {
+      _activeSession = null; // Always clear any stale activeSession
       _webrtcService = WebRTCCallService();
       _webrtcService.onIceStateChanged = (RTCIceConnectionState state) {
         if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
@@ -402,24 +407,37 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           if (foundTrack != null) {
             _remoteLiveKitVideoTrack = foundTrack;
           }
-          _isCallAccepted = true;
-          _isConnectingCall = false;
         });
-        CallSoundManager.stopRingtone();
-        _ringTimeoutTimer?.cancel();
-        _ringTimeoutTimer = null;
-        _pollingTimer?.cancel();
-        _pollingTimer = null;
-        if (!_hasStartedTimer) {
-          _hasStartedTimer = true;
-          final cId = _callId ?? widget.callId;
-          if (cId != null) {
-            CallApiService.notifyCallConnected(
-              callId: cId,
-              mediaStatus: 'connected',
-            );
+
+        // 🛑 CRUCIAL GUARD: For an outgoing call that is still ringing (!widget.isIncoming && !_isCallAccepted),
+        // we must NEVER mark the call as accepted merely because a remote participant object exists!
+        // It must only be marked as accepted if:
+        // 1) This is an incoming call (receiver already pressed accept), OR
+        // 2) _isCallAccepted was already confirmed by server/socket, OR
+        // 3) An actual active remote video track publication is genuinely subscribed (foundTrack != null).
+        if (widget.isIncoming || _isCallAccepted || foundTrack != null) {
+          if (!_isCallAccepted) {
+            setState(() {
+              _isCallAccepted = true;
+              _isConnectingCall = false;
+            });
           }
-          _startTimer();
+          CallSoundManager.stopRingtone();
+          _ringTimeoutTimer?.cancel();
+          _ringTimeoutTimer = null;
+          _pollingTimer?.cancel();
+          _pollingTimer = null;
+          if (!_hasStartedTimer && _isCallAccepted) {
+            _hasStartedTimer = true;
+            final cId = _callId ?? widget.callId;
+            if (cId != null) {
+              CallApiService.notifyCallConnected(
+                callId: cId,
+                mediaStatus: 'connected',
+              );
+            }
+            _startTimer();
+          }
         }
       }
     }
@@ -931,15 +949,25 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         return;
       }
 
+      final myChannel = _channelName ?? widget.channelName;
+
       // 1. Check incoming signals via /api/call/signal/receive
       try {
         final signals = await CallApiService.receiveSignals(
           callId: pollCallId,
-          autoRead: false,
+          channelName: myChannel,
+          lastSignalId: _lastPolledSignalId,
+          autoRead: true,
         );
         if (!mounted || _isEndingCall) return;
 
         for (final signal in signals) {
+          final dynamic rawSigId = signal['id'];
+          final int? sigId = rawSigId is int ? rawSigId : int.tryParse(rawSigId?.toString() ?? '');
+          if (sigId != null && sigId > _lastPolledSignalId) {
+            _lastPolledSignalId = sigId;
+          }
+
           dynamic rawPayload = signal['payload'];
           if (rawPayload is String) {
             try {
@@ -949,6 +977,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           final Map<String, dynamic> payload = (rawPayload is Map)
               ? Map<String, dynamic>.from(rawPayload)
               : Map<String, dynamic>.from(signal);
+
+          // Verify signal belongs to this call channel if specified
+          final dynamic sigChannel = payload['channel_name'] ?? payload['room_name'] ?? signal['channel_name'];
+          if (sigChannel != null && myChannel != null && myChannel.isNotEmpty && sigChannel.toString() != myChannel.toString()) {
+            continue; // Belongs to an older/different call
+          }
 
           final senderRole = (payload['sender_role'] ?? signal['sender_role'])?.toString().toLowerCase();
           if (senderRole == 'caller') continue; // Ignore caller's own signals
@@ -994,28 +1028,42 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       try {
         final statusData = await CallApiService.getCallStatus(
           pollCallId,
-          channelName: _channelName ?? widget.channelName,
+          channelName: myChannel,
         );
         if (!mounted || statusData == null || _isEndingCall) return;
 
-        final status = (statusData['status'] ?? statusData['data']?['status'])?.toString().toLowerCase();
+        final rawStatus = statusData['status'];
+        final dataMap = statusData['data'] is Map ? statusData['data'] as Map<String, dynamic> : null;
+        final callStatus = (dataMap?['status'] ?? (rawStatus is String ? rawStatus : null))?.toString().toLowerCase();
 
-        if (status == 'rejected' || status == 'declined') {
+        final bool isRinging = statusData['is_ringing'] == true ||
+            dataMap?['is_ringing'] == true ||
+            callStatus == 'ringing' ||
+            callStatus == 'initiated' ||
+            callStatus == 'dialing' ||
+            callStatus == 'calling';
+
+        // 🛑 CRITICAL DEFENSE: If server reports call is ringing, NEVER mark accepted!
+        if (isRinging) {
+          return;
+        }
+
+        if (callStatus == 'rejected' || callStatus == 'declined') {
           timer.cancel();
           _pollingTimer = null;
           _terminateCallSession('Host declined the call');
-        } else if (_isCallAccepted && status == 'ended') {
+        } else if (_isCallAccepted && callStatus == 'ended') {
           timer.cancel();
           _pollingTimer = null;
           _terminateCallSession('Call ended');
-        } else if (!_isCallAccepted && _remoteLiveKitVideoTrack == null && (_liveKitRoom == null || _liveKitRoom!.remoteParticipants.isEmpty) && (status == 'cancelled' || status == 'caller_cancelled')) {
+        } else if (!_isCallAccepted && _remoteLiveKitVideoTrack == null && (_liveKitRoom == null || _liveKitRoom!.remoteParticipants.isEmpty) && (callStatus == 'cancelled' || callStatus == 'caller_cancelled')) {
           timer.cancel();
           _pollingTimer = null;
           _terminateCallSession('Call was cancelled');
-        } else if (status == 'connected' || status == 'accepted') {
+        } else if ((callStatus == 'connected' || callStatus == 'accepted') && !isRinging) {
           timer.cancel();
           _pollingTimer = null;
-          _handleCallAccepted(statusData);
+          _handleCallAccepted(dataMap ?? statusData);
         }
       } catch (e) {
         debugPrint('[VideoCallScreen] getCallStatus error: $e');

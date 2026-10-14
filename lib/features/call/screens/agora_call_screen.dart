@@ -624,9 +624,22 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     final effectiveCallId = _callId ?? widget.callId;
     if (effectiveCallId == null || _isEndingCall) return;
     try {
-      final statusData = await CallApiService.getCallStatus(effectiveCallId);
+      final statusData = await CallApiService.getCallStatus(
+        effectiveCallId,
+        channelName: widget.channelName,
+      );
       if (!mounted || statusData == null || _isEndingCall) return;
-      final status = (statusData['status'] ?? statusData['data']?['status'])?.toString().toLowerCase();
+      final rawStatus = statusData['status'];
+      final dataMap = statusData['data'] is Map ? statusData['data'] as Map<String, dynamic> : null;
+      final status = (dataMap?['status'] ?? (rawStatus is String ? rawStatus : null))?.toString().toLowerCase();
+
+      final bool isRinging = statusData['is_ringing'] == true ||
+          dataMap?['is_ringing'] == true ||
+          status == 'ringing' ||
+          status == 'initiated' ||
+          status == 'dialing';
+      if (isRinging) return; // 🛑 Never accept while still ringing!
+
       final isTerminated = statusData['is_terminated'] == true ||
           statusData['data']?['is_terminated'] == true ||
           status == 'ended' ||
@@ -635,7 +648,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
           status == 'declined' ||
           status == 'missed' ||
           status == 'timeout';
-      if (status == 'connected' || status == 'accepted') {
+      if ((status == 'connected' || status == 'accepted') && !isRinging) {
         _ringTimeoutTimer?.cancel();
         _ringTimeoutTimer = null;
         CallSoundManager.stopRingtone();

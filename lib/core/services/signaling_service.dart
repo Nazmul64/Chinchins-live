@@ -819,7 +819,7 @@ class SignalingService {
     }
 
     // 12. Call Accepted (CallAccepted / call.accepted / private_call.accepted)
-    if (cleanName == 'call.accepted' ||
+    final bool isCallAcceptedEvent = cleanName == 'call.accepted' ||
         cleanName == 'CallAccepted' ||
         cleanName == 'CallAcceptedEvent' ||
         cleanName == 'private_call.accepted' ||
@@ -832,7 +832,9 @@ class SignalingService {
         lowerName == 'call_accepted' ||
         lowerName == 'private_call.accepted' ||
         lowerName == 'privatecallaccepted' ||
-        (data['status'] == 'accepted' || data['action'] == 'call_accepted' || data['type'] == 'accepted')) {
+        ((data['action'] == 'call_accepted' || data['action'] == 'call.accepted') &&
+            (data['call_id'] != null || data['channel_name'] != null || data['session_id'] != null));
+    if (isCallAcceptedEvent) {
       _callAcceptedController.add(data);
       return;
     }

@@ -172,7 +172,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     }
 
     // ⚡ 0.00ms INSTANT CALL SCREEN LAUNCH (Zero-Loader Rule)
-    final String channelName = 'call_${_currentModel.id}_${DateTime.now().millisecondsSinceEpoch}';
+    final String channelName = 'call_video_${myId ?? "user"}_${_currentModel.id}_${DateTime.now().millisecondsSinceEpoch}';
 
     StreamingService.startDynamicCall(
       context: context,
@@ -213,7 +213,7 @@ class _HostProfileScreenState extends State<HostProfileScreen>
     }
 
     // ⚡ 0.00ms INSTANT CALL SCREEN LAUNCH (Zero-Loader Rule)
-    final String channelName = 'audio_call_${_currentModel.id}_${DateTime.now().millisecondsSinceEpoch}';
+    final String channelName = 'call_audio_${myId ?? "user"}_${_currentModel.id}_${DateTime.now().millisecondsSinceEpoch}';
 
     StreamingService.startDynamicCall(
       context: context,
